@@ -9,11 +9,10 @@ RUN pacman -Sy --noconfirm git
 
 # switch to builder user
 USER build
-WORKDIR /app/builds/
+WORKDIR /app
 
 # fix fakeroot problem (https://github.com/moby/moby/issues/45436)
 CMD ulimit -u 62811 && ulimit -n 1024 && \
     sudo pacman -Suy --noconfirm && \
     sudo chown -R build . && \
-    if cd $ID; then git pull; else git clone $REPOSITORY $ID && cd $ID; fi && \
     makepkg -sf --noconfirm

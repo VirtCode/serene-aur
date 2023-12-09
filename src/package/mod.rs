@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use base64::Engine;
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
-use git2::Repository;
 use regex::Regex;
+
+mod git;
 
 const BUILD_DIR: &str = "./app/build";
 const PKGBUILD_FILE: &str = "PKGBUILD";
@@ -12,12 +13,12 @@ const PKGBUILD_FILE: &str = "PKGBUILD";
 #[derive(Debug)]
 pub struct Package {
     /// url to the repository
-    repository: String,
+    pub repository: String,
 
     /// name of the package to be used in the cli, etc.
-    name: String,
+    pub name: String,
     /// current version of the package
-    version: String,
+    pub version: String,
 
     /// is it a package from the aur
     aur: bool,
@@ -50,13 +51,16 @@ pub fn get_from_aur(name: &str) -> anyhow::Result<Package> {
 }
 
 pub fn get(repository: &str, aur: bool, git: bool) -> anyhow::Result<Package> {
-    create_dir_all(BUILD_DIR)?;
-
     let path = repository_path(repository);
+    create_dir_all(&path)?;
 
-    let _repo = Repository::clone(repository, &path).context("failed to clone given git repository")?;
+    if path.read_dir()?.next().is_none() {
+        git::clone(repository, &path)?;
+    } else {
+        git::pull(&path)?;
+    }
+
     let (name, version) = parse_pkgbuild(&path)?;
-
 
     Ok(Package {
         repository: repository.to_owned(),
