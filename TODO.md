@@ -34,3 +34,6 @@ The cli is on the client and should interact with the api
 ## Future
 These things are future tasks and not priority right now:
 - [ ] Signing packages
+
+## Notes
+- Fakeroot hangs in container for some reason. The current quickfix is adding `--ulimit "nofile=1024:1048576"` when starting the container. See https://github.com/moby/moby/issues/45436 for more infos.
