@@ -20,6 +20,9 @@ pub struct Package {
     /// current version of the package
     pub version: String,
 
+    /// should clean build
+    pub clean: bool,
+
     /// is it a package from the aur
     aur: bool,
     /// is it a git package that needs frequent rebuilding

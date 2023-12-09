@@ -10,10 +10,10 @@ This is a docker container which runs the builds inside of it.
 #### The Service
 This contains some parts which are required by the service.
 - [ ] Interact with the AUR to check for updates and obtain build files
-- [ ] Clone Repositories to build onto volume and manage those
-- [ ] Run Runners on demand
-- [ ] Retrieve built files from ran containers
-- [ ] Serve built files for pacman to use
+- [X] Clone Repositories to build onto volume and manage those
+- [X] Run Runners on demand
+- [X] Retrieve built files from ran containers
+- [X] Serve built files for pacman to use
 - [ ] Schedule Builds
 
 #### The Database
@@ -29,11 +29,13 @@ The api is a part of the service which handles user interaction.
 
 #### The CLI
 The cli is on the client and should interact with the api
+- [ ] Generate secret on first start and prompt user
 - [ ] Basic commands for adding and removing packages, and querying status
 
 ## Future
 These things are future tasks and not priority right now:
 - [ ] Signing packages
+- [ ] Handle in-aur dependencies
 
 ## Notes
 - Fakeroot hangs in container for some reason. The current quickfix is adding `--ulimit "nofile=1024:1048576"` when starting the container. See https://github.com/moby/moby/issues/45436 for more infos.

@@ -11,11 +11,9 @@ const REPO_DIR: &str = "./app/repository";
 const ARCH: &str = "x86_64";
 
 /// returns the webservice which exposes the repository
-pub fn webservice() -> anyhow::Result<Files> {
-    create_dir_all(REPO_DIR)?;
-
-    Ok(Files::new(ARCH, REPO_DIR)
-        .show_files_listing())
+pub fn webservice() -> Files {
+    Files::new(ARCH, REPO_DIR)
+        .show_files_listing()
 }
 
 pub struct RepositoryEntry {
@@ -24,6 +22,8 @@ pub struct RepositoryEntry {
 }
 
 pub fn update(package: Package, state: &mut Vec<RepositoryEntry>, repository_name: &str) -> anyhow::Result<()> {
+    create_dir_all(REPO_DIR)?;
+
     let file = find_latest_file(&package)?;
     let new_file = file.file_name().expect("found package must have file name").to_string_lossy().to_string();
 
