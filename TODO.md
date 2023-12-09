@@ -3,9 +3,9 @@ The project can be devided into the following areas:
 
 #### The Runner
 This is a docker container which runs the builds inside of it.
-- [ ] Decide on Structure of container
-- [ ] Create Dockerfile
-- [ ] Test
+- [X] Decide on Structure of container
+- [X] Create Dockerfile
+- [X] Test
 
 #### The Service
 This contains some parts which are required by the service.
