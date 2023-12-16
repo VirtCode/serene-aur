@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
+use anyhow::Context;
 use async_trait::async_trait;
 use log::debug;
 use srcinfo::Srcinfo;
@@ -9,19 +10,31 @@ const SRCINFO: &str = ".SRCINFO";
 
 #[async_trait]
 pub trait PackageSource {
-    // creates an empty package source for a repository, create should be called afterwards
-    fn empty(repository: &str) -> Self;
+    /// creates an empty package source for a repository, create should be called afterwards
+    fn empty(repository: &str) -> Self where Self: Sized;
 
-    // pulls the package sources for the first time
+    /// pulls the package sources for the first time
     async fn create(&mut self, folder: &Path) -> anyhow::Result<()>;
 
-    // checks whether an update would be available
+    /// checks whether an update would be available
     async fn update_available(&self) -> anyhow::Result<bool>;
 
-    // upgrades the sources
+    /// upgrades the sources
     async fn upgrade(&mut self, folder: &Path) -> anyhow::Result<()>;
+
+    /// try to read the current version, returning None if the version is unknown
+    async fn read_version(&self, folder: &Path) -> anyhow::Result<Option<String>>;
+
+    /// read the package base name
+    async fn read_base(&self, folder: &Path) -> anyhow::Result<String>;
+
+    /// read all package names contained in the pkgbuild
+    async fn read_packages(&self, folder: &Path) -> anyhow::Result<Vec<String>>;
+
+    fn repository(&self) -> String;
 }
 
+/// this is the source of a normally versioned package
 #[derive(Debug)]
 pub struct NormalSource {
     repository: String,
@@ -61,8 +74,25 @@ impl PackageSource for NormalSource {
 
         Ok(())
     }
+
+    async fn read_version(&self, folder: &Path) -> anyhow::Result<Option<String>> {
+        Ok(Some(read_srcinfo(folder).await?.base.pkgver))
+    }
+
+    async fn read_base(&self, folder: &Path) -> anyhow::Result<String> {
+        Ok(read_srcinfo(folder).await?.base.pkgbase)
+    }
+
+    async fn read_packages(&self, folder: &Path) -> anyhow::Result<Vec<String>> {
+        Ok(read_srcinfo(folder).await?.pkgs.into_iter().map(|p| p.pkgname).collect())
+    }
+
+    fn repository(&self) -> String {
+        self.repository.clone()
+    }
 }
 
+/// this is the source of a development package, frequently called -git packages
 #[derive(Debug)]
 pub struct DevelSource {
     repository: String,
@@ -112,7 +142,7 @@ impl PackageSource for DevelSource {
 
         // refresh sources
         self.last_source_commits = HashMap::new();
-        let srcinfo: Srcinfo = tokio::fs::read_to_string(folder.join(SRCINFO)).await?.parse()?;
+        let srcinfo: Srcinfo = read_srcinfo(folder).await?;
 
         for src in srcinfo.base.source.iter().flat_map(|s| &s.vec) { // TODO: only use required arch
             let mut split = src.split('+');
@@ -128,4 +158,26 @@ impl PackageSource for DevelSource {
 
         Ok(())
     }
+
+    async fn read_version(&self, _folder: &Path) -> anyhow::Result<Option<String>> {
+        Ok(None)
+    }
+
+    async fn read_base(&self, folder: &Path) -> anyhow::Result<String> {
+        Ok(read_srcinfo(folder).await?.base.pkgbase)
+    }
+
+    async fn read_packages(&self, folder: &Path) -> anyhow::Result<Vec<String>> {
+        Ok(read_srcinfo(folder).await?.pkgs.into_iter().map(|p| p.pkgname).collect())
+    }
+
+    fn repository(&self) -> String {
+        self.repository.clone()
+    }
+}
+
+/// reads the .SRCINFO file from the source directory
+async fn read_srcinfo(folder: &Path) -> anyhow::Result<Srcinfo> {
+    tokio::fs::read_to_string(folder.join(SRCINFO)).await?
+        .parse().context("failed to parse srcinfo")
 }

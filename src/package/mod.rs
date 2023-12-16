@@ -1,92 +1,75 @@
-use std::fs::{create_dir_all, read_to_string};
 use std::path::{Path, PathBuf};
-use anyhow::Context;
-use base64::Engine;
-use base64::prelude::BASE64_URL_SAFE_NO_PAD;
-use regex::Regex;
+use std::time::{SystemTime, UNIX_EPOCH};
+use anyhow::{anyhow, Context};
+use log::{debug, error};
+use tokio::fs;
+use crate::package::source::{DevelSource, NormalSource, PackageSource};
 
-mod git;
+pub mod git;
+pub mod source;
+pub mod aur;
 
-const BUILD_DIR: &str = "./app/build";
-const PKGBUILD_FILE: &str = "PKGBUILD";
-
-#[derive(Debug)]
-pub struct Package {
-    /// url to the repository
-    pub repository: String,
-
-    /// name of the package to be used in the cli, etc.
-    pub name: String,
-    /// current version of the package
-    pub version: String,
-
-    /// should clean build
-    pub clean: bool,
-
-    /// is it a package from the aur
-    aur: bool,
-    /// is it a git package that needs frequent rebuilding
-    git: bool
+pub struct PackageManager {
+    folder: PathBuf,
+    packages: Vec<Package>
 }
 
-impl Package {
-    pub fn get_id(&self) -> String {
-        repository_id(&self.repository)
+impl PackageManager {
+
+    pub fn new(folder: &Path) -> Self {
+        Self {
+            folder: folder.to_owned(),
+            packages: vec![]
+        }
     }
 
-    pub fn get_path(&self) -> PathBuf {
-        repository_path(&self.repository)
+    /// adds a package from the aur to the manager
+    pub async fn add_aur(&mut self, name: &str) -> anyhow::Result<String> {
+        debug!("adding aur package {name}");
+        let info = aur::find(name).await?;
+
+        self.add_custom(&info.repository, info.devel).await
+    }
+
+    /// adds a custom repository to the manager
+    pub async fn add_custom(&mut self, repository: &str, devel: bool) -> anyhow::Result<String>{
+        debug!("adding package from {repository}, devel: {devel}");
+
+        if devel {
+            self.add(Box::new(DevelSource::empty(repository))).await
+        } else {
+            self.add(Box::new(NormalSource::empty(repository))).await
+        }
+    }
+
+    async fn add(&mut self, mut source: Box<dyn PackageSource>) -> anyhow::Result<String>{
+        let folder = self.folder
+            .join("tmp")
+            .join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string());
+
+        fs::create_dir_all(&folder).await?;
+
+        // pull package
+        source.create(&folder).await?;
+        let base = source.read_base(&folder).await?;
+        error!("package-base: {base}");
+
+        // check other packages
+        if self.packages.iter().any(|p| p.base == base) {
+            fs::remove_dir_all(folder).await?;
+            return Err(anyhow!("already have package with base {}", base))
+        }
+
+        // move package
+        fs::rename(folder, self.folder.join(&base)).await?;
+
+        self.packages.push(Package { base: base.clone(), source });
+
+        Ok(base)
     }
 }
 
-fn repository_id(repository: &str) -> String {
-    BASE64_URL_SAFE_NO_PAD.encode(&repository)
+struct Package {
+    base: String,
+    source: Box<dyn PackageSource>
 }
-
-fn repository_path(repository: &str) -> PathBuf {
-    PathBuf::from(BUILD_DIR).join(repository_id(repository))
-}
-
-pub fn get_from_aur(name: &str) -> anyhow::Result<Package> {
-    let git = name.ends_with("-git");
-
-    get(&format!("https://aur.archlinux.org/{name}.git"), true, git)
-}
-
-pub fn get(repository: &str, aur: bool, git: bool) -> anyhow::Result<Package> {
-    let path = repository_path(repository);
-    create_dir_all(&path)?;
-
-    if path.read_dir()?.next().is_none() {
-        git::clone(repository, &path)?;
-    } else {
-        git::pull(&path)?;
-    }
-
-    let (name, version) = parse_pkgbuild(&path)?;
-
-    Ok(Package {
-        repository: repository.to_owned(),
-        name, version, aur, git
-    })
-}
-
-fn parse_pkgbuild(path: &Path) -> anyhow::Result<(String, String)> {
-    let text = read_to_string(path.join(PKGBUILD_FILE)).context("repo does not contain readable PKGBUILD")?;
-
-    let name_regex = Regex::new("pkgname=(.+)").expect("regex should compile");
-    let version_regex = Regex::new("pkgver=(.+)").expect("regex should compile");
-
-    let name = name_regex.captures(&text)
-        .and_then(|c| c.get(1))
-        .map(|m| m.as_str().to_owned())
-        .context("PKGBUILD did not contain package name")?;
-
-    let version = version_regex.captures(&text)
-        .and_then(|c| c.get(1))
-        .map(|m| m.as_str().to_owned())
-        .context("PKGBUILD did not contain package version")?;
-
-    Ok((name, version))
-}
-

@@ -36,6 +36,9 @@ The cli is on the client and should interact with the api
 These things are future tasks and not priority right now:
 - [ ] Signing packages
 - [ ] Handle in-aur dependencies
+- [ ] Allow pinning a package to a specific commit
+- [ ] Store state in a database and not a json file
+- [ ] Dependency resolving on AUR
 
 ## Notes
 - Fakeroot hangs in container for some reason. The current quickfix is adding `--ulimit "nofile=1024:1048576"` when starting the container. See https://github.com/moby/moby/issues/45436 for more infos.
