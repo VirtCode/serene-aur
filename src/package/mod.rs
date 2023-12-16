@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{anyhow, Context};
+use async_tar::Builder;
+use hyper::Body;
 use log::{debug, error};
 use tokio::fs;
 use crate::package::source::{DevelSource, NormalSource, PackageSource};
@@ -63,13 +65,49 @@ impl PackageManager {
         // move package
         fs::rename(folder, self.folder.join(&base)).await?;
 
-        self.packages.push(Package { base: base.clone(), source });
+        self.packages.push(Package {
+            base: base.clone(), source,
+            devel: false, clean: false
+        });
 
         Ok(base)
     }
+
+    /// retrieves the source files for a package in a tar archive, inside a hyper body
+    /// warning, this method will load all sources into memory, so be cautious
+    pub async fn sources_tar(&self, package: &Package) -> anyhow::Result<Body> {
+        let folder = self.folder.join(&package.base);
+
+        let buffer = vec![];
+        let mut archive = Builder::new(buffer);
+
+        archive.append_dir_all("", &folder).await?;
+        archive.finish().await?;
+
+        Ok(Body::from(archive.into_inner().await?))
+    }
+
+    /// get a package by name
+    pub fn get(&self, string: &str) -> Option<&Package> {
+        self.packages.iter().find(|p| p.base == string)
+    }
 }
 
-struct Package {
-    base: String,
-    source: Box<dyn PackageSource>
+pub struct Package {
+    pub base: String,
+    source: Box<dyn PackageSource>,
+
+    devel: bool,
+    clean: bool,
+}
+
+impl Package {
+    pub fn create(name: String) -> Self {
+        Package {
+            base: name,
+            source: Box::new(NormalSource::empty("amogus")),
+            devel: false,
+            clean: false
+        }
+    }
 }

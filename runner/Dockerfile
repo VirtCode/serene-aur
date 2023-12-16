@@ -9,7 +9,7 @@ RUN pacman -Sy --noconfirm git
 
 # create build folder and script
 ADD run.sh /app/run.sh
-RUN mkdir -p /app/build
+RUN mkdir -p /app/build/serene-build
 
 # switch to builder user
 USER build
