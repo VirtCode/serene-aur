@@ -1533,6 +1533,7 @@ dependencies = [
  "actix-files",
  "actix-web",
  "anyhow",
+ "async-trait",
  "base64",
  "bollard",
  "futures",
@@ -1544,6 +1545,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "simplelog",
+ "srcinfo",
  "tokio",
 ]
 
@@ -1623,6 +1625,12 @@ dependencies = [
  "libc",
  "windows-sys 0.48.0",
 ]
+
+[[package]]
+name = "srcinfo"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ceaee0d48949e3aa5365945de3e467e797b30b4f8636c2e580121a293fd77519"
 
 [[package]]
 name = "syn"

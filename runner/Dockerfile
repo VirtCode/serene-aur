@@ -7,12 +7,13 @@ RUN useradd -m build && echo "build ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/bu
 RUN pacman -Suy --noconfirm
 RUN pacman -Sy --noconfirm git
 
+# create build folder and script
+ADD run.sh /app/run.sh
+RUN mkdir -p /app/build
+
 # switch to builder user
 USER build
 WORKDIR /app
 
-# fix fakeroot problem (https://github.com/moby/moby/issues/45436)
-CMD ulimit -u 62811 && ulimit -n 1024 && \
-    sudo pacman -Suy --noconfirm && \
-    sudo chown -R build . && \
-    makepkg -sf --noconfirm
+# run
+CMD sh run.sh
