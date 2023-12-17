@@ -12,6 +12,7 @@ use bollard::secret::HostConfig;
 use futures_util::{AsyncRead, AsyncReadExt, Stream, StreamExt};
 use futures_util::stream::Map;
 use hyper::Body;
+use hyper::body::HttpBody;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio_util::bytes::Bytes;
@@ -41,6 +42,38 @@ pub struct Builder {
 
 impl Builder {
 
+    pub async fn build(&self, container: ContainerId) -> anyhow::Result<BuildStatus> {
+        let start = SystemTime::now();
+
+        // start container
+        self.docker.start_container(&container, None::<StartContainerOptions<String>>).await?;
+
+        // wait for container to exit and collect logs
+        let result =
+            self.docker.wait_container(&container,  None::<WaitContainerOptions<String>>).collect::<Vec<_>>().await;
+
+        let end = SystemTime::now();
+
+        // retrieve logs
+        let log_options = LogsOptions {
+            stdout: true, stderr: true,
+            since: start.duration_since(UNIX_EPOCH).unwrap().as_secs() as i64,
+            ..Default::default()
+        };
+
+        let logs: Vec<String> = self.docker.logs::<String>(&container, Some(log_options)).filter_map(|r| async {
+            r.ok().map(|c| c.to_string())
+        }).collect::<Vec<_>>().await;
+
+        Ok(BuildStatus {
+            success: result.first().and_then(|r| r.as_ref().ok()).is_some(),
+            fatal: false,
+            logs: logs.join(""),
+            started: start,
+            duration: end.duration_since(start).expect("should work")
+        })
+    }
+
     pub async fn test(&self, container: &ContainerId) -> anyhow::Result<()> {
         self.docker.start_container(container, None::<StartContainerOptions<String>>).await?;
 
@@ -68,14 +101,18 @@ impl Builder {
 
     /// uploads files to the build directory in a container
     /// the files should be in a tar archive, in a body, where everything is in the root
-    pub async fn upload_sources(&self, container: &ContainerId, body: Body) -> anyhow::Result<()> {
+    pub async fn upload_sources(&self, container: &ContainerId, package: &Package) -> anyhow::Result<()> {
+
+        let sources = package.sources_tar().await
+            .context("could not get sources tar from package")?;
 
         let options = UploadToContainerOptions{
             path: RUNNER_IMAGE_BUILD_IN,
             no_overwrite_dir_non_dir: "false"
         };
 
-        self.docker.upload_to_container(container, Some(options), body).await?;
+        self.docker.upload_to_container(container, Some(options), sources).await
+            .context("could not upload sources to docker container")?;
 
         Ok(())
     }
@@ -123,49 +160,11 @@ impl Builder {
 }
 
 /*
-pub async fn build(docker: &Docker, package: &Package) -> anyhow::Result<BuildStatus> {
-    let time = SystemTime::now();
 
-    // create or find container
-    let id = if let Some(id) = find_container(docker, package).await? {
-        id
-    } else {
-        create_container(docker, package).await?
-    };
-
-    // start container
-    docker.start_container(&id, None::<StartContainerOptions<String>>).await?;
-
-    // wait for container to exit and collect logs
-    //let result: Vec<Result<ContainerWaitResponse, bollard::errors::Error>> = docker.wait_container(&id,  None::<WaitContainerOptions<String>>).collect().await?;
-
-    let end = SystemTime::now();
-
-    let logs: Vec<String> = docker.logs::<String>(&id, Some(LogsOptions {
-        stdout: true, stderr: true,
-        since: time.duration_since(UNIX_EPOCH).unwrap().as_secs() as i64,
-        ..Default::default()
-    })).filter_map(|r| async {
-        r.ok().map(|c| c.to_string())
-    }).collect::<Vec<_>>().await;
-
-    // remove container if clean build
-    if clean {
-        docker.remove_container(&id, None).await?;
-    }
-
-    Ok(BuildStatus {
-        //success: result.first().and_then(|r| r.as_ref().ok()).is_some(),
-        success: false,
-        fatal: false,
-        logs: logs.join(""),
-        started: time,
-        duration: end.duration_since(time).expect("should work")
-    })
-}
 
  */
 
 fn container_name(package: &Package) -> String{
+    // TODO: Make configurable
     format!("serene-aur-runner-{}", &package.base)
 }

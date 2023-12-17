@@ -39,6 +39,7 @@ These things are future tasks and not priority right now:
 - [ ] Allow pinning a package to a specific commit
 - [ ] Store state in a database and not a json file
 - [ ] Dependency resolving on AUR
+- [ ] Set makepkg config in runner
 
 ## Notes
 - Fakeroot hangs in container for some reason. The current quickfix is adding `--ulimit "nofile=1024:1048576"` when starting the container. See https://github.com/moby/moby/issues/45436 for more infos.
