@@ -1,8 +1,11 @@
-use std::fs;
-use std::fs::{create_dir, create_dir_all, DirEntry};
 use std::path::PathBuf;
 use actix_files::Files;
-use anyhow::Context;
+use anyhow::{anyhow, Context};
+use async_tar::Entries;
+use futures_util::AsyncRead;
+use log::__private_api::enabled;
+use tokio::fs;
+use crate::build::archive;
 use crate::package::Package;
 
 mod manage;
@@ -16,73 +19,81 @@ pub fn webservice() -> Files {
         .show_files_listing()
 }
 
+pub struct PackageRepository {
+    folder: PathBuf,
+    name: String,
+    packages: Vec<RepositoryEntry>
+}
+
 pub struct RepositoryEntry {
-    pub repository: String,
-    pub file: String,
+    base: String,
+    files: Vec<String>
 }
 
-pub fn update(package: Package, state: &mut Vec<RepositoryEntry>, repository_name: &str) -> anyhow::Result<()> {
-    create_dir_all(REPO_DIR)?;
+impl PackageRepository {
 
-    let file = find_latest_file(&package)?;
-    let new_file = file.file_name().expect("found package must have file name").to_string_lossy().to_string();
-
-    if let Some(entry) = state.iter_mut().find(|s| s.repository == package.repository) {
-        if entry.file == new_file { return Ok(()) }
-
-        manage::remove(repository_name, vec![&entry.file], &PathBuf::from(REPO_DIR))?;
-        fs::remove_dir(PathBuf::from(REPO_DIR).join(&entry.file))?;
-        fs::copy(&file, PathBuf::from(REPO_DIR).join(&new_file))?;
-        manage::add(repository_name, vec![new_file.as_str()], &PathBuf::from(REPO_DIR))?;
-
-        entry.file = new_file;
-
-    } else {
-        fs::copy(&file, PathBuf::from(REPO_DIR).join(&new_file))?;
-        manage::add(repository_name, vec![new_file.as_str()], &PathBuf::from(REPO_DIR))?;
-
-        state.push(RepositoryEntry {
-            repository: package.repository.clone(),
-            file: new_file
-        })
-    }
-
-    Ok(())
-
-}
-
-pub fn remove(package: Package, state: &mut Vec<RepositoryEntry>, repository_name: &str) -> anyhow::Result<()> {
-    let index = state.iter().position(|s| s.repository == package.repository);
-
-    if let Some(i) = index {
-        let entry = state.remove(i);
-
-        manage::remove(repository_name, vec![&entry.file], &PathBuf::from(REPO_DIR))?;
-        fs::remove_dir(PathBuf::from(REPO_DIR).join(&entry.file))?;
-    }
-
-    Ok(())
-}
-
-/// finds the last built file in the package directory
-pub fn find_latest_file(package: &Package) -> anyhow::Result<PathBuf> {
-    let build_path = package.get_path();
-
-    let files = build_path.read_dir()?
-        .filter_map(|a| a.ok())
-        .filter(|f| f.file_name().to_string_lossy().contains(".pkg.tar."))
-        .collect::<Vec<DirEntry>>();
-
-    let mut min: Option<DirEntry> = None;
-    for x in files {
-        if let Some(next) = &min {
-            if x.metadata()?.created()? < next.metadata()?.created()? { min = Some(x) };
-        } else {
-            min = Some(x)
+    pub fn new(folder: PathBuf, name: String) -> Self {
+        Self {
+            folder, name,
+            packages: vec![]
         }
     }
 
-    min.map(|m| m.path()).context("could not find built package file")
+    pub async fn publish(&mut self, package: &Package, mut output: Entries<impl AsyncRead + Unpin + Sized>) -> anyhow::Result<()> {
+        fs::create_dir_all(&self.folder).await
+            .context("failed to create folder for repository")?;
+
+        let files = package.expected_files().await
+            .context("failed to construct expected files from package")?;
+
+        // get or create entry
+        let entry =
+            if let Some(p) = self.packages.iter_mut().find(|e| e.base == package.base) { p } else {
+                self.packages.push(RepositoryEntry { base: package.base.clone(), files: vec![]});
+                self.packages.last_mut().expect("item was just added")
+            };
+
+        // remove old files from repository
+        manage::remove(&self.name, &entry.files, &self.folder).await
+            .context("failed to remove files from repository")?;
+
+        // delete package files
+        for x in &entry.files {
+            fs::remove_file(self.folder.join(x)).await
+                .context(format!("failed to delete file from repository: {x}"))?
+        }
+
+        entry.files = vec![];
+
+        // extract package files
+        archive::extract_files(&mut output, &files, &self.folder).await
+            .context("failed to extract all packages from build container")?;
+
+        // add package files
+        manage::add(&self.name, &files, &self.folder).await
+            .context("failed to add files to repository")?;
+
+        entry.files = files;
+
+        Ok(())
+    }
+
+    async fn remove(&mut self, package: &Package) -> anyhow::Result<()> {
+        let pos = self.packages.iter().position(|p| p.base == package.base)
+            .context(anyhow!("could not find package {} in repository", &package.base))?;
+
+        let entry = self.packages.remove(pos);
+
+        // remove files from repository
+        manage::remove(&self.name, &entry.files, &self.folder).await
+            .context("failed to remove files from repository")?;
+
+        // delete package files
+        for x in &entry.files {
+            fs::remove_file(self.folder.join(x)).await
+                .context(format!("failed to delete file from repository: {x}"))?
+        }
+
+        Ok(())
+    }
 }
-
-

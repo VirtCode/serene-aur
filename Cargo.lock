@@ -1927,6 +1927,7 @@ dependencies = [
  "actix-files",
  "actix-web",
  "anyhow",
+ "async-std",
  "async-tar",
  "async-trait",
  "base64",

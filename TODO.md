@@ -1,6 +1,9 @@
 ## TODO
 The project can be devided into the following areas:
 
+#### General
+- [ ] Add more debug statements
+
 #### The Runner
 This is a docker container which runs the builds inside of it.
 - [X] Decide on Structure of container
@@ -9,7 +12,7 @@ This is a docker container which runs the builds inside of it.
 
 #### The Service
 This contains some parts which are required by the service.
-- [ ] Interact with the AUR to check for updates and obtain build files
+- [X] Interact with the AUR to check for updates and obtain build files
 - [X] Clone Repositories to build onto volume and manage those
 - [X] Run Runners on demand
 - [X] Retrieve built files from ran containers

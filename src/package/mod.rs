@@ -86,6 +86,11 @@ impl PackageManager {
     pub fn get(&self, string: &str) -> Option<&Package> {
         self.packages.iter().find(|p| p.base == string)
     }
+
+    /// mutably get a package by name
+    pub fn get_mut(&mut self, string: &str) -> Option<&mut Package> {
+        self.packages.iter_mut().find(|p| p.base == string)
+    }
 }
 
 pub struct Package {
@@ -110,9 +115,9 @@ impl Package {
 
     /// upgrades the version of the package
     /// returns an error if a version mismatch is detected with the source files
-    async fn upgrade_version(&mut self, reported: &str) -> anyhow::Result<()> {
+    pub async fn upgrade_version(&mut self, reported: &str) -> anyhow::Result<()> {
         if let Some(version) = self.source.read_version(&self.get_folder()).await? {
-            if version != reported { return Err(anyhow!("version mismatch on package {}, expected {version} but built {reported}", &self.base)) }
+            if version.as_str() != reported.trim() { return Err(anyhow!("version mismatch on package {}, expected {version} but built {reported}", &self.base)) }
 
             self.version = version;
         } else {

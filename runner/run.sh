@@ -15,6 +15,6 @@ rm -rf ./serene-build/*
 
 makepkg -sf --noconfirm
 # also add built version, primarily for devel packages
-makepkg --printsrcinfo | grep -oP 'pkgver = \K[^ ]+' > serene-build/VERSION
+makepkg --printsrcinfo | grep -oP 'pkgver = \K[^ ]+' > serene-build/.VERSION
 
 mv ./*.pkg.tar.* serene-build/

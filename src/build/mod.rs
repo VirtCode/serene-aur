@@ -1,21 +1,14 @@
+pub mod archive;
+
 use std::error::Error;
 use std::io::Read;
-use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{anyhow, Context};
 use async_tar::Archive;
 use bollard::container::{Config, CreateContainerOptions, DownloadFromContainerOptions, ListContainersOptions, LogsOptions, StartContainerOptions, UploadToContainerOptions, WaitContainerOptions};
 use bollard::Docker;
-use bollard::models::{Mount, MountTypeEnum};
-use bollard::secret::{ContainerWaitResponse};
-use bollard::secret::HostConfig;
 use futures_util::{AsyncRead, AsyncReadExt, Stream, StreamExt};
-use futures_util::stream::Map;
-use hyper::Body;
 use hyper::body::HttpBody;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::task::JoinHandle;
-use tokio_util::bytes::Bytes;
 use tokio_util::io::StreamReader;
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
 use crate::package::Package;
@@ -23,6 +16,7 @@ use crate::package::Package;
 const RUNNER_IMAGE: &str = "serene-aur-runner:latest";
 const RUNNER_IMAGE_BUILD_IN: &str = "/app/build";
 const RUNNER_IMAGE_BUILD_OUT: &str = "/app/build/serene-build";
+
 
 #[derive(Debug)]
 pub struct BuildStatus {
@@ -42,15 +36,15 @@ pub struct Builder {
 
 impl Builder {
 
-    pub async fn build(&self, container: ContainerId) -> anyhow::Result<BuildStatus> {
+    pub async fn build(&self, container: &ContainerId) -> anyhow::Result<BuildStatus> {
         let start = SystemTime::now();
 
         // start container
-        self.docker.start_container(&container, None::<StartContainerOptions<String>>).await?;
+        self.docker.start_container(container, None::<StartContainerOptions<String>>).await?;
 
         // wait for container to exit and collect logs
         let result =
-            self.docker.wait_container(&container,  None::<WaitContainerOptions<String>>).collect::<Vec<_>>().await;
+            self.docker.wait_container(container,  None::<WaitContainerOptions<String>>).collect::<Vec<_>>().await;
 
         let end = SystemTime::now();
 
@@ -61,7 +55,7 @@ impl Builder {
             ..Default::default()
         };
 
-        let logs: Vec<String> = self.docker.logs::<String>(&container, Some(log_options)).filter_map(|r| async {
+        let logs: Vec<String> = self.docker.logs::<String>(container, Some(log_options)).filter_map(|r| async {
             r.ok().map(|c| c.to_string())
         }).collect::<Vec<_>>().await;
 
@@ -74,18 +68,9 @@ impl Builder {
         })
     }
 
-    pub async fn test(&self, container: &ContainerId) -> anyhow::Result<()> {
-        self.docker.start_container(container, None::<StartContainerOptions<String>>).await?;
-
-        // wait for container to exit and collect logs
-        self.docker.wait_container(container,  None::<WaitContainerOptions<String>>).next().await;
-
-        Ok(())
-    }
-
     /// downloads the built directory from the container, in a stream.
     /// the files are in a tar archive, all in the `serene-build` folder. See RUNNER_IMAGE_BUILD_OUT
-    pub async fn download_packages(&self, container: &ContainerId) -> anyhow::Result<Archive<impl AsyncRead>> {
+    pub async fn download_packages(&self, container: &ContainerId) -> anyhow::Result<Archive<impl AsyncRead + Unpin>> {
         let options = DownloadFromContainerOptions {
             path: RUNNER_IMAGE_BUILD_OUT,
         };
