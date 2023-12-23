@@ -4,13 +4,17 @@ pub mod devel;
 use std::path::Path;
 use anyhow::Context;
 use async_trait::async_trait;
+use dyn_clone::{clone_trait_object, DynClone};
 use srcinfo::Srcinfo;
 
 const SRCINFO: &str = ".SRCINFO";
 
+clone_trait_object!(PackageSource);
+
 /// this trait abstracts a package source
 #[async_trait]
-pub trait PackageSource: Sync {
+#[typetag::serde(tag = "type")]
+pub trait PackageSource: Sync + DynClone {
 
     /// pulls the package sources for the first time
     async fn create(&mut self, folder: &Path) -> anyhow::Result<()>;

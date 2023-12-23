@@ -9,7 +9,7 @@ use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use sha2::{Sha256, Digest};
 
-const AUTHORIZED_PATH: &str = "./app/authorized_secrets";
+const AUTHORIZED_PATH: &str = "authorized_secrets";
 
 /// this extractor makes sure that users are authorized when making special requests
 pub struct Auth;

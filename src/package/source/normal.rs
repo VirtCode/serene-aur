@@ -1,11 +1,12 @@
 use std::path::Path;
 use async_trait::async_trait;
 use log::debug;
+use serde::{Deserialize, Serialize};
 use crate::package::git;
 use crate::package::source::{PackageSource};
 
 /// this is the source of a normally versioned package
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NormalSource {
     repository: String,
     last_commit: String
@@ -22,6 +23,7 @@ impl NormalSource {
 }
 
 #[async_trait]
+#[typetag::serde]
 impl PackageSource for NormalSource {
 
     async fn create(&mut self, folder: &Path) -> anyhow::Result<()> {

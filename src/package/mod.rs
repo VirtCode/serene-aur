@@ -1,33 +1,36 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{anyhow, Context};
 use async_tar::Builder;
 use hyper::Body;
 use log::{debug, error};
+use serde::{Deserialize, Serialize};
 use tokio::fs;
+use tokio::sync::Mutex;
 use crate::package::source::{PackageSource};
 use crate::package::source::devel::DevelGitSource;
 use crate::package::source::normal::NormalSource;
+use crate::package::store::{PackageStore, PackageStoreRef};
 
 pub mod git;
 pub mod source;
 pub mod aur;
+pub mod store;
+
+const SOURCE_FOLDER: &str = "sources";
 
 const DEFAULT_ARCH: &str = "x86_64";
 const PACKAGE_EXTENSION: &str = ".pkg.tar.zst"; // see /etc/makepkg.conf
 
 pub struct PackageManager {
-    folder: PathBuf,
-    packages: Vec<Package>
+    store: PackageStoreRef
 }
 
 impl PackageManager {
 
-    pub fn new(folder: &Path) -> Self {
-        Self {
-            folder: folder.to_owned(),
-            packages: vec![]
-        }
+    pub fn new(store: PackageStoreRef) -> Self {
+        Self { store }
     }
 
     /// adds a package from the aur to the manager
@@ -50,7 +53,7 @@ impl PackageManager {
     }
 
     async fn add(&mut self, mut source: Box<dyn PackageSource>) -> anyhow::Result<String>{
-        let folder = self.folder
+        let folder = Path::new(SOURCE_FOLDER)
             .join("tmp")
             .join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string());
 
@@ -62,40 +65,29 @@ impl PackageManager {
         error!("package-base: {base}");
 
         // check other packages
-        if self.packages.iter().any(|p| p.base == base) {
+        if self.store.lock().await.has(&base) {
             fs::remove_dir_all(folder).await?;
             return Err(anyhow!("already have package with base {}", base))
         }
 
         // move package
-        fs::rename(folder, self.folder.join(&base)).await?;
+        fs::rename(folder, Path::new(SOURCE_FOLDER).join(&base)).await?;
 
-        self.packages.push(Package {
-            base_folder: Some(self.folder.clone()),
+        self.store.lock().await.update(Package {
+            source,
+
             base: base.clone(),
             version: "".to_string(),
-            source: source,
             devel: false,
             clean: false
-        });
+        }).await.context("failed to persist package in store")?;
 
         Ok(base)
     }
-
-    /// get a package by name
-    pub fn get(&self, string: &str) -> Option<&Package> {
-        self.packages.iter().find(|p| p.base == string)
-    }
-
-    /// mutably get a package by name
-    pub fn get_mut(&mut self, string: &str) -> Option<&mut Package> {
-        self.packages.iter_mut().find(|p| p.base == string)
-    }
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Package {
-    pub base_folder: Option<PathBuf>, // base folder of the package, populated when it is read by a registry
-
     pub base: String,
     source: Box<dyn PackageSource>,
     version: String,
@@ -108,9 +100,7 @@ impl Package {
 
     /// gets the current folder for the package
     fn get_folder(&self) -> PathBuf {
-        self.base_folder.as_ref()
-            .map(|f| f.join(&self.base))
-            .expect("package was not retreived from registry")
+        Path::new(SOURCE_FOLDER).join(&self.base)
     }
 
     /// upgrades the version of the package

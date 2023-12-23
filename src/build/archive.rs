@@ -26,7 +26,7 @@ pub async fn read_version(entries: &mut Entries<impl AsyncRead + Unpin + Sized>)
             entry.read_to_string(&mut version).await
                 .context("could not read .VERSION file from archive from container")?;
 
-            return Ok(version);
+            return Ok(version.trim().to_string());
         }
     }
 

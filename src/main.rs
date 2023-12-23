@@ -8,9 +8,11 @@ use std::any;
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
+use std::sync::{Arc};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use actix_web::{App, HttpServer};
 use actix_web::web::Data;
+use anyhow::Context;
 use bollard::container::{Config, CreateContainerOptions, ListContainersOptions, LogsOptions, StartContainerOptions, WaitContainerOptions};
 use bollard::Docker;
 use bollard::exec::{CreateExecOptions, StartExecResults};
@@ -19,9 +21,11 @@ use futures_util::AsyncReadExt;
 use hyper::Body;
 use log::LevelFilter;
 use simplelog::{ColorChoice, TerminalMode, TermLogger};
+use tokio::sync::Mutex;
 use crate::build::{archive, Builder, ContainerId};
 use crate::build::archive::read_version;
 use crate::package::{Package, PackageManager};
+use crate::package::store::PackageStore;
 use crate::repository::PackageRepository;
 
 #[tokio::main]
@@ -43,22 +47,27 @@ async fn main_web() -> anyhow::Result<()> {
 async fn main() -> Result<(), Box<dyn Error>>{
     TermLogger::init(LevelFilter::Debug, simplelog::Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap();
 
-    let mut manager = PackageManager::new(&PathBuf::from("app/sources"));
+    let store = Arc::new(Mutex::new(PackageStore::init().await?));
+
+    let mut manager = PackageManager::new(store.clone());
     let builder = Builder { docker: Docker::connect_with_socket_defaults().unwrap() };
-    let mut repository = PackageRepository::new("app/repository".into(), "aur".to_string());
+    let mut repository = PackageRepository::new("aur".to_string()).await?;
 
     // download sources
     let package_name = "nvm";
-    manager.add_aur(package_name).await?;
-    let package = manager.get_mut(package_name).unwrap();
+    if !store.lock().await.has(package_name) {
+        manager.add_aur(package_name).await?;
+    }
+
+    let mut package = store.lock().await.get(package_name).context("")?;
 
     // create container
-    let id = builder.prepare(package).await?;
-    builder.upload_sources(&id, package).await?;
+    let id = builder.prepare(&package).await?;
+    builder.upload_sources(&id, &package).await?;
 
     // start container
     let result = builder.build(&id).await?;
-    println!("{result:?}");
+    //println!("{result:?}");
 
     // retrieve data
     let mut archive = archive::begin_read(builder.download_packages(&id).await?)?;
@@ -67,7 +76,8 @@ async fn main() -> Result<(), Box<dyn Error>>{
     package.upgrade_version(&version).await?;
 
     // update repository
-    repository.publish(package, archive).await?;
+    repository.publish(&package, archive).await?;
+    store.lock().await.update(package).await?;
 
     Ok(())
 }
