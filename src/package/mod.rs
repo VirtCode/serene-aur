@@ -117,6 +117,16 @@ impl Package {
         Ok(())
     }
 
+    /// is there an update available for the package source
+    pub async fn updatable(&self) -> anyhow::Result<bool> {
+        self.source.update_available().await
+    }
+
+    /// upgrades the sources to the newest version
+    pub async fn upgrade_sources(&mut self) -> anyhow::Result<()> {
+        self.source.upgrade(&self.get_folder()).await
+    }
+
     /// returns the expected built files
     /// requires the version to be upgraded
     pub async fn expected_files(&self) -> anyhow::Result<Vec<String>> {
@@ -133,6 +143,11 @@ impl Package {
         Ok(packages.iter().map(|s| {
             format!("{s}-{epoch}{version}-{rel}-{arch}{PACKAGE_EXTENSION}")
         }).collect())
+    }
+
+    // returns the expected packages
+    pub async fn expected_packages(&self) -> anyhow::Result<Vec<String>> {
+        self.source.read_packages(&self.get_folder()).await
     }
 
     /// retrieves the source files for a package in a tar archive, inside a hyper body

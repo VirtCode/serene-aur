@@ -4,6 +4,8 @@ use actix_files::Files;
 use anyhow::{anyhow, Context};
 use async_tar::Entries;
 use futures_util::AsyncRead;
+use hyper::body::HttpBody;
+use serde::{Deserialize, Serialize};
 use tokio::fs;
 use crate::build::archive;
 use crate::package::Package;
@@ -23,7 +25,13 @@ pub fn webservice() -> Files {
 
 pub struct PackageRepository {
     name: String,
-    files: HashMap<String, Vec<String>>
+    bases: HashMap<String, Vec<PackageEntry>>
+}
+
+#[derive(Serialize, Deserialize)]
+struct PackageEntry {
+    name: String,
+    file: String
 }
 
 impl PackageRepository {
@@ -31,7 +39,7 @@ impl PackageRepository {
     pub async fn new(name: String) -> anyhow::Result<Self> {
         let mut s = Self {
             name,
-            files: HashMap::new()
+            bases: HashMap::new()
         };
 
         s.load().await?;
@@ -46,7 +54,7 @@ impl PackageRepository {
         let string = fs::read_to_string(path).await
             .context("failed to read database summary from file")?;
 
-        self.files = serde_json::from_str(&string)
+        self.bases = serde_json::from_str(&string)
             .context("failed to deserialize database summary")?;
 
         Ok(())
@@ -55,7 +63,7 @@ impl PackageRepository {
     async fn save(&self) -> anyhow::Result<()> {
         let path = Path::new(REPO_DIR).join(REPO_SERENE);
 
-        let string = serde_json::to_string(&self.files)
+        let string = serde_json::to_string(&self.bases)
             .context("failed to serialize serene database")?;
 
         fs::write(path, string).await
@@ -68,19 +76,20 @@ impl PackageRepository {
         fs::create_dir_all(REPO_DIR).await
             .context("failed to create folder for repository")?;
 
+
         let files = package.expected_files().await
             .context("failed to construct expected files from package")?;
 
         // remove old things if present
-        if let Some(files) = self.files.get(&package.base) {
+        if let Some(entries) = self.bases.get(&package.base) {
             // remove old files from repository
-            manage::remove(&self.name, files, Path::new(REPO_DIR)).await
+            manage::remove(&self.name, &entries.iter().map(|e| e.name.clone()).collect(), Path::new(REPO_DIR)).await
                 .context("failed to remove files from repository")?;
 
             // delete package files
-            for x in files {
-                fs::remove_file(Path::new(REPO_DIR).join(x)).await
-                    .context(format!("failed to delete file from repository: {x}"))?
+            for entry in entries {
+                fs::remove_file(Path::new(REPO_DIR).join(&entry.file)).await
+                    .context(format!("failed to delete file from repository: {}", entry.file))?
             }
         }
 
@@ -92,7 +101,13 @@ impl PackageRepository {
         manage::add(&self.name, &files, Path::new(REPO_DIR)).await
             .context("failed to add files to repository")?;
 
-        self.files.insert(package.base.clone(), files);
+        // create entries
+        let entries = package.expected_packages().await
+            .context("failed to read expected packages from file")?
+            .into_iter().zip(files)
+            .map(|(name, file)| PackageEntry { name, file }).collect();
+
+        self.bases.insert(package.base.clone(), entries);
         self.save().await?;
 
         Ok(())
@@ -100,15 +115,15 @@ impl PackageRepository {
 
     async fn remove(&mut self, package: &Package) -> anyhow::Result<()> {
 
-        if let Some(files) = self.files.remove(&package.base) {
-            // remove files from repository
-            manage::remove(&self.name, &files, Path::new(REPO_DIR)).await
+        if let Some(entries) = self.bases.remove(&package.base) {
+            // remove old files from repository
+            manage::remove(&self.name, &entries.iter().map(|e| e.name.clone()).collect(), Path::new(REPO_DIR)).await
                 .context("failed to remove files from repository")?;
 
             // delete package files
-            for x in &files {
-                fs::remove_file(Path::new(REPO_DIR).join(x)).await
-                    .context(format!("failed to delete file from repository: {x}"))?
+            for entry in entries {
+                fs::remove_file(Path::new(REPO_DIR).join(&entry.file)).await
+                    .context(format!("failed to delete file from repository: {}", entry.file))?
             }
         } else {
             return Err(anyhow!("could not find package {} in repository", &package.base))

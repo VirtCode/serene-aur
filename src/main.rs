@@ -54,12 +54,15 @@ async fn main() -> Result<(), Box<dyn Error>>{
     let mut repository = PackageRepository::new("aur".to_string()).await?;
 
     // download sources
-    let package_name = "nvm";
+    let package_name = "hyprland-git";
     if !store.lock().await.has(package_name) {
         manager.add_aur(package_name).await?;
     }
 
     let mut package = store.lock().await.get(package_name).context("")?;
+    if package.updatable().await? {
+        package.upgrade_sources().await?
+    }
 
     // create container
     let id = builder.prepare(&package).await?;
