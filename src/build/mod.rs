@@ -1,155 +1,96 @@
-pub mod archive;
-
 use std::error::Error;
-use std::io::Read;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use anyhow::{anyhow, Context};
-use async_tar::Archive;
-use bollard::container::{Config, CreateContainerOptions, DownloadFromContainerOptions, ListContainersOptions, LogsOptions, StartContainerOptions, UploadToContainerOptions, WaitContainerOptions};
+use std::sync::Arc;
+use anyhow::Context;
 use bollard::Docker;
-use futures_util::{AsyncRead, AsyncReadExt, Stream, StreamExt};
-use hyper::body::HttpBody;
-use tokio_util::io::StreamReader;
-use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
-use crate::package::Package;
+use log::{error, LevelFilter};
+use simplelog::{ColorChoice, TerminalMode, TermLogger};
+use tokio::sync::RwLock;
+use crate::package::{Package, PackageManager};
+use crate::package::store::PackageStore;
+use crate::repository::PackageRepository;
+use crate::runner::{archive, Runner};
+use crate::runner::archive::read_version;
 
-const RUNNER_IMAGE: &str = "serene-aur-runner:latest";
-const RUNNER_IMAGE_BUILD_IN: &str = "/app/build";
-const RUNNER_IMAGE_BUILD_OUT: &str = "/app/build/serene-build";
+pub mod schedule;
 
-
-#[derive(Debug)]
-pub struct BuildStatus {
-    pub success: bool,
-    pub fatal: bool,
-    pub logs: String,
-
-    started: SystemTime,
-    duration: Duration,
+struct Serene {
+    store: Arc<RwLock<PackageStore>>,
+    runner: Runner,
+    repository: PackageRepository,
 }
 
-pub type ContainerId = String;
+impl Serene {
 
-pub struct Builder {
-    pub docker: Docker,
-}
+    pub async fn start(&mut self, package: &str, force: bool) {
+        let mut package =
+            if let Some(p) = self.store.read().await.get(package) { p }
+            else {
+                error!("package scheduled for build is no longer in package store");
+                return
+            };
 
-impl Builder {
-
-    pub async fn build(&self, container: &ContainerId) -> anyhow::Result<BuildStatus> {
-        let start = SystemTime::now();
-
-        // start container
-        self.docker.start_container(container, None::<StartContainerOptions<String>>).await?;
-
-        // wait for container to exit and collect logs
-        let result =
-            self.docker.wait_container(container,  None::<WaitContainerOptions<String>>).collect::<Vec<_>>().await;
-
-        let end = SystemTime::now();
-
-        // retrieve logs
-        let log_options = LogsOptions {
-            stdout: true, stderr: true,
-            since: start.duration_since(UNIX_EPOCH).unwrap().as_secs() as i64,
-            ..Default::default()
+        let updatable = match package.updatable().await
+            .context("failed to check for package updates on scheduled build") {
+            Ok(u) => { u }
+            Err(e) => { error!("{e:#}"); return }
         };
 
-        let logs: Vec<String> = self.docker.logs::<String>(container, Some(log_options)).filter_map(|r| async {
-            r.ok().map(|c| c.to_string())
-        }).collect::<Vec<_>>().await;
-
-        Ok(BuildStatus {
-            success: result.first().and_then(|r| r.as_ref().ok()).is_some(),
-            fatal: false,
-            logs: logs.join(""),
-            started: start,
-            duration: end.duration_since(start).expect("should work")
-        })
-    }
-
-    /// downloads the built directory from the container, in a stream.
-    /// the files are in a tar archive, all in the `serene-build` folder. See RUNNER_IMAGE_BUILD_OUT
-    pub async fn download_packages(&self, container: &ContainerId) -> anyhow::Result<Archive<impl AsyncRead + Unpin>> {
-        let options = DownloadFromContainerOptions {
-            path: RUNNER_IMAGE_BUILD_OUT,
-        };
-
-        let stream = self.docker.download_from_container(container, Some(options))
-            .map(|b| b.map_err(std::io::Error::other));
-        let reader = StreamReader::new(stream);
-
-        let archive = Archive::new(reader.compat());
-
-        Ok(archive)
-    }
-
-    /// uploads files to the build directory in a container
-    /// the files should be in a tar archive, in a body, where everything is in the root
-    pub async fn upload_sources(&self, container: &ContainerId, package: &Package) -> anyhow::Result<()> {
-
-        let sources = package.sources_tar().await
-            .context("could not get sources tar from package")?;
-
-        let options = UploadToContainerOptions{
-            path: RUNNER_IMAGE_BUILD_IN,
-            no_overwrite_dir_non_dir: "false"
-        };
-
-        self.docker.upload_to_container(container, Some(options), sources).await
-            .context("could not upload sources to docker container")?;
-
-        Ok(())
-    }
-
-    /// prepares a container for the build process
-    /// either creates a new one or takes an old one which was already created
-    pub async fn prepare(&self, package: &Package) -> anyhow::Result<ContainerId> {
-        Ok(if let Some(id) = self.find_container(package).await? {
-            id
-        } else {
-            self.create_container(package).await?
-        })
-    }
-
-    /// finds an already created container for a package
-    async fn find_container(&self, package: &Package) -> anyhow::Result<Option<String>> {
-        let summary = self.docker.list_containers::<String>(Some(ListContainersOptions {
-            all: true,
-            .. Default::default()
-        })).await?;
-
-        if let Some(s) = summary.iter().find(|s| {
-            s.names.as_ref().map(|v| v.contains(&format!("/{}", container_name(package)))).unwrap_or_default()
-        }) {
-            Ok(Some(s.id.clone().context("container does not have id")?))
-        } else {
-            Ok(None)
+        if updatable || force {
+            self.build(package, updatable).await;
         }
     }
 
-    /// creates a new build container for a package
-    async fn create_container(&self, package: &Package) -> anyhow::Result<String> {
-        let config = Config {
-            image: Some(RUNNER_IMAGE),
-            ..Default::default()
-        };
+    async fn build(&mut self, package: Package, update: bool) {
 
-        let options = CreateContainerOptions {
-            name: container_name(&package),
-            ..Default::default()
-        };
 
-        Ok(self.docker.create_container(Some(options), config).await?.id)
+
+
+
+
+
     }
 }
 
-/*
 
 
- */
+#[tokio::main]
+async fn main_test() -> Result<(), Box<dyn Error>>{
+    TermLogger::init(LevelFilter::Debug, simplelog::Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap();
 
-fn container_name(package: &Package) -> String{
-    // TODO: Make configurable
-    format!("serene-aur-runner-{}", &package.base)
+    let store = Arc::new(RwLock::new(PackageStore::init().await?));
+
+    let mut manager = PackageManager::new(store.clone());
+    let builder = Runner { docker: Docker::connect_with_socket_defaults().unwrap() };
+    let mut repository = PackageRepository::new().await?;
+
+    // download sources
+    let package_name = "nvm";
+    if !store.read().await.has(package_name) {
+        manager.add_aur(package_name).await?;
+    }
+
+    let mut package = store.read().await.get(package_name).context("")?;
+    if package.updatable().await? {
+        package.upgrade_sources().await?
+    }
+
+    // create container
+    let id = builder.prepare(&package).await?;
+    builder.upload_sources(&id, &package).await?;
+
+    // start container
+    let result = builder.build(&id).await?;
+    //println!("{result:?}");
+
+    // retrieve data
+    let mut archive = archive::begin_read(builder.download_packages(&id).await?)?;
+
+    let version = read_version(&mut archive).await?;
+    package.upgrade_version(&version).await?;
+
+    // update repository
+    repository.publish(&package, archive).await?;
+    store.write().await.update(package).await?;
+
+    Ok(())
 }

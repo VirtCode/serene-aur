@@ -14,7 +14,7 @@ clone_trait_object!(PackageSource);
 /// this trait abstracts a package source
 #[async_trait]
 #[typetag::serde(tag = "type")]
-pub trait PackageSource: Sync + DynClone {
+pub trait PackageSource: Sync + Send + DynClone {
 
     /// pulls the package sources for the first time
     async fn create(&mut self, folder: &Path) -> anyhow::Result<()>;

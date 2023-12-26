@@ -7,7 +7,7 @@ use futures_util::AsyncRead;
 use hyper::body::HttpBody;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
-use crate::build::archive;
+use crate::runner::archive;
 use crate::config::CONFIG;
 use crate::package::Package;
 

@@ -52,7 +52,7 @@ impl PackageManager {
         }
     }
 
-    async fn add(&mut self, mut source: Box<dyn PackageSource>) -> anyhow::Result<String>{
+    async fn add(&mut self, mut source: Box<dyn PackageSource + Sync + Send>) -> anyhow::Result<String>{
         let folder = Path::new(SOURCE_FOLDER)
             .join("tmp")
             .join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string());
@@ -65,7 +65,7 @@ impl PackageManager {
         error!("package-base: {base}");
 
         // check other packages
-        if self.store.lock().await.has(&base) {
+        if self.store.read().await.has(&base) {
             fs::remove_dir_all(folder).await?;
             return Err(anyhow!("already have package with base {}", base))
         }
@@ -73,12 +73,13 @@ impl PackageManager {
         // move package
         fs::rename(folder, Path::new(SOURCE_FOLDER).join(&base)).await?;
 
-        self.store.lock().await.update(Package {
+        self.store.write().await.update(Package {
             source,
 
             base: base.clone(),
             version: "".to_string(),
-            clean: false
+            clean: false,
+            schedule: None
         }).await.context("failed to persist package in store")?;
 
         Ok(base)
@@ -88,10 +89,11 @@ impl PackageManager {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Package {
     pub base: String,
-    source: Box<dyn PackageSource>,
+    source: Box<dyn PackageSource + Sync + Send>,
     version: String,
 
-    clean: bool,
+    pub clean: bool,
+    schedule: Option<String>
 }
 
 impl Package {
@@ -99,6 +101,14 @@ impl Package {
     /// gets the current folder for the package
     fn get_folder(&self) -> PathBuf {
         Path::new(SOURCE_FOLDER).join(&self.base)
+    }
+
+    /// gets the schedule string for the package
+    pub fn get_schedule(&self) -> String {
+        self.schedule.as_ref().unwrap_or_else(|| {
+            if self.source.is_devel() { &CONFIG.schedule_devel }
+            else { &CONFIG.schedule_default }
+        }).clone()
     }
 
     /// upgrades the version of the package

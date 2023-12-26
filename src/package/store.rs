@@ -1,15 +1,16 @@
 use std::collections::HashMap;
 use std::io::BufRead;
 use std::path::Path;
-use std::sync::Arc;
+use std::rc::Rc;
+use std::sync::{Arc};
 use anyhow::Context;
 use tokio::fs;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use crate::package::Package;
 
 const FILE: &str = "serene.json";
 
-pub type PackageStoreRef = Arc<Mutex<PackageStore>>;
+pub type PackageStoreRef = Arc<RwLock<PackageStore>>;
 
 pub struct PackageStore {
     packages: HashMap<String, Package>
@@ -51,6 +52,10 @@ impl PackageStore {
             .context("failed to write serene database to file")?;
 
         Ok(())
+    }
+    
+    pub fn peek(&self) -> Vec<&Package> {
+        self.packages.values().collect()
     }
 
     pub fn has(&self, base: &str) -> bool {

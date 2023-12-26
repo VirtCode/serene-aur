@@ -1,5 +1,4 @@
 use std::path::Path;
-use actix_web::dev::ResourcePath;
 use anyhow::{anyhow, Context};
 use async_std::path::PathBuf;
 use async_tar::{Archive, Entries};
