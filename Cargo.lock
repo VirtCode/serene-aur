@@ -1957,6 +1957,7 @@ dependencies = [
  "futures",
  "futures-util",
  "hyper",
+ "lazy_static",
  "log",
  "raur",
  "serde",

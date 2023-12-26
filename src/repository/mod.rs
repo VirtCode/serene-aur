@@ -8,6 +8,7 @@ use hyper::body::HttpBody;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use crate::build::archive;
+use crate::config::CONFIG;
 use crate::package::Package;
 
 mod manage;
@@ -15,11 +16,9 @@ mod manage;
 const REPO_DIR: &str = "repository";
 const REPO_SERENE: &str = "bases.json";
 
-const ARCH: &str = "x86_64";
-
 /// returns the webservice which exposes the repository
 pub fn webservice() -> Files {
-    Files::new(ARCH, REPO_DIR)
+    Files::new(&CONFIG.architecture, REPO_DIR)
         .show_files_listing()
 }
 
@@ -36,9 +35,9 @@ struct PackageEntry {
 
 impl PackageRepository {
 
-    pub async fn new(name: String) -> anyhow::Result<Self> {
+    pub async fn new() -> anyhow::Result<Self> {
         let mut s = Self {
-            name,
+            name: CONFIG.repository_name.to_owned(),
             bases: HashMap::new()
         };
 

@@ -50,4 +50,6 @@ impl PackageSource for NormalSource {
 
         Ok(())
     }
+
+    fn is_devel(&self) -> bool { false }
 }

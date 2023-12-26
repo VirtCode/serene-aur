@@ -3,6 +3,7 @@ pub mod package;
 
 mod repository;
 mod web;
+pub mod config;
 
 use std::any;
 use std::collections::HashMap;
@@ -25,7 +26,7 @@ use tokio::sync::Mutex;
 use crate::build::{archive, Builder, ContainerId};
 use crate::build::archive::read_version;
 use crate::package::{Package, PackageManager};
-use crate::package::store::PackageStore;
+use crate::package::store::{PackageStore, PackageStoreRef};
 use crate::repository::PackageRepository;
 
 #[tokio::main]
@@ -43,6 +44,13 @@ async fn main_web() -> anyhow::Result<()> {
     Ok(())
 }
 
+struct Serene {
+    store: PackageStoreRef,
+
+
+
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>>{
     TermLogger::init(LevelFilter::Debug, simplelog::Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap();
@@ -51,7 +59,7 @@ async fn main() -> Result<(), Box<dyn Error>>{
 
     let mut manager = PackageManager::new(store.clone());
     let builder = Builder { docker: Docker::connect_with_socket_defaults().unwrap() };
-    let mut repository = PackageRepository::new("aur".to_string()).await?;
+    let mut repository = PackageRepository::new().await?;
 
     // download sources
     let package_name = "hyprland-git";

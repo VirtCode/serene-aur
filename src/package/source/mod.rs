@@ -45,4 +45,6 @@ pub trait PackageSource: Sync + DynClone {
         tokio::fs::read_to_string(folder.join(SRCINFO)).await?
             .parse().context("failed to parse srcinfo")
     }
+
+    fn is_devel(&self) -> bool;
 }

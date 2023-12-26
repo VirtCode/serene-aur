@@ -82,4 +82,6 @@ impl PackageSource for DevelGitSource {
     async fn read_version(&self, _folder: &Path) -> anyhow::Result<Option<String>> {
         Ok(None)
     }
+
+    fn is_devel(&self) -> bool { true }
 }

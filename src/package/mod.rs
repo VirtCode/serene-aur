@@ -8,6 +8,7 @@ use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tokio::sync::Mutex;
+use crate::config::CONFIG;
 use crate::package::source::{PackageSource};
 use crate::package::source::devel::DevelGitSource;
 use crate::package::source::normal::NormalSource;
@@ -20,7 +21,6 @@ pub mod store;
 
 const SOURCE_FOLDER: &str = "sources";
 
-const DEFAULT_ARCH: &str = "x86_64";
 const PACKAGE_EXTENSION: &str = ".pkg.tar.zst"; // see /etc/makepkg.conf
 
 pub struct PackageManager {
@@ -78,7 +78,6 @@ impl PackageManager {
 
             base: base.clone(),
             version: "".to_string(),
-            devel: false,
             clean: false
         }).await.context("failed to persist package in store")?;
 
@@ -92,7 +91,6 @@ pub struct Package {
     source: Box<dyn PackageSource>,
     version: String,
 
-    devel: bool,
     clean: bool,
 }
 
@@ -167,9 +165,8 @@ impl Package {
 }
 
 /// selects the built architecture from a list of architectures
-/// TODO: make this depend on the env or something
 fn select_arch(available: Vec<String>) -> String {
-    // x86_64 system can only build either itself or any
-    if available.iter().any(|s| s == DEFAULT_ARCH) { DEFAULT_ARCH.to_owned() }
+    // system can only build either itself or any
+    if available.iter().any(|s| s == &CONFIG.architecture) { CONFIG.architecture.to_owned() }
     else { "any".to_string() }
 }
