@@ -64,7 +64,6 @@ impl PackageManager {
         // pull package
         source.create(&folder).await?;
         let base = source.read_base(&folder).await?;
-        error!("package-base: {base}");
 
         // check other packages
         if self.store.read().await.has(&base) {

@@ -12,18 +12,19 @@ use std::sync::{Arc, };
 use actix_web::{App, HttpMessage, HttpServer};
 use actix_web::web::Data;
 use anyhow::Context;
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use bollard::Docker;
 use futures::stream::StreamExt;
 use futures_util::AsyncReadExt;
-use log::LevelFilter;
+use log::{info, LevelFilter};
+use sha2::{Digest, Sha256};
 use simplelog::{ColorChoice, TerminalMode, TermLogger};
 use tokio::sync::{Mutex, RwLock};
 use crate::build::schedule::BuildScheduler;
 use crate::build::Builder;
 use crate::runner::{archive, Runner, ContainerId};
-use crate::runner::archive::read_version;
-use crate::package::{Package, PackageManager};
-use crate::package::store::{PackageStore, PackageStoreRef};
+use crate::package::store::{PackageStore};
 use crate::repository::PackageRepository;
 
 #[tokio::main]
@@ -60,8 +61,8 @@ async fn main() -> anyhow::Result<()> {
 
     HttpServer::new(move ||
         App::new()
-            .app_data(Data::new(schedule.clone()))
-            .app_data(Data::new(store.clone()))
+            .app_data(Data::from(schedule.clone()))
+            .app_data(Data::from(store.clone()))
             .service(repository::webservice())
             .service(web::status)
             .service(web::add)
