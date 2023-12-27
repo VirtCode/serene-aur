@@ -21,6 +21,7 @@ async-trait = "0.1.74"
 # scheduling
 tokio-cron-scheduler = "0.9.4"
 uuid = "1.6.1"
+chrono = { version = "0.4.31", features = ["serde"] }
 
 # docker
 bollard = "0.15.0"

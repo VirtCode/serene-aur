@@ -2,27 +2,64 @@ use std::error::Error;
 use std::sync::Arc;
 use anyhow::Context;
 use bollard::Docker;
-use log::{error, LevelFilter};
+use chrono::{DateTime, Utc};
+use log::{error, info, LevelFilter};
+use serde::{Deserialize, Serialize};
 use simplelog::{ColorChoice, TerminalMode, TermLogger};
 use tokio::sync::RwLock;
+use crate::build::BuildProgress::{Build, Clean, Publish, Update};
+use crate::build::BuildState::{Failure, Fatal, Running, Success};
 use crate::package::{Package, PackageManager};
 use crate::package::store::PackageStore;
 use crate::repository::PackageRepository;
-use crate::runner::{archive, Runner};
-use crate::runner::archive::read_version;
+use crate::runner::{archive, ContainerId, Runner, RunStatus};
+use crate::runner::archive::{begin_read, read_version};
 
 pub mod schedule;
 
-struct Serene {
+#[derive(Clone, Serialize, Deserialize)]
+pub enum BuildProgress {
+    Update,
+    Build,
+    Publish,
+    Clean
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub enum BuildState {
+    Running(BuildProgress),
+    Success,
+    Failure,
+    Fatal(String, BuildProgress)
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct BuildSummary {
+    pub state: BuildState,
+
+    pub logs: Option<RunStatus>,
+    pub version: Option<String>,
+
+    pub started: DateTime<Utc>,
+    pub ended: Option<DateTime<Utc>>
+}
+
+pub struct Builder {
     store: Arc<RwLock<PackageStore>>,
     runner: Runner,
     repository: PackageRepository,
 }
 
-impl Serene {
+impl Builder {
+
+    pub fn new(store: Arc<RwLock<PackageStore>>, runner: Runner, repository: PackageRepository) -> Self {
+        Self { store, runner, repository }
+    }
 
     pub async fn start(&mut self, package: &str, force: bool) {
-        let mut package =
+        info!("starting build for package {package} now");
+
+        let package =
             if let Some(p) = self.store.read().await.get(package) { p }
             else {
                 error!("package scheduled for build is no longer in package store");
@@ -36,61 +73,131 @@ impl Serene {
         };
 
         if updatable || force {
-            self.build(package, updatable).await;
+            match self.run(package, updatable).await
+                .context("build run for package failed extremely fatally"){
+                Ok(_) => {}
+                Err(e) => { error!("{e:#}") }
+            };
         }
     }
 
-    async fn build(&mut self, package: Package, update: bool) {
+    async fn run(&mut self, mut package: Package, update: bool) -> anyhow::Result<()> {
+        let start = Utc::now();
 
+        let mut summary = BuildSummary {
+            state: Running(if update { Update } else { Build }),
+            started: start.clone(),
+            logs: None, version: None, ended: None,
+        };
 
+        package.update_build(summary.clone());
+        self.store.write().await.update(package.clone()).await?;
 
+        'run: {
+            // UPDATE
+            if update {
+                match self.update(&mut package).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        summary.state = Fatal(format!("{e:#}"), Update);
+                        break 'run;
+                    }
+                };
 
+                summary.state = Running(Build);
 
+                package.update_build(summary.clone());
+                self.store.write().await.update(package.clone()).await?;
+            }
 
+            // BUILD
+            let (container, success) = match self.build(&mut package).await {
+                Ok((status, container)) => {
+                    let next = status.success;
+                    summary.logs = Some(status);
+                    (container, next)
+                }
+                Err(e) => {
+                    summary.state = Fatal(format!("{e:#}"), Build);
+                    break 'run;
+                }
+            };
+            summary.state = Running(if success { Publish } else { Clean });
 
+            package.update_build(summary.clone());
+            self.store.write().await.update(package.clone()).await?;
+
+            // PUBLISH
+            if success {
+                match self.publish(&mut package, &container).await {
+                    Ok(()) => { }
+                    Err(e) => {
+                        summary.state = Fatal(format!("{e:#}"), Publish);
+                        break 'run;
+                    }
+                }
+
+                summary.version = Some(package.version.clone());
+                summary.state = Running(Clean);
+
+                package.update_build(summary.clone());
+                self.store.write().await.update(package.clone()).await?;
+            }
+
+            // CLEAN
+            match self.clean(&container).await {
+                Ok(()) => {}
+                Err(e) => {
+                    summary.state = Fatal(format!("{e:#}"), Clean);
+                    break 'run;
+                }
+            }
+
+            summary.state = if success {
+                Success
+            } else {
+                Failure
+            };
+        };
+
+        summary.ended = Some(Utc::now());
+
+        package.update_build(summary);
+        self.store.write().await.update(package).await?;
+
+        Ok(())
     }
-}
 
-
-
-#[tokio::main]
-async fn main_test() -> Result<(), Box<dyn Error>>{
-    TermLogger::init(LevelFilter::Debug, simplelog::Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap();
-
-    let store = Arc::new(RwLock::new(PackageStore::init().await?));
-
-    let mut manager = PackageManager::new(store.clone());
-    let builder = Runner { docker: Docker::connect_with_socket_defaults().unwrap() };
-    let mut repository = PackageRepository::new().await?;
-
-    // download sources
-    let package_name = "nvm";
-    if !store.read().await.has(package_name) {
-        manager.add_aur(package_name).await?;
+    // updates the sources of a given package
+    async fn update(&mut self, package: &mut Package) -> anyhow::Result<()> {
+        package.upgrade_sources().await
     }
 
-    let mut package = store.read().await.get(package_name).context("")?;
-    if package.updatable().await? {
-        package.upgrade_sources().await?
+    // builds a given package
+    async fn build(&mut self, package: &mut Package) -> anyhow::Result<(RunStatus, ContainerId)> {
+        let container = self.runner.prepare(package).await?;
+
+        self.runner.upload_sources(&container, package).await?;
+
+        let status = self.runner.build(&container).await?;
+
+        Ok((status, container))
     }
 
-    // create container
-    let id = builder.prepare(&package).await?;
-    builder.upload_sources(&id, &package).await?;
+    // publishes a given package to the repository
+    async fn publish(&mut self, package: &mut Package, container: &ContainerId) -> anyhow::Result<()> {
+        let stream = self.runner.download_packages(&container).await?;
+        let mut archive = begin_read(stream)?;
 
-    // start container
-    let result = builder.build(&id).await?;
-    //println!("{result:?}");
+        let version = read_version(&mut archive).await?;
+        package.upgrade_version(&version).await?;
 
-    // retrieve data
-    let mut archive = archive::begin_read(builder.download_packages(&id).await?)?;
+        self.repository.publish(package, archive).await
+    }
 
-    let version = read_version(&mut archive).await?;
-    package.upgrade_version(&version).await?;
+    // cleans the container for a given package
+    async fn clean(&mut self, container: &ContainerId) -> anyhow::Result<()> {
+        self.runner.clean(container).await
+    }
 
-    // update repository
-    repository.publish(&package, archive).await?;
-    store.write().await.update(package).await?;
-
-    Ok(())
 }

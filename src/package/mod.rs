@@ -3,11 +3,13 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{anyhow, Context};
 use async_tar::Builder;
+use chrono::{DateTime, Utc};
 use hyper::Body;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tokio::sync::Mutex;
+use crate::build::BuildSummary;
 use crate::config::CONFIG;
 use crate::package::source::{PackageSource};
 use crate::package::source::devel::DevelGitSource;
@@ -75,11 +77,16 @@ impl PackageManager {
 
         self.store.write().await.update(Package {
             source,
+            version: "".to_string(),
 
             base: base.clone(),
-            version: "".to_string(),
+            added: Utc::now(),
+
             clean: false,
-            schedule: None
+            enabled: true,
+            schedule: None,
+
+            builds: vec![]
         }).await.context("failed to persist package in store")?;
 
         Ok(base)
@@ -89,11 +96,16 @@ impl PackageManager {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Package {
     pub base: String,
-    source: Box<dyn PackageSource + Sync + Send>,
-    version: String,
+    added: DateTime<Utc>,
 
+    source: Box<dyn PackageSource + Sync + Send>,
+    pub version: String,
+
+    pub enabled: bool,
     pub clean: bool,
-    schedule: Option<String>
+    schedule: Option<String>,
+
+    builds: Vec<BuildSummary>
 }
 
 impl Package {
@@ -172,6 +184,16 @@ impl Package {
         Ok(Body::from(archive.into_inner().await?))
     }
 
+    /// adds a build to the package
+    pub fn add_build(&mut self, build: BuildSummary) {
+        self.builds.push(build)
+    }
+
+    /// update a build summary with a newer version. Matching is done on the start date.
+    pub fn update_build(&mut self, build: BuildSummary) {
+        self.builds.retain(|f| f.started != build.started);
+        self.builds.push(build)
+    }
 }
 
 /// selects the built architecture from a list of architectures

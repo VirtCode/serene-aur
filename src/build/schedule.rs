@@ -6,17 +6,21 @@ use log::{debug, info, warn};
 use tokio::sync::RwLock;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use uuid::Uuid;
+use crate::build::Builder;
 use crate::package::Package;
 
 pub struct BuildScheduler {
+    builder: Arc<RwLock<Builder>>,
+
     sched: JobScheduler,
     jobs: HashMap<String, Uuid>,
     locks: HashMap<String, Arc<RwLock<bool>>>
 }
 
 impl BuildScheduler {
-    pub async fn new() -> anyhow::Result<Self> {
+    pub async fn new(builder: Arc<RwLock<Builder>>) -> anyhow::Result<Self> {
         Ok(Self {
+            builder,
             sched: JobScheduler::new().await
                 .context("failed to initialize job scheduler")?,
             jobs: HashMap::new(),
@@ -40,6 +44,7 @@ impl BuildScheduler {
 
         let lock = self.get_lock(package);
         let base = package.base.clone();
+        let builder = self.builder.clone();
 
         if *lock.read().await {
             return Err(anyhow!("cannot run build for package {base} now because lock for build is set"))
@@ -48,8 +53,9 @@ impl BuildScheduler {
         let job = Job::new_one_shot_async(Duration::from_secs(0), move |_, _| {
             let lock = lock.clone();
             let base = base.clone();
+            let builder = builder.clone();
 
-            Box::pin(async move { run(lock, base).await })
+            Box::pin(async move { run(lock, builder, true, base).await })
         }).context(format!("failed to create job for package {}", package.base))?;
 
         self.sched.add(job).await
@@ -74,12 +80,14 @@ impl BuildScheduler {
 
         let lock = self.get_lock(package);
         let base = package.base.clone();
+        let builder = self.builder.clone();
 
         let job = Job::new_async(package.get_schedule().as_str(), move |_, _| {
             let lock = lock.clone();
             let base = base.clone();
+            let builder = builder.clone();
 
-            Box::pin(async move { run(lock, base).await })
+            Box::pin(async move { run(lock, builder, false, base).await })
         }).context(format!("failed to create job for package {}", package.base))?;
 
         self.jobs.insert(package.base.clone(), job.guid());
@@ -91,15 +99,15 @@ impl BuildScheduler {
     }
 }
 
-async fn run(lock: Arc<RwLock<bool>>, base: String) {
+async fn run(lock: Arc<RwLock<bool>>, builder: Arc<RwLock<Builder>>, force: bool, base: String) {
     if *lock.read().await {
         warn!("cancelling schedule for package {base} because the lock is set");
         return
     }
 
-    info!("building package {base} now");
+    info!("waiting for ownership to build package {base} now");
 
     *lock.write().await = true;
-
+    builder.write().await.start(&base, force).await;
     *lock.write().await = false;
 }

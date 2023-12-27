@@ -19,6 +19,7 @@ use log::LevelFilter;
 use simplelog::{ColorChoice, TerminalMode, TermLogger};
 use tokio::sync::{Mutex, RwLock};
 use crate::build::schedule::BuildScheduler;
+use crate::build::Builder;
 use crate::runner::{archive, Runner, ContainerId};
 use crate::runner::archive::read_version;
 use crate::package::{Package, PackageManager};
@@ -31,13 +32,24 @@ async fn main() -> anyhow::Result<()> {
 
     // initializing storage
     let store = PackageStore::init().await
-        .context("failed to serene data storage")?;
+        .context("failed to create serene data storage")?;
+    let store = Arc::new(RwLock::new(store));
+
+    // initializing builder
+    let builder = Builder::new(
+        store.clone(),
+        Runner::new()
+            .context("failed to initialize docker runner")?,
+        PackageRepository::new().await
+            .context("failed to create package repository")?
+    );
+    let builder = Arc::new(RwLock::new(builder));
 
     // creating scheduler
-    let mut schedule = BuildScheduler::new().await
+    let mut schedule = BuildScheduler::new(builder).await
         .context("failed to start package scheduler")?;
 
-    for package in store.peek() {
+    for package in store.read().await.peek() {
         schedule.schedule(package).await
             .context(format!("failed to start schedule for package {}", &package.base))?;
     }
@@ -45,7 +57,6 @@ async fn main() -> anyhow::Result<()> {
     schedule.start().await?;
 
     let schedule = Arc::new(RwLock::new(schedule));
-    let store = Arc::new(RwLock::new(store));
 
     HttpServer::new(move ||
         App::new()

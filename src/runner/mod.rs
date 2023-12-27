@@ -2,15 +2,15 @@ pub mod archive;
 
 use std::error::Error;
 use std::io::Read;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use anyhow::{anyhow, Context};
+use anyhow::{Context};
 use async_tar::Archive;
 use bollard::container::{Config, CreateContainerOptions, DownloadFromContainerOptions, ListContainersOptions, LogsOptions, StartContainerOptions, UploadToContainerOptions, WaitContainerOptions};
 use bollard::Docker;
-use futures_util::{AsyncRead, AsyncReadExt, Stream, StreamExt};
-use hyper::body::HttpBody;
+use chrono::{DateTime, Utc};
+use futures_util::{AsyncRead, StreamExt};
+use serde::{Deserialize, Serialize};
 use tokio_util::io::StreamReader;
-use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
+use tokio_util::compat::{TokioAsyncReadCompatExt};
 use crate::config::CONFIG;
 use crate::package::Package;
 
@@ -19,14 +19,13 @@ const RUNNER_IMAGE_BUILD_IN: &str = "/app/build";
 const RUNNER_IMAGE_BUILD_OUT: &str = "/app/build/serene-build";
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunStatus {
     pub success: bool,
-    pub fatal: bool,
     pub logs: String,
 
-    started: SystemTime,
-    duration: Duration,
+    started: DateTime<Utc>,
+    ended: DateTime<Utc>,
 }
 
 pub type ContainerId = String;
@@ -45,7 +44,7 @@ impl Runner {
     }
 
     pub async fn build(&self, container: &ContainerId) -> anyhow::Result<RunStatus> {
-        let start = SystemTime::now();
+        let start = Utc::now();
 
         // start container
         self.docker.start_container(container, None::<StartContainerOptions<String>>).await?;
@@ -54,12 +53,12 @@ impl Runner {
         let result =
             self.docker.wait_container(container,  None::<WaitContainerOptions<String>>).collect::<Vec<_>>().await;
 
-        let end = SystemTime::now();
+        let end = Utc::now();
 
         // retrieve logs
         let log_options = LogsOptions {
             stdout: true, stderr: true,
-            since: start.duration_since(UNIX_EPOCH).unwrap().as_secs() as i64,
+            since: start.timestamp(),
             ..Default::default()
         };
 
@@ -69,10 +68,10 @@ impl Runner {
 
         Ok(RunStatus {
             success: result.first().and_then(|r| r.as_ref().ok()).is_some(),
-            fatal: false,
             logs: logs.join(""),
+
             started: start,
-            duration: end.duration_since(start).expect("should work")
+            ended: end,
         })
     }
 
@@ -149,6 +148,11 @@ impl Runner {
         };
 
         Ok(self.docker.create_container(Some(options), config).await?.id)
+    }
+
+    pub async fn clean(&self, container: &ContainerId) -> anyhow::Result<()> {
+        self.docker.remove_container(&container, None).await
+            .context("failed to remove container whilst cleaning")
     }
 }
 
