@@ -59,6 +59,7 @@ async fn main() -> anyhow::Result<()> {
 
     let schedule = Arc::new(RwLock::new(schedule));
 
+    // web app
     HttpServer::new(move ||
         App::new()
             .app_data(Data::from(schedule.clone()))

@@ -9,15 +9,19 @@ use uuid::Uuid;
 use crate::build::Builder;
 use crate::package::Package;
 
+/// this struct schedules builds for all packages
 pub struct BuildScheduler {
     builder: Arc<RwLock<Builder>>,
 
     sched: JobScheduler,
     jobs: HashMap<String, Uuid>,
+    /// stores whether a package is currently being built
     locks: HashMap<String, Arc<RwLock<bool>>>
 }
 
 impl BuildScheduler {
+
+    /// creates a new scheduler
     pub async fn new(builder: Arc<RwLock<Builder>>) -> anyhow::Result<Self> {
         Ok(Self {
             builder,
@@ -28,17 +32,20 @@ impl BuildScheduler {
         })
     }
 
+    /// starts the scheduler
     pub async fn start(&self) -> anyhow::Result<()> {
         self.sched.start().await
             .context("failed to start scheduler")
     }
 
+    /// get the build lock of a package
     fn get_lock(&mut self, package: &Package) -> Arc<RwLock<bool>> {
         self.locks.entry(package.base.clone())
             .or_insert_with(|| Arc::new(RwLock::new(false)))
             .clone()
     }
 
+    /// runs a one-shot build for a package
     pub async fn run(&mut self, package: &Package) -> anyhow::Result<()> {
         info!("scheduling one-shot build for package {} now", &package.base);
 
@@ -64,6 +71,7 @@ impl BuildScheduler {
         Ok(())
     }
 
+    /// unschedules the build for a package
     pub async fn unschedule(&mut self, package: &Package) -> anyhow::Result<()> {
         if let Some(id) = self.jobs.remove(&package.base) {
             debug!("unscheduling job for {}", package.base);
@@ -74,6 +82,7 @@ impl BuildScheduler {
         Ok(())
     }
 
+    /// schedules the builds for a package
     pub async fn schedule(&mut self, package: &Package) -> anyhow::Result<()>{
         info!("scheduling recurring build for package {}", &package.base);
         self.unschedule(package).await?;
@@ -99,13 +108,14 @@ impl BuildScheduler {
     }
 }
 
+/// runs a build for a package
 async fn run(lock: Arc<RwLock<bool>>, builder: Arc<RwLock<Builder>>, force: bool, base: String) {
     if *lock.read().await {
         warn!("cancelling schedule for package {base} because the lock is set");
         return
     }
 
-    info!("waiting for ownership to build package {base} now");
+    info!("waiting for ownership to build package {base}");
 
     *lock.write().await = true;
     builder.write().await.start(&base, force).await;

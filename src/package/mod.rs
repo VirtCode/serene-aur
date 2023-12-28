@@ -8,7 +8,7 @@ use hyper::Body;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use crate::build::BuildSummary;
 use crate::config::CONFIG;
 use crate::package::source::{PackageSource};
@@ -25,85 +25,78 @@ const SOURCE_FOLDER: &str = "sources";
 
 const PACKAGE_EXTENSION: &str = ".pkg.tar.zst"; // see /etc/makepkg.conf
 
-pub struct PackageManager {
-    store: PackageStoreRef
-}
+/// adds a repository as a package
+pub async fn add_repository(store: Arc<RwLock<PackageStore>>, repository: &str, devel: bool) -> anyhow::Result<Option<String>>{
+    debug!("adding package from {repository}, devel: {devel}");
 
-impl PackageManager {
-
-    pub fn new(store: PackageStoreRef) -> Self {
-        Self { store }
-    }
-
-    /// adds a package from the aur to the manager
-    pub async fn add_aur(&mut self, name: &str) -> anyhow::Result<String> {
-        debug!("adding aur package {name}");
-        let info = aur::find(name).await?;
-
-        self.add_custom(&info.repository, info.devel).await
-    }
-
-    /// adds a custom repository to the manager
-    pub async fn add_custom(&mut self, repository: &str, devel: bool) -> anyhow::Result<String>{
-        debug!("adding package from {repository}, devel: {devel}");
-
-        if devel {
-            self.add(Box::new(DevelGitSource::empty(repository))).await
-        } else {
-            self.add(Box::new(NormalSource::empty(repository))).await
-        }
-    }
-
-    async fn add(&mut self, mut source: Box<dyn PackageSource + Sync + Send>) -> anyhow::Result<String>{
-        let folder = Path::new(SOURCE_FOLDER)
-            .join("tmp")
-            .join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string());
-
-        fs::create_dir_all(&folder).await?;
-
-        // pull package
-        source.create(&folder).await?;
-        let base = source.read_base(&folder).await?;
-
-        // check other packages
-        if self.store.read().await.has(&base) {
-            fs::remove_dir_all(folder).await?;
-            return Err(anyhow!("already have package with base {}", base))
-        }
-
-        // move package
-        fs::rename(folder, Path::new(SOURCE_FOLDER).join(&base)).await?;
-
-        self.store.write().await.update(Package {
-            source,
-            version: "".to_string(),
-
-            base: base.clone(),
-            added: Utc::now(),
-
-            clean: false,
-            enabled: true,
-            schedule: None,
-
-            builds: vec![]
-        }).await.context("failed to persist package in store")?;
-
-        Ok(base)
+    if devel {
+        add_source(store, Box::new(DevelGitSource::empty(repository))).await
+    } else {
+        add_source(store, Box::new(NormalSource::empty(repository))).await
     }
 }
 
+/// adds a source to the package store as a package, returns none if base is already present, otherwise the base is returned
+pub async fn add_source(store: Arc<RwLock<PackageStore>>, mut source: Box<dyn PackageSource + Sync + Send>) -> anyhow::Result<Option<String>> {
+    let folder = Path::new(SOURCE_FOLDER)
+        .join("tmp")
+        .join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string());
+
+    fs::create_dir_all(&folder).await?;
+
+    // pull package
+    source.create(&folder).await?;
+    let base = source.read_base(&folder).await?;
+
+    // check other packages
+    if store.read().await.has(&base) {
+        fs::remove_dir_all(folder).await?;
+        return Ok(None);
+    }
+
+    // move package
+    fs::rename(folder, Path::new(SOURCE_FOLDER).join(&base)).await?;
+
+    store.write().await.update(Package {
+        clean: !source.is_devel(),
+        source,
+
+        version: "".to_string(),
+
+        base: base.clone(),
+        added: Utc::now(),
+
+        enabled: true,
+        schedule: None,
+
+        builds: vec![]
+    }).await.context("failed to persist package in store")?;
+
+    Ok(Some(base))
+}
+
+
+/// this struct represents a package built by serene
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Package {
+    /// base of the package
     pub base: String,
-    added: DateTime<Utc>,
+    /// time when the package was added
+    pub added: DateTime<Utc>,
 
+    /// source of the package
     source: Box<dyn PackageSource + Sync + Send>,
+    /// last build version of the package
     pub version: String,
 
+    /// whether package is enabled, meaning it is built automatically
     pub enabled: bool,
+    /// whether package should be cleaned after building
     pub clean: bool,
+    /// potential custom cron schedule string
     schedule: Option<String>,
 
+    /// contains the summaries of all builds done to the package
     builds: Vec<BuildSummary>
 }
 

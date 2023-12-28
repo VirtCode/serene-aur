@@ -18,7 +18,7 @@ const RUNNER_IMAGE: &str = "serene-aur-runner:latest";
 const RUNNER_IMAGE_BUILD_IN: &str = "/app/build";
 const RUNNER_IMAGE_BUILD_OUT: &str = "/app/build/serene-build";
 
-
+/// this is the status of a build run through the runner
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunStatus {
     pub success: bool,
@@ -30,12 +30,14 @@ pub struct RunStatus {
 
 pub type ContainerId = String;
 
+/// this is a wrapper for docker which creates and interacts with runner containers
 pub struct Runner {
     pub docker: Docker,
 }
 
 impl Runner {
 
+    /// creates a new runner by taking the docker from the default socket
     pub fn new() -> anyhow::Result<Self> {
         Ok(Self {
             docker: Docker::connect_with_socket_defaults()
@@ -43,6 +45,7 @@ impl Runner {
         })
     }
 
+    /// builds the package inside a container
     pub async fn build(&self, container: &ContainerId) -> anyhow::Result<RunStatus> {
         let start = Utc::now();
 
@@ -150,12 +153,14 @@ impl Runner {
         Ok(self.docker.create_container(Some(options), config).await?.id)
     }
 
+    /// cleans the container, i.e. removes it
     pub async fn clean(&self, container: &ContainerId) -> anyhow::Result<()> {
         self.docker.remove_container(&container, None).await
             .context("failed to remove container whilst cleaning")
     }
 }
 
+/// constructs the container name from package and configuration
 fn container_name(package: &Package) -> String{
     format!("{}{}", CONFIG.container_prefix, &package.base)
 }

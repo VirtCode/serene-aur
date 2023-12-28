@@ -35,6 +35,7 @@ struct PackageEntry {
 
 impl PackageRepository {
 
+    /// creates a new package repository
     pub async fn new() -> anyhow::Result<Self> {
         let mut s = Self {
             name: CONFIG.repository_name.to_owned(),
@@ -46,6 +47,7 @@ impl PackageRepository {
         Ok(s)
     }
 
+    /// loads the current bases file from disk
     async fn load(&mut self) -> anyhow::Result<()>{
         let path = Path::new(REPO_DIR).join(REPO_SERENE);
         if !path.is_file() { return Ok(()) }
@@ -59,6 +61,7 @@ impl PackageRepository {
         Ok(())
     }
 
+    /// saves the current bases file to disk
     async fn save(&self) -> anyhow::Result<()> {
         let path = Path::new(REPO_DIR).join(REPO_SERENE);
 
@@ -71,6 +74,7 @@ impl PackageRepository {
         Ok(())
     }
 
+    /// publishes the files for a package on the repository
     pub async fn publish(&mut self, package: &Package, mut output: Entries<impl AsyncRead + Unpin + Sized>) -> anyhow::Result<()> {
         fs::create_dir_all(REPO_DIR).await
             .context("failed to create folder for repository")?;
@@ -112,6 +116,7 @@ impl PackageRepository {
         Ok(())
     }
 
+    /// removes a package from the repository
     async fn remove(&mut self, package: &Package) -> anyhow::Result<()> {
 
         if let Some(entries) = self.bases.remove(&package.base) {
