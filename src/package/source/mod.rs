@@ -42,8 +42,9 @@ pub trait PackageSource: Sync + Send + DynClone {
 
     /// read entire srcinfo from disk
     async fn read_srcinfo(&self, folder: &Path) -> anyhow::Result<Srcinfo> {
-        tokio::fs::read_to_string(folder.join(SRCINFO)).await?
-            .parse().context("failed to parse srcinfo")
+        tokio::fs::read_to_string(folder.join(SRCINFO)).await
+            .context("couldn't read .SRCINFO")?
+            .parse().context("failed to parse .SRCINFO")
     }
 
     fn is_devel(&self) -> bool;

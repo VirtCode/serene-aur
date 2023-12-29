@@ -1,5 +1,7 @@
 use lazy_static::lazy_static;
 use std::env;
+use std::str::FromStr;
+use anyhow::Context;
 
 lazy_static! {
     pub static ref CONFIG: Config = Config::env();
@@ -15,7 +17,9 @@ pub struct Config {
     /// scheduling of development packages
     pub schedule_devel: String,
     /// container name prefix xxxxx-my-package
-    pub container_prefix: String
+    pub container_prefix: String,
+    /// port to bind to
+    pub port: u16
 }
 
 impl Config {
@@ -27,7 +31,8 @@ impl Config {
             repository_name: env::var("NAME").unwrap_or("serene".to_string()),
             schedule_devel: env::var("SCHEDULE_DEVEL").unwrap_or(schedule.clone()),
             schedule_default: schedule,
-            container_prefix: env::var("RUNNER_PREFIX").unwrap_or("serene-aur-runner-".to_string())
+            container_prefix: env::var("RUNNER_PREFIX").unwrap_or("serene-aur-runner-".to_string()),
+            port: env::var("PORT").context("").and_then(|s| u16::from_str(&s).context("malformed port number")).unwrap_or(80)
         }
     }
 }

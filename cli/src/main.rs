@@ -1,3 +1,5 @@
+#![feature(iter_intersperse)]
+
 #[macro_use]
 pub mod log;
 
@@ -7,7 +9,7 @@ mod config;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use crate::config::Config;
-use crate::web::add;
+use crate::web::requests;
 
 fn main() -> anyhow::Result<()>{
     let config = Config::create()?;
@@ -21,14 +23,25 @@ fn main() -> anyhow::Result<()>{
                 config.print_secret(true);
             }
         }
+
         Command::Add { name } => {
-            add::add_aur(&config, &name);
+            requests::add_aur(&config, &name);
+        }
+        Command::Custom {devel, url} => {
+            requests::add_git(&config, &url, devel);
+        }
+        Command::Build { name } => {
+            requests::build(&config, &name);
+        }
+        Command::List => {
+            requests::list(&config);
+        }
+        Command::Info { name } => {
+            requests::info(&config, &name);
         }
 
         _ => unimplemented!()
     }
-
-
 
     Ok(())
 }
@@ -51,7 +64,7 @@ pub enum Command {
     },
 
     /// adds a package given a git repository
-    Git {
+    Custom {
         /// url of that repository
         url: String,
         /// set the package to be a development package
@@ -59,8 +72,16 @@ pub enum Command {
         devel: bool
     },
 
+    /*
     /// removes a package
     Remove {
+        /// name of the package
+        name: String
+    },
+     */
+
+    /// get info about a package
+    Info {
         /// name of the package
         name: String
     },
@@ -70,6 +91,9 @@ pub enum Command {
         /// name of the package
         name: String
     },
+
+    /// List all packages which are added
+    List,
 
     /// prints the current secret
     Secret {

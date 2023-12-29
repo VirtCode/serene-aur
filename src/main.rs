@@ -23,6 +23,7 @@ use simplelog::{ColorChoice, TerminalMode, TermLogger};
 use tokio::sync::{Mutex, RwLock};
 use crate::build::schedule::BuildScheduler;
 use crate::build::Builder;
+use crate::config::CONFIG;
 use crate::runner::{archive, Runner, ContainerId};
 use crate::package::store::{PackageStore};
 use crate::repository::PackageRepository;
@@ -65,11 +66,12 @@ async fn main() -> anyhow::Result<()> {
             .app_data(Data::from(schedule.clone()))
             .app_data(Data::from(store.clone()))
             .service(repository::webservice())
-            .service(web::status)
             .service(web::add)
+            .service(web::list)
+            .service(web::status)
             .service(web::remove)
             .service(web::build)
-    ).bind(("127.0.0.1", 8080))?.run().await?;
+    ).bind(("0.0.0.0", CONFIG.port))?.run().await?;
 
     Ok(())
 }

@@ -120,6 +120,10 @@ impl Package {
         self.source.is_devel()
     }
 
+    pub fn get_builds(&self) -> &Vec<BuildSummary> {
+        &self.builds
+    }
+
     /// upgrades the version of the package
     /// returns an error if a version mismatch is detected with the source files
     pub async fn upgrade_version(&mut self, reported: &str) -> anyhow::Result<()> {

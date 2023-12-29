@@ -1,13 +1,15 @@
 use std::io::repeat;
 use std::sync::Arc;
-use actix_web::{delete, get, post, Responder};
+use actix_web::{delete, get, HttpResponse, post, Responder};
 use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound};
 use actix_web::web::{Data, Json, Path};
 use chrono::{DateTime, Utc};
+use hyper::StatusCode;
 use log::error;
 use raur::Raur;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
+use crate::build::{BuildState, BuildSummary};
 use crate::build::schedule::BuildScheduler;
 use crate::package;
 use crate::package::{aur, Package};
@@ -29,28 +31,79 @@ impl<T> InternalError<T> for anyhow::Result<T> {
     }
 }
 
+fn empty_response() -> impl Responder {
+    (None::<Option<String>>, StatusCode::OK)
+}
+
+#[derive(Serialize, Deserialize)]
+struct PackagePeek {
+    base: String,
+    version: String,
+    enabled: bool,
+    devel: bool,
+    build: Option<BuildPeek>
+}
+
+impl PackagePeek {
+    pub fn create(package: &Package) -> Self {
+        Self {
+            base: package.base.clone(),
+            enabled: package.enabled,
+            devel: package.get_devel(),
+            version: package.version.clone(),
+            build: package.get_builds().iter()
+                .max_by_key(|p| p.started)
+                .map(BuildPeek::create)
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct PackageInfo {
     base: String,
-    added: DateTime<Utc>,
+    version: String,
     enabled: bool,
-    clean: bool,
     devel: bool,
+    clean: bool,
     schedule: String,
+    added: DateTime<Utc>,
+    builds: Vec<BuildPeek>
 }
 
 impl PackageInfo {
     pub fn create(package: &Package) -> Self {
         Self {
             base: package.base.clone(),
-            added: package.added,
             enabled: package.enabled,
-            clean: package.clean,
+            devel: package.get_devel(),
+            version: package.version.clone(),
+            builds: package.get_builds().iter().map(BuildPeek::create).collect(),
+            added: package.added,
             schedule: package.get_schedule(),
-            devel: package.get_devel()
+            clean: package.clean
         }
     }
 }
+
+#[derive(Serialize, Deserialize)]
+struct BuildPeek {
+    state: BuildState,
+    version: Option<String>,
+    started: DateTime<Utc>,
+    ended: Option<DateTime<Utc>>
+}
+
+impl BuildPeek {
+    pub fn create(summary: &BuildSummary) -> Self {
+        Self {
+            state: summary.state.clone(),
+            version: summary.version.clone(),
+            started: summary.started,
+            ended: summary.ended
+        }
+    }
+}
+
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -86,19 +139,34 @@ pub async fn add(_: Auth, body: Json<PackageAddRequest>, store: PackageStoreData
         scheduler.run(&package).await.internal()?;
     }
 
-    Ok(Json(PackageInfo::create(&package)))
+    Ok(Json(PackagePeek::create(&package)))
+}
+
+#[get("/package/list")]
+pub async fn list(_: Auth, store: PackageStoreData) -> actix_web::Result<impl Responder> {
+    Ok(Json(
+        store.read().await.peek().iter()
+            .map(|p| PackagePeek::create(p))
+            .collect::<Vec<PackagePeek>>()
+    ))
 }
 
 #[get("/package/{name}")]
-pub async fn status(_: Auth, package: Path<String>) -> actix_web::Result<impl Responder> {
-    Ok(package.into_inner())
+pub async fn status(_: Auth, package: Path<String>, store: PackageStoreData) -> actix_web::Result<impl Responder> {
+    let package = store.read().await.get(&package)
+        .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
+
+    Ok(Json(PackageInfo::create(&package)))
 }
 
 #[post("/package/{name}/build")]
 pub async fn build(_: Auth, package: Path<String>, store: PackageStoreData, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
-    let mut a = store.read().await.get(&package.into_inner()).unwrap();
-    scheduler.write().await.run(&a).await.unwrap();
-    Ok("asdf")
+    let package = store.read().await.get(&package)
+        .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
+
+    scheduler.write().await.run(&package).await.internal()?;
+
+    Ok(empty_response())
 }
 
 #[delete("/package/{name}")]

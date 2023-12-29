@@ -1,4 +1,5 @@
-pub mod add;
+pub mod requests;
+pub mod data;
 
 use chrono::{DateTime, Utc};
 use reqwest::blocking::{Client, Response};
@@ -46,11 +47,11 @@ fn get_url(config: &Config, path: &str) -> String {
     format!("{}/{}", config.url, path)
 }
 
-fn process_result<R: DeserializeOwned>(result: reqwest::Result<Response>) -> Result<R> {
+fn process_errors(result: reqwest::Result<Response>) -> Result<Response> {
     let result = result.map_err(|e| Error::Client { error: e })?;
 
     if result.status().is_success() {
-        result.json().map_err(|e| Error::Client { error: e })
+        Ok(result)
     } else if result.status().is_server_error() {
         Err(Error::Server {
             message: result.text().map_err(|e| Error::Client { error: e })?
@@ -63,7 +64,12 @@ fn process_result<R: DeserializeOwned>(result: reqwest::Result<Response>) -> Res
     }
 }
 
-fn post<B: Serialize, R: DeserializeOwned>(config: &Config, path: &str, body: B) -> Result<R> {
+fn process_result<R: DeserializeOwned>(result: reqwest::Result<Response>) -> Result<R> {
+    process_errors(result)?.json()
+        .map_err(|e| Error::Client { error: e })
+}
+
+pub fn post<B: Serialize, R: DeserializeOwned>(config: &Config, path: &str, body: B) -> Result<R> {
     let result = Client::new().post(get_url(config, path))
         .header("Authorization", &config.secret)
         .json(&body)
@@ -72,7 +78,17 @@ fn post<B: Serialize, R: DeserializeOwned>(config: &Config, path: &str, body: B)
     process_result(result)
 }
 
-fn get<R: DeserializeOwned>(config: &Config, path: &str) -> Result<R> {
+pub fn post_empty(config: &Config, path: &str) -> Result<()> {
+    let result = Client::new().post(get_url(config, path))
+        .header("Authorization", &config.secret)
+        .send();
+
+    process_errors(result)?;
+
+    Ok(())
+}
+
+pub fn get<R: DeserializeOwned>(config: &Config, path: &str) -> Result<R> {
     let result = Client::new().get(get_url(config, path))
         .header("Authorization", &config.secret)
         .send();
