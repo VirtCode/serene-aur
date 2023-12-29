@@ -115,6 +115,11 @@ impl Package {
         }).clone()
     }
 
+    /// gets whether the package is marked as a development package
+    pub fn get_devel(&self) -> bool {
+        self.source.is_devel()
+    }
+
     /// upgrades the version of the package
     /// returns an error if a version mismatch is detected with the source files
     pub async fn upgrade_version(&mut self, reported: &str) -> anyhow::Result<()> {

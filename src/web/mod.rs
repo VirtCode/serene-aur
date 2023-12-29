@@ -35,6 +35,7 @@ struct PackageInfo {
     added: DateTime<Utc>,
     enabled: bool,
     clean: bool,
+    devel: bool,
     schedule: String,
 }
 
@@ -42,10 +43,11 @@ impl PackageInfo {
     pub fn create(package: &Package) -> Self {
         Self {
             base: package.base.clone(),
-            added: package.added.clone(),
+            added: package.added,
             enabled: package.enabled,
             clean: package.clean,
-            schedule: package.get_schedule()
+            schedule: package.get_schedule(),
+            devel: package.get_devel()
         }
     }
 }
