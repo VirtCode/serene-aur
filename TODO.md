@@ -17,23 +17,25 @@ This contains some parts which are required by the service.
 - [X] Run Runners on demand
 - [X] Retrieve built files from ran containers
 - [X] Serve built files for pacman to use
-- [ ] Schedule Builds
+- [X] Schedule Builds
 
 #### The Database
 The database which is used to store what packages are installed etc.
-- [ ] Store current packages with their url and other stuff
-- [ ] Store build logs for each build
-- [ ] Get that working, probably with diesel
+- [X] Store current packages with their url and other stuff
+- [X] Store build logs for each build
+- [/] Get that working, probably with diesel, HAHA NO, WE USE PLAIN JSON
 
 #### The API
 The api is a part of the service which handles user interaction.
-- [ ] Handle user logon with a secret from known_secrets file.
-- [ ] Create Endpoints for adding and removing a package, getting status (probably with actix)
+- [X] Handle user logon with a secret from known_secrets file.
+- [X] Create Endpoints for adding and removing a package, getting status (probably with actix)
+- [ ] Package removal and build diagnosis 
 
 #### The CLI
 The cli is on the client and should interact with the api
-- [ ] Generate secret on first start and prompt user
-- [ ] Basic commands for adding and removing packages, and querying status
+- [X] Generate secret on first start and prompt user
+- [X] Basic commands for adding and removing packages, and querying status
+- [ ] Package removal and build diagnosis
 
 ## Future
 These things are future tasks and not priority right now:
@@ -41,7 +43,6 @@ These things are future tasks and not priority right now:
 - [ ] Handle in-aur dependencies
 - [ ] Allow pinning a package to a specific commit
 - [ ] Store state in a database and not a json file
-- [ ] Dependency resolving on AUR
 - [ ] Set makepkg config in runner
 
 ## Notes
