@@ -1,5 +1,5 @@
 use chrono::{Local};
-use colored::Colorize;
+use colored::{ColoredString, Colorize};
 use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron;
 use serde::{Deserialize, Serialize};
 use crate::config::Config;
@@ -48,16 +48,18 @@ pub fn list(c: &Config) {
     info!("Querying server...");
 
     match get::<Vec<PackagePeek>>(c, "package/list") {
-        Ok(list) => {
+        Ok(mut list) => {
             println!();
-            println!("{:<20} {:<15} {:<5} {:<8} {:<7}", "name".italic(), "version".italic(), "devel".italic(), "state".italic(), "build".italic());
+            println!("{:<20} {:<15} {:<5} {:<5} {:<7}", "name".italic(), "version".italic(), "devel".italic(), "enabl".italic(), "build".italic());
+
+            list.sort_by_key(|p| p.base.clone());
 
             for peek in list {
-                println!("{:<20.20} {:<15.15} {:^5} {:<8} {:<7}",
+                println!("{:<20.20} {:<15.15} {:^5} {:^5} {:<7}",
                     peek.base.bold(),
                     peek.version,
                     if peek.devel { "X".dimmed() } else { "".dimmed() },
-                    if peek.enabled { "enabled".yellow() } else { "disabled".dimmed() },
+                    if peek.enabled { "X".yellow() } else { "".dimmed() },
                     peek.build.map(|p| p.state.colored_passive()).unwrap_or_else(|| "none".dimmed())
                 );
             }
@@ -97,12 +99,12 @@ pub fn info(c: &Config, package: &str) {
 
             for peek in info.builds {
                 println!("{:<15.15} {:<7} {:17} {:>5}",
-                         peek.version.unwrap_or_else(|| "unknown".dimmed().to_string()),
-                         peek.state.colored_substantive(),
-                         peek.started.with_timezone(&Local).format("%x %X"),
-                         peek.ended.map(|ended| {
+                     peek.version.map(ColoredString::from).unwrap_or_else(|| "unknown".dimmed()),
+                     peek.state.colored_substantive(),
+                     peek.started.with_timezone(&Local).format("%x %X"),
+                     peek.ended.map(|ended| {
                         format!("{}s", (ended - peek.started).num_seconds())
-                    }).unwrap_or_else(|| "running".blue().to_string())
+                     }).map(ColoredString::from).unwrap_or_else(|| "running".blue())
                 );
             }
         }

@@ -1,49 +1,39 @@
 ## TODO
-The project can be devided into the following areas:
+redone for v0.2.0 on 30.12.23
 
-#### General
-- [ ] Add more debug statements
+#### Polish 
+*polish for a better user experience*
+- [ ] Add more debug and info logs
+- [ ] Make tables of cli adaptive to text width
+- [ ] Disclaimer about pkgbuilds
+- [ ] Clear versioning
 
-#### The Runner
-This is a docker container which runs the builds inside of it.
-- [X] Decide on Structure of container
-- [X] Create Dockerfile
-- [X] Test
+#### Cleanness
+*changes for a cleaner overall process*
+- [X] Enable multilib in build container
+- [X] Set makepkg.conf to build to /app/target (to avoid conflicts with any packages)
+- [ ] Figure something out to avoid code duplication from server to cli
+- [ ] Cache more data inside the sources after upgrading, so that we don't have to read the filesystem as often
+- [ ] Create aur-specific normal source, so that we can check for updating without git
 
-#### The Service
-This contains some parts which are required by the service.
-- [X] Interact with the AUR to check for updates and obtain build files
-- [X] Clone Repositories to build onto volume and manage those
-- [X] Run Runners on demand
-- [X] Retrieve built files from ran containers
-- [X] Serve built files for pacman to use
-- [X] Schedule Builds
+#### Improvements
+*not too heavy improvement which can be made*
+- [ ] Removal of packages from the server
+- [ ] `serene check` command to compare output of `pacman -Qm`
+- [ ] allow changing of settings for package, e.g. enable, schedule, clean
+- [ ] allow inspection of builds through cli
+- [ ] on-boarding screen when first using the cli, with config to configure pacman
 
-#### The Database
-The database which is used to store what packages are installed etc.
-- [X] Store current packages with their url and other stuff
-- [X] Store build logs for each build
-- [/] Get that working, probably with diesel, HAHA NO, WE USE PLAIN JSON
-
-#### The API
-The api is a part of the service which handles user interaction.
-- [X] Handle user logon with a secret from known_secrets file.
-- [X] Create Endpoints for adding and removing a package, getting status (probably with actix)
-- [ ] Package removal and build diagnosis 
-
-#### The CLI
-The cli is on the client and should interact with the api
-- [X] Generate secret on first start and prompt user
-- [X] Basic commands for adding and removing packages, and querying status
-- [ ] Package removal and build diagnosis
+#### Features
+*features which are kinda important*
+- [ ] Signing packages
+- [ ] Pre-launch scripts to configure container specifically for package (e.g. with `eww`'s keys)
+- [ ] Readme & License
+- [ ] CI and ghcr
 
 ## Future
-These things are future tasks and not priority right now:
-- [ ] Signing packages
+*things that would be nice but are not priority*
 - [ ] Handle in-aur dependencies
-- [ ] Allow pinning a package to a specific commit
 - [ ] Store state in a database and not a json file
-- [ ] Set makepkg config in runner
-
-## Notes
-- Fakeroot hangs in container for some reason. The current quickfix is adding `--ulimit "nofile=1024:1048576"` when starting the container. See https://github.com/moby/moby/issues/45436 for more infos.
+- [ ] Allow attachment at build process to view logs real-time
+- [ ] Web frontend to view package status

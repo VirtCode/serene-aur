@@ -16,7 +16,7 @@ use crate::package::Package;
 
 const RUNNER_IMAGE: &str = "serene-aur-runner:latest";
 const RUNNER_IMAGE_BUILD_IN: &str = "/app/build";
-const RUNNER_IMAGE_BUILD_OUT: &str = "/app/build/serene-build";
+const RUNNER_IMAGE_BUILD_OUT: &str = "/app/target";
 
 /// this is the status of a build run through the runner
 #[derive(Debug, Clone, Serialize, Deserialize)]

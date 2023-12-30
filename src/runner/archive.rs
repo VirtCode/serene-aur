@@ -9,8 +9,8 @@ use futures_util::{AsyncRead, AsyncReadExt, StreamExt};
 //       For now we will have to deal with passing that archive into and out of functions.
 //       If you know how to do this properly, please let me know!
 
-const RUNNER_IMAGE_BUILD_ARCHIVE_VERSION: &str = "serene-build/.VERSION";
-const RUNNER_IMAGE_BUILD_ARCHIVE_PACKAGE_DIR: &str = "serene-build/";
+const RUNNER_IMAGE_BUILD_ARCHIVE_VERSION: &str = "target/VERSION";
+const RUNNER_IMAGE_BUILD_ARCHIVE_PACKAGE_DIR: &str = "target/";
 
 pub fn begin_read(archive: Archive<impl AsyncRead + Unpin>) -> anyhow::Result<Entries<impl AsyncRead + Unpin + Sized>> {
     archive.entries().context("failed starting to read archive with build packages")

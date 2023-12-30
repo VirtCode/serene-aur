@@ -12,8 +12,12 @@ use crate::config::Config;
 use crate::web::requests;
 
 fn main() -> anyhow::Result<()>{
-    let config = Config::create()?;
+    let mut config = Config::create()?;
     let args = Args::parse();
+
+    if let Some(host) = args.server {
+        config.url = host;
+    }
 
     match args.command {
         Command::Secret { machine } => {
@@ -52,7 +56,11 @@ fn main() -> anyhow::Result<()>{
 #[command(disable_help_subcommand = true)]
 pub struct Args {
     #[clap(subcommand)]
-    command: Command
+    command: Command,
+
+    /// override the host url that is used
+    #[clap(short, long)]
+    server: Option<String>
 }
 
 #[derive(Subcommand)]
