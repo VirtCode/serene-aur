@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 # interact with the aur
-raur = "7.0.0"
+raur = { version = "7.0.0", default-features = false, features = ["async", "rustls-tls"] }
 srcinfo = "1.1.0"
 
 # async
@@ -45,7 +45,7 @@ dyn-clone = "1.0.16"
 
 # log
 log = "0.4.20"
-simplelog = "0.12.1"
+env_logger = "0.10.1"
 anyhow = "1.0.75"
 
 # config

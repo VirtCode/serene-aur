@@ -19,7 +19,6 @@ use futures::stream::StreamExt;
 use futures_util::AsyncReadExt;
 use log::{info, LevelFilter};
 use sha2::{Digest, Sha256};
-use simplelog::{ColorChoice, TerminalMode, TermLogger};
 use tokio::sync::{Mutex, RwLock};
 use crate::build::schedule::BuildScheduler;
 use crate::build::Builder;
@@ -30,7 +29,7 @@ use crate::repository::PackageRepository;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    TermLogger::init(LevelFilter::Debug, simplelog::Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap();
+    env_logger::init();
 
     // initializing storage
     let store = PackageStore::init().await

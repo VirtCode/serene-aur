@@ -1,11 +1,9 @@
 use std::error::Error;
 use std::sync::Arc;
 use anyhow::Context;
-use bollard::Docker;
 use chrono::{DateTime, Utc};
 use log::{error, info, LevelFilter};
 use serde::{Deserialize, Serialize};
-use simplelog::{ColorChoice, TerminalMode, TermLogger};
 use tokio::sync::RwLock;
 use crate::build::BuildProgress::{Build, Clean, Publish, Update};
 use crate::build::BuildState::{Failure, Fatal, Running, Success};
