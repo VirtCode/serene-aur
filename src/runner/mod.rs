@@ -98,7 +98,7 @@ impl Runner {
     /// the files should be in a tar archive, in a body, where everything is in the root
     pub async fn upload_sources(&self, container: &ContainerId, package: &Package) -> anyhow::Result<()> {
 
-        let sources = package.sources_tar().await
+        let sources = package.source.tar().await
             .context("could not get sources tar from package")?;
 
         let options = UploadToContainerOptions{

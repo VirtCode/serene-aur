@@ -2,6 +2,7 @@ pub mod normal;
 pub mod devel;
 
 use std::path::Path;
+use actix_web::HttpMessage;
 use anyhow::Context;
 use async_trait::async_trait;
 use dyn_clone::{clone_trait_object, DynClone};
@@ -9,43 +10,26 @@ use srcinfo::Srcinfo;
 
 const SRCINFO: &str = ".SRCINFO";
 
-clone_trait_object!(PackageSource);
+clone_trait_object!(Source);
 
 /// this trait abstracts a package source
 #[async_trait]
 #[typetag::serde(tag = "type")]
-pub trait PackageSource: Sync + Send + DynClone {
+pub trait Source: Sync + Send + DynClone {
 
-    /// pulls the package sources for the first time
-    async fn create(&mut self, folder: &Path) -> anyhow::Result<()>;
+    /// pulls the package sources for the first time, returns the srcinfo string
+    async fn create(&mut self, folder: &Path) -> anyhow::Result<String>;
 
     /// checks whether an update would be available
     async fn update_available(&self) -> anyhow::Result<bool>;
 
-    /// upgrades the sources
-    async fn upgrade(&mut self, folder: &Path) -> anyhow::Result<()>;
-
-    /// try to read the current version, returning None if the version is unknown
-    async fn read_version(&self, folder: &Path) -> anyhow::Result<Option<String>> {
-        Ok(Some(self.read_srcinfo(folder).await?.base.pkgver))
-    }
-
-    /// read the package base name
-    async fn read_base(&self, folder: &Path) -> anyhow::Result<String> {
-        Ok(self.read_srcinfo(folder).await?.base.pkgbase)
-    }
-
-    /// read all package names contained in the pkgbuild
-    async fn read_packages(&self, folder: &Path) -> anyhow::Result<Vec<String>> {
-        Ok(self.read_srcinfo(folder).await?.pkgs.into_iter().map(|p| p.pkgname).collect())
-    }
-
-    /// read entire srcinfo from disk
-    async fn read_srcinfo(&self, folder: &Path) -> anyhow::Result<Srcinfo> {
-        tokio::fs::read_to_string(folder.join(SRCINFO)).await
-            .context("couldn't read .SRCINFO")?
-            .parse().context("failed to parse .SRCINFO")
-    }
+    /// upgrades the sources, returns the srcinfo string
+    async fn update(&mut self, folder: &Path) -> anyhow::Result<String>;
 
     fn is_devel(&self) -> bool;
+}
+
+async fn read_srcinfo_string(folder: &Path) -> anyhow::Result<String> {
+    tokio::fs::read_to_string(folder.join(SRCINFO)).await
+        .context("failed to read .SRCINFO")
 }

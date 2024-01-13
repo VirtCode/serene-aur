@@ -1,9 +1,10 @@
 use std::path::Path;
+use anyhow::Context;
 use async_trait::async_trait;
 use log::debug;
 use serde::{Deserialize, Serialize};
 use crate::package::git;
-use crate::package::source::{PackageSource};
+use crate::package::source::{read_srcinfo_string, Source};
 
 /// this is the source of a normally versioned package
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -24,13 +25,13 @@ impl NormalSource {
 
 #[async_trait]
 #[typetag::serde]
-impl PackageSource for NormalSource {
+impl Source for NormalSource {
 
-    async fn create(&mut self, folder: &Path) -> anyhow::Result<()> {
+    async fn create(&mut self, folder: &Path) -> anyhow::Result<String> {
         debug!("creating {}", self.repository);
         git::clone(&self.repository, folder).await?;
 
-        self.upgrade(folder).await
+        self.update(folder).await
     }
 
     async fn update_available(&self) -> anyhow::Result<bool> {
@@ -40,7 +41,7 @@ impl PackageSource for NormalSource {
         Ok(current_commit != self.last_commit)
     }
 
-    async fn upgrade(&mut self, folder: &Path) -> anyhow::Result<()> {
+    async fn update(&mut self, folder: &Path) -> anyhow::Result<String> {
         debug!("upgrading {}", &self.repository);
 
         // pull repo
@@ -48,7 +49,8 @@ impl PackageSource for NormalSource {
         // set commit to newest (could also be done by looking at the local repository...)
         self.last_commit = git::latest_commit(&self.repository).await?;
 
-        Ok(())
+        read_srcinfo_string(folder).await
+            .context("failed to parse .SRCINFO")
     }
 
     fn is_devel(&self) -> bool { false }

@@ -1,17 +1,20 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, Context, Error};
 use async_tar::Builder;
 use chrono::{DateTime, Utc};
+use futures_util::TryFutureExt;
 use hyper::Body;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
+use sha2::digest::typenum::private::IsEqualPrivate;
+use srcinfo::Srcinfo;
 use tokio::fs;
 use tokio::sync::{Mutex, RwLock};
 use crate::build::BuildSummary;
 use crate::config::CONFIG;
-use crate::package::source::{PackageSource};
+use crate::package::source::{Source};
 use crate::package::source::devel::DevelGitSource;
 use crate::package::source::normal::NormalSource;
 use crate::package::store::{PackageStore, PackageStoreRef};
@@ -37,44 +40,138 @@ pub async fn add_repository(store: Arc<RwLock<PackageStore>>, repository: &str, 
 }
 
 /// adds a source to the package store as a package, returns none if base is already present, otherwise the base is returned
-pub async fn add_source(store: Arc<RwLock<PackageStore>>, mut source: Box<dyn PackageSource + Sync + Send>) -> anyhow::Result<Option<String>> {
-    let folder = Path::new(SOURCE_FOLDER)
-        .join("tmp")
-        .join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string());
+pub async fn add_source(store: Arc<RwLock<PackageStore>>, source: Box<dyn Source + Sync + Send>) -> anyhow::Result<Option<String>> {
+    if let Some(source) = PackageSource::create(source, store.clone()).await? {
+        let base = source.base.clone();
 
-    fs::create_dir_all(&folder).await?;
+        store.write().await.update(Package {
+            clean: !source.is_devel(),
+            enabled: true,
+            schedule: None,
 
-    // pull package
-    source.create(&folder).await?;
-    let base = source.read_base(&folder).await?;
+            added: Utc::now(),
 
-    // check other packages
-    if store.read().await.has(&base) {
-        fs::remove_dir_all(folder).await?;
-        return Ok(None);
+            base: source.base.clone(),
+            version: "".to_string(),
+            source,
+
+            builds: vec![]
+        }).await.context("failed to persist package in store")?;
+
+        Ok(Some(base))
+    } else {
+        Ok(None)
     }
-
-    // move package
-    fs::rename(folder, Path::new(SOURCE_FOLDER).join(&base)).await?;
-
-    store.write().await.update(Package {
-        clean: !source.is_devel(),
-        source,
-
-        version: "".to_string(),
-
-        base: base.clone(),
-        added: Utc::now(),
-
-        enabled: true,
-        schedule: None,
-
-        builds: vec![]
-    }).await.context("failed to persist package in store")?;
-
-    Ok(Some(base))
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PackageSource {
+    base: String,
+    /// source of the package
+    source: Box<dyn Source + Sync + Send>,
+    /// string of the current srcinfo, this MUST be parsable, otherwise it will crash, but we cannot store a parsed srcinfo
+    srcinfo: String
+}
+
+impl PackageSource {
+
+    /// gets the current folder for the package
+    fn get_folder_tmp() -> PathBuf {
+        Path::new(SOURCE_FOLDER)
+            .join("tmp")
+            .join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string())
+    }
+
+    /// gets the current folder for the package
+    fn get_folder(&self) -> PathBuf {
+        Path::new(SOURCE_FOLDER)
+            .join(&self.base)
+    }
+
+    /// creates a package source from the given source and checks whether the package already exits with the given store
+    pub async fn create(mut source: Box<dyn Source + Sync + Send>, store: Arc<RwLock<PackageStore>>) -> anyhow::Result<Option<Self>> {
+        let folder = Self::get_folder_tmp();
+        fs::create_dir_all(&folder).await?;
+
+        let result = 'create: {
+            // pull source
+            let srcinfo = match source.create(&folder).await {
+                Ok(s) => s,
+                Err(e) => break 'create Err(anyhow!("failed to check out source: {e:?}"))
+            };
+
+            // parse pkgbuild
+            let parsed: Srcinfo = match srcinfo.parse() {
+                Ok(s) => s,
+                Err(e) => break 'create Err(anyhow!("failed to parse .SRCINFO: {e:#}"))
+            };
+
+            let s = Self {
+                base: parsed.base.pkgbase,
+                source, srcinfo
+            };
+
+            // check other packages
+            if store.read().await.has(&s.base) {
+                break 'create Ok(None);
+            }
+
+            // move package
+            if let Err(e) = fs::rename(&folder, s.get_folder()).await {
+                break 'create Err(anyhow!("failed to copy source: {e:#}"))
+            }
+
+            return Ok(Some(s));
+        };
+
+        // cleanup when failed
+        fs::remove_dir_all(folder).await?;
+
+        result
+    }
+
+    pub async fn updatable(&self) -> anyhow::Result<bool> {
+        self.source.update_available().await
+    }
+
+    pub async fn update(&mut self) -> anyhow::Result<()> {
+        self.srcinfo = self.source.update(&self.get_folder()).await?;
+        Ok(())
+    }
+
+    /// retrieves the source files for a package in a tar archive, inside a hyper body
+    /// warning, this method will load all sources into memory, so be cautious
+    pub async fn tar(&self) -> anyhow::Result<Body> {
+        let folder = self.get_folder();
+
+        let buffer = vec![];
+        let mut archive = Builder::new(buffer);
+
+        archive.append_dir_all("", &folder).await?;
+        archive.finish().await?;
+
+        Ok(Body::from(archive.into_inner().await?))
+    }
+
+    pub fn get_version(&self) -> String {
+        self.get_srcinfo().base.pkgver
+    }
+
+    pub fn get_packages(&self) -> Vec<String> {
+        self.get_srcinfo().pkgs.into_iter()
+            .map(|p| p.pkgname)
+            .collect()
+    }
+
+    pub fn get_srcinfo(&self) -> Srcinfo {
+        self.srcinfo.parse()
+            .expect("failed to parse .SRCINFO")
+    }
+
+    pub fn is_devel(&self) -> bool {
+        self.source.is_devel()
+    }
+}
 
 /// this struct represents a package built by serene
 #[derive(Serialize, Deserialize, Clone)]
@@ -85,7 +182,7 @@ pub struct Package {
     pub added: DateTime<Utc>,
 
     /// source of the package
-    source: Box<dyn PackageSource + Sync + Send>,
+    pub source: PackageSource,
     /// last build version of the package
     pub version: String,
 
@@ -101,11 +198,6 @@ pub struct Package {
 }
 
 impl Package {
-
-    /// gets the current folder for the package
-    fn get_folder(&self) -> PathBuf {
-        Path::new(SOURCE_FOLDER).join(&self.base)
-    }
 
     /// gets the schedule string for the package
     pub fn get_schedule(&self) -> String {
@@ -127,62 +219,39 @@ impl Package {
     /// upgrades the version of the package
     /// returns an error if a version mismatch is detected with the source files
     pub async fn upgrade_version(&mut self, reported: &str) -> anyhow::Result<()> {
-        if let Some(version) = self.source.read_version(&self.get_folder()).await? {
-            if version.as_str() != reported.trim() { return Err(anyhow!("version mismatch on package {}, expected {version} but built {reported}", &self.base)) }
+        if !self.source.is_devel() { // devel packages will report pkgbuild version
 
-            self.version = version;
-        } else {
-            self.version = reported.to_owned();
+            // check for version mismatch
+            let source_version = self.source.get_version();
+
+            if source_version.as_str() != reported.trim() {
+                return Err(anyhow!("version mismatch on package {}, expected {source_version} but built {reported}", &self.base))
+            }
         }
 
+        self.version = reported.to_owned();
+
         Ok(())
-    }
-
-    /// is there an update available for the package source
-    pub async fn updatable(&self) -> anyhow::Result<bool> {
-        self.source.update_available().await
-    }
-
-    /// upgrades the sources to the newest version
-    pub async fn upgrade_sources(&mut self) -> anyhow::Result<()> {
-        self.source.upgrade(&self.get_folder()).await
     }
 
     /// returns the expected built files
     /// requires the version to be upgraded
     pub async fn expected_files(&self) -> anyhow::Result<Vec<String>> {
-        // get epoch and rel from srcinfo
-        // TODO: this reads the .SRCINFO twice, but once is enough
-        let srcinfo = self.source.read_srcinfo(&self.get_folder()).await?;
-        let packages = self.source.read_packages(&self.get_folder()).await?;
+        let srcinfo = self.source.get_srcinfo();
 
         let rel = srcinfo.base.pkgrel;
         let epoch = srcinfo.base.epoch.map(|s| format!("{}:", s)).unwrap_or_else(|| "".to_string());
         let arch = select_arch(srcinfo.pkg.arch);
         let version = &self.version;
 
-        Ok(packages.iter().map(|s| {
+        Ok(srcinfo.pkgs.iter().map(|p| &p.pkgname).map(|s| {
             format!("{s}-{epoch}{version}-{rel}-{arch}{PACKAGE_EXTENSION}")
         }).collect())
     }
 
     // returns the expected packages
-    pub async fn expected_packages(&self) -> anyhow::Result<Vec<String>> {
-        self.source.read_packages(&self.get_folder()).await
-    }
-
-    /// retrieves the source files for a package in a tar archive, inside a hyper body
-    /// warning, this method will load all sources into memory, so be cautious
-    pub async fn sources_tar(&self) -> anyhow::Result<Body> {
-        let folder = self.get_folder();
-
-        let buffer = vec![];
-        let mut archive = Builder::new(buffer);
-
-        archive.append_dir_all("", &folder).await?;
-        archive.finish().await?;
-
-        Ok(Body::from(archive.into_inner().await?))
+    pub fn expected_packages(&self) -> Vec<String> {
+        self.source.get_packages()
     }
 
     /// adds a build to the package

@@ -105,8 +105,7 @@ impl PackageRepository {
             .context("failed to add files to repository")?;
 
         // create entries
-        let entries = package.expected_packages().await
-            .context("failed to read expected packages from file")?
+        let entries = package.expected_packages()
             .into_iter().zip(files)
             .map(|(name, file)| PackageEntry { name, file }).collect();
 

@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::path::Path;
+use anyhow::Context;
 use async_trait::async_trait;
 use log::debug;
 use serde::{Deserialize, Serialize};
 use srcinfo::Srcinfo;
 use crate::package::git;
-use crate::package::source::{PackageSource};
+use crate::package::source::{read_srcinfo_string, Source};
 
 /// this is the source of a -git development package
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -28,13 +29,13 @@ impl DevelGitSource {
 
 #[async_trait]
 #[typetag::serde]
-impl PackageSource for DevelGitSource {
+impl Source for DevelGitSource {
 
-    async fn create(&mut self, folder: &Path) -> anyhow::Result<()> {
+    async fn create(&mut self, folder: &Path) -> anyhow::Result<String> {
         debug!("creating {}", self.repository);
         git::clone(&self.repository, folder).await?;
 
-        self.upgrade(folder).await
+        self.update(folder).await
     }
 
     async fn update_available(&self) -> anyhow::Result<bool> {
@@ -53,7 +54,7 @@ impl PackageSource for DevelGitSource {
         Ok(false)
     }
 
-    async fn upgrade(&mut self, folder: &Path) -> anyhow::Result<()> {
+    async fn update(&mut self, folder: &Path) -> anyhow::Result<String> {
         // pull pkg repo
         debug!("upgrading {}", &self.repository);
         git::pull(folder).await?;
@@ -61,7 +62,9 @@ impl PackageSource for DevelGitSource {
 
         // refresh sources
         self.last_source_commits = HashMap::new();
-        let srcinfo: Srcinfo = self.read_srcinfo(folder).await?;
+        let srcinfo_src = read_srcinfo_string(folder).await?;
+        let srcinfo: Srcinfo = srcinfo_src.parse()
+            .context("failed to parse .SRCINFO")?;
 
         for src in srcinfo.base.source.iter().flat_map(|s| &s.vec) { // TODO: only use required arch
             let mut split = src.split('+');
@@ -76,11 +79,7 @@ impl PackageSource for DevelGitSource {
             }
         }
 
-        Ok(())
-    }
-
-    async fn read_version(&self, _folder: &Path) -> anyhow::Result<Option<String>> {
-        Ok(None)
+        Ok(srcinfo_src)
     }
 
     fn is_devel(&self) -> bool { true }

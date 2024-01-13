@@ -79,7 +79,7 @@ impl Builder {
                 return
             };
 
-        let updatable = match package.updatable().await
+        let updatable = match package.source.updatable().await
             .context("failed to check for package updates on scheduled build") {
             Ok(u) => { u }
             Err(e) => { error!("{e:#}"); return }
@@ -186,7 +186,7 @@ impl Builder {
 
     /// updates the sources of a given package
     async fn update(&mut self, package: &mut Package) -> anyhow::Result<()> {
-        package.upgrade_sources().await
+        package.source.update().await
     }
 
     /// builds a given package

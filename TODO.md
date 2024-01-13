@@ -13,7 +13,7 @@ redone for v0.2.0 on 30.12.23
 - [X] Enable multilib in build container
 - [X] Set makepkg.conf to build to /app/target (to avoid conflicts with any packages)
 - [ ] Figure something out to avoid code duplication from server to cli
-- [ ] Cache more data inside the sources after upgrading, so that we don't have to read the filesystem as often
+- [X] Cache more data inside the sources after upgrading, so that we don't have to read the filesystem as often
 - [ ] Create aur-specific normal source, so that we can check for updating without git
 
 #### Improvements
@@ -29,7 +29,7 @@ redone for v0.2.0 on 30.12.23
 - [ ] Signing packages
 - [ ] Pre-launch scripts to configure container specifically for package (e.g. with `eww`'s keys)
 - [ ] Readme & License
-- [ ] CI and ghcr
+- [X] CI and ghcr
 
 ## Future
 *things that would be nice but are not priority*
