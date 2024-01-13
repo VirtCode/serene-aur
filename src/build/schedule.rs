@@ -118,6 +118,6 @@ async fn run(lock: Arc<RwLock<bool>>, builder: Arc<RwLock<Builder>>, force: bool
     info!("waiting for ownership to build package {base}");
 
     *lock.write().await = true;
-    builder.write().await.start(&base, force).await;
+    builder.write().await.start_build(&base, force).await;
     *lock.write().await = false;
 }

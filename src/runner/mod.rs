@@ -123,7 +123,7 @@ impl Runner {
     }
 
     /// finds an already created container for a package
-    async fn find_container(&self, package: &Package) -> anyhow::Result<Option<String>> {
+    pub async fn find_container(&self, package: &Package) -> anyhow::Result<Option<ContainerId>> {
         let summary = self.docker.list_containers::<String>(Some(ListContainersOptions {
             all: true,
             .. Default::default()

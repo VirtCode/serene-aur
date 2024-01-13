@@ -548,6 +548,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "base32"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23ce669cd6c8588f79e15cf450314f9638f967fc5770ff1c7c1deb0925ea7cfa"
+
+[[package]]
 name = "base64"
 version = "0.21.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2469,6 +2475,7 @@ dependencies = [
  "raur",
  "serde",
  "serde_json",
+ "serene-data",
  "sha2",
  "srcinfo",
  "tokio",
@@ -2483,6 +2490,7 @@ name = "serene-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base32",
  "base64",
  "chrono",
  "clap 4.4.11",
@@ -2493,8 +2501,17 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.9.29",
+ "serene-data",
  "sha2",
  "whoami",
+]
+
+[[package]]
+name = "serene-data"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
 ]
 
 [[package]]

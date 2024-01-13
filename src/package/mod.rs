@@ -1,10 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use anyhow::{anyhow, Context, Error};
+use anyhow::{anyhow, Context};
 use async_tar::Builder;
 use chrono::{DateTime, Utc};
-use futures_util::TryFutureExt;
 use hyper::Body;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
@@ -154,7 +153,8 @@ impl PackageSource {
     }
 
     pub fn get_version(&self) -> String {
-        self.get_srcinfo().base.pkgver
+        if self.is_devel() { "latest".to_owned() }
+        else { self.get_srcinfo().base.pkgver }
     }
 
     pub fn get_packages(&self) -> Vec<String> {
@@ -207,11 +207,6 @@ impl Package {
         }).clone()
     }
 
-    /// gets whether the package is marked as a development package
-    pub fn get_devel(&self) -> bool {
-        self.source.is_devel()
-    }
-
     pub fn get_builds(&self) -> &Vec<BuildSummary> {
         &self.builds
     }
@@ -247,11 +242,6 @@ impl Package {
         Ok(srcinfo.pkgs.iter().map(|p| &p.pkgname).map(|s| {
             format!("{s}-{epoch}{version}-{rel}-{arch}{PACKAGE_EXTENSION}")
         }).collect())
-    }
-
-    // returns the expected packages
-    pub fn expected_packages(&self) -> Vec<String> {
-        self.source.get_packages()
     }
 
     /// adds a build to the package

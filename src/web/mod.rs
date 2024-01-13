@@ -9,17 +9,21 @@ use log::error;
 use raur::Raur;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use crate::build::{BuildState, BuildSummary};
+use serene_data::package::PackagePeek;
+use crate::build::Builder;
 use crate::build::schedule::BuildScheduler;
 use crate::package;
 use crate::package::{aur, Package};
 use crate::package::store::PackageStore;
 use crate::web::auth::Auth;
+use crate::web::data::PackageAddRequest;
 
 mod auth;
+mod data;
 
 type BuildSchedulerData = Data<RwLock<BuildScheduler>>;
 type PackageStoreData = Data<RwLock<PackageStore>>;
+type BuilderData = Data<RwLock<Builder>>;
 
 pub trait InternalError<T> {
     fn internal(self) -> actix_web::Result<T>;
@@ -35,89 +39,11 @@ fn empty_response() -> impl Responder {
     (None::<Option<String>>, StatusCode::OK)
 }
 
-#[derive(Serialize, Deserialize)]
-struct PackagePeek {
-    base: String,
-    version: String,
-    enabled: bool,
-    devel: bool,
-    build: Option<BuildPeek>
-}
-
-impl PackagePeek {
-    pub fn create(package: &Package) -> Self {
-        Self {
-            base: package.base.clone(),
-            enabled: package.enabled,
-            devel: package.get_devel(),
-            version: package.version.clone(),
-            build: package.get_builds().iter()
-                .max_by_key(|p| p.started)
-                .map(BuildPeek::create)
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-struct PackageInfo {
-    base: String,
-    version: String,
-    enabled: bool,
-    devel: bool,
-    clean: bool,
-    schedule: String,
-    added: DateTime<Utc>,
-    builds: Vec<BuildPeek>
-}
-
-impl PackageInfo {
-    pub fn create(package: &Package) -> Self {
-        Self {
-            base: package.base.clone(),
-            enabled: package.enabled,
-            devel: package.get_devel(),
-            version: package.version.clone(),
-            builds: package.get_builds().iter().map(BuildPeek::create).collect(),
-            added: package.added,
-            schedule: package.get_schedule(),
-            clean: package.clean
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-struct BuildPeek {
-    state: BuildState,
-    version: Option<String>,
-    started: DateTime<Utc>,
-    ended: Option<DateTime<Utc>>
-}
-
-impl BuildPeek {
-    pub fn create(summary: &BuildSummary) -> Self {
-        Self {
-            state: summary.state.clone(),
-            version: summary.version.clone(),
-            started: summary.started,
-            ended: summary.ended
-        }
-    }
-}
-
-
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-enum PackageAddRequest {
-    Aur { name: String },
-    Custom { url: String, devel: bool }
-}
-
 #[post("/package/add")]
 pub async fn add(_: Auth, body: Json<PackageAddRequest>, store: PackageStoreData, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
 
     // get repo and devel tag
     let (repository, devel) = match &body.0 {
-
         PackageAddRequest::Aur { name } => {
             let package = aur::find(&name).await.internal()?
                 .ok_or_else(|| ErrorNotFound(format!("aur package '{}' does not exist", name)))?;
@@ -139,14 +65,14 @@ pub async fn add(_: Auth, body: Json<PackageAddRequest>, store: PackageStoreData
         scheduler.run(&package).await.internal()?;
     }
 
-    Ok(Json(PackagePeek::create(&package)))
+    Ok(Json(package.as_peek()))
 }
 
 #[get("/package/list")]
 pub async fn list(_: Auth, store: PackageStoreData) -> actix_web::Result<impl Responder> {
     Ok(Json(
         store.read().await.peek().iter()
-            .map(|p| PackagePeek::create(p))
+            .map(|p| p.as_peek())
             .collect::<Vec<PackagePeek>>()
     ))
 }
@@ -156,7 +82,7 @@ pub async fn status(_: Auth, package: Path<String>, store: PackageStoreData) -> 
     let package = store.read().await.get(&package)
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    Ok(Json(PackageInfo::create(&package)))
+    Ok(Json(package.as_info()))
 }
 
 #[post("/package/{name}/build")]
@@ -169,8 +95,46 @@ pub async fn build(_: Auth, package: Path<String>, store: PackageStoreData, sche
     Ok(empty_response())
 }
 
+#[get("/package/{name}/build/{time}")]
+pub async fn get_build(_: Auth, package: Path<String>, time: Path<DateTime<Utc>>, store: PackageStoreData) -> actix_web::Result<impl Responder> {
+    let package = store.read().await.get(&package)
+        .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
+
+    let time = time.into_inner();
+
+    Ok(Json(
+        package.get_builds().iter()
+            .find(|b| b.started == time)
+            .map(|b| b.as_info())
+            .ok_or_else(|| ErrorNotFound("not build at this time found"))?
+    ))
+}
+
+#[get("/package/{name}/build/{time}/logs")]
+pub async fn get_logs(_: Auth, package: Path<String>, time: Path<DateTime<Utc>>, store: PackageStoreData) -> actix_web::Result<impl Responder> {
+    let package = store.read().await.get(&package)
+        .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
+
+    let time = time.into_inner();
+
+    Ok(Json(
+        package.get_builds().iter()
+            .find(|b| b.started == time)
+            .and_then(|b| b.logs.clone())
+            .map(|s| s.logs)
+            .ok_or_else(|| ErrorNotFound("no build at this time or it has no logs"))?
+    ))
+}
+
 #[delete("/package/{name}")]
-pub async fn remove(_: Auth, package: Path<String>, store: PackageStoreData, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
-    Ok(package.into_inner())
+pub async fn remove(_: Auth, package: Path<String>, store: PackageStoreData, builder: BuilderData) -> actix_web::Result<impl Responder> {
+    let package = store.read().await.get(&package)
+        .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
+
+    store.write().await.remove(&package.base).await.internal()?;
+
+    builder.write().await.run_remove(&package).await.internal()?;
+
+    Ok(empty_response())
 }
 

@@ -12,7 +12,7 @@ redone for v0.2.0 on 30.12.23
 *changes for a cleaner overall process*
 - [X] Enable multilib in build container
 - [X] Set makepkg.conf to build to /app/target (to avoid conflicts with any packages)
-- [ ] Figure something out to avoid code duplication from server to cli
+- [X] Figure something out to avoid code duplication from server to cli
 - [X] Cache more data inside the sources after upgrading, so that we don't have to read the filesystem as often
 - [ ] Create aur-specific normal source, so that we can check for updating without git
 

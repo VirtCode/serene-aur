@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli"]
+members = ["cli", "data"]
 
 [package]
 name = "serene"
@@ -7,6 +7,8 @@ version = "0.2.0"
 edition = "2021"
 
 [dependencies]
+serene-data = { path = "data" }
+
 # interact with the aur
 raur = { version = "7.0.0", default-features = false, features = ["async", "rustls-tls"] }
 srcinfo = "1.1.0"

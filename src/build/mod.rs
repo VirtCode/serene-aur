@@ -1,43 +1,19 @@
-use std::error::Error;
 use std::sync::Arc;
 use anyhow::Context;
 use chrono::{DateTime, Utc};
-use log::{error, info, LevelFilter};
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use crate::build::BuildProgress::{Build, Clean, Publish, Update};
-use crate::build::BuildState::{Failure, Fatal, Running, Success};
+use serene_data::build::BuildProgress::{Build, Clean, Publish, Update};
+use serene_data::build::BuildState;
+use serene_data::build::BuildState::{Failure, Fatal, Running, Success};
 use crate::package::{Package};
 use crate::package::store::PackageStore;
 use crate::repository::PackageRepository;
-use crate::runner::{archive, ContainerId, Runner, RunStatus};
+use crate::runner::{ContainerId, Runner, RunStatus};
 use crate::runner::archive::{begin_read, read_version};
 
 pub mod schedule;
-
-#[derive(Clone, Serialize, Deserialize)]
-pub enum BuildProgress {
-    /// the build is updating the sources
-    Update,
-    /// the build is building the package in the container
-    Build,
-    /// the build is publishing the built packages in the repository
-    Publish,
-    /// the build is cleaning the environment
-    Clean
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub enum BuildState {
-    /// the build is running
-    Running(BuildProgress),
-    /// the build succeeded
-    Success,
-    /// the build failed when building the package
-    Failure,
-    /// a fatal error occurred in a given step of the build
-    Fatal(String, BuildProgress)
-}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BuildSummary {
@@ -69,7 +45,7 @@ impl Builder {
     }
 
     /// starts a build for a package, if there is no update, the build will be skipped (except when forced)
-    pub async fn start(&mut self, package: &str, force: bool) {
+    pub async fn start_build(&mut self, package: &str, force: bool) {
         info!("starting build for package {package} now");
 
         let package =
@@ -86,7 +62,7 @@ impl Builder {
         };
 
         if updatable || force {
-            match self.run(package, updatable).await
+            match self.run_build(package, updatable).await
                 .context("build run for package failed extremely fatally"){
                 Ok(_) => {}
                 Err(e) => { error!("{e:#}") }
@@ -94,8 +70,19 @@ impl Builder {
         }
     }
 
+    pub async fn run_remove(&mut self, package: &Package) -> anyhow::Result<()> {
+        // remove container if exists
+        if let Some(container) = self.runner.find_container(package).await? {
+            self.clean(&container).await?;
+        }
+
+        self.repository.remove(package).await?;
+
+        Ok(())
+    }
+
     /// this runs a complete build of a package
-    async fn run(&mut self, mut package: Package, update: bool) -> anyhow::Result<()> {
+    pub async fn run_build(&mut self, mut package: Package, update: bool) -> anyhow::Result<()> {
         let start = Utc::now();
 
         let mut summary = BuildSummary {

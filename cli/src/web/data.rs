@@ -1,76 +1,40 @@
+use base32::Alphabet::Crockford;
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use chrono::{DateTime, Utc};
 use colored::{ColoredString, Colorize};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use serene_data::build::{BuildInfo, BuildState};
 
-#[derive(Clone, Serialize, Deserialize)]
-pub enum BuildProgress {
-    /// the build is updating the sources
-    Update,
-    /// the build is building the package in the container
-    Build,
-    /// the build is publishing the built packages in the repository
-    Publish,
-    /// the build is cleaning the environment
-    Clean
+pub trait BuildStateFormatter {
+    fn colored_passive(&self) -> ColoredString;
+    fn colored_substantive(&self) -> ColoredString;
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub enum BuildState {
-    /// the build is running
-    Running(BuildProgress),
-    /// the build succeeded
-    Success,
-    /// the build failed when building the package
-    Failure,
-    /// a fatal error occurred in a given step of the build
-    Fatal(String, BuildProgress)
-}
-
-impl BuildState {
-    pub fn colored_passive(&self) -> ColoredString {
+impl BuildStateFormatter for BuildState {
+    fn colored_passive(&self) -> ColoredString {
         match self {
-            BuildState::Running(_) =>   { "working".blue() }
-            BuildState::Success =>      { "passing".green() }
-            BuildState::Failure =>      { "failing".red() }
-            BuildState::Fatal(_, _) =>  { "fatal".bright_red() }
+            BuildState::Running(_) => { "working".blue() }
+            BuildState::Success => { "passing".green() }
+            BuildState::Failure => { "failing".red() }
+            BuildState::Fatal(_, _) => { "fatal".bright_red() }
         }
     }
 
-    pub fn colored_substantive(&self) -> ColoredString {
+    fn colored_substantive(&self) -> ColoredString {
         match self {
-            BuildState::Running(_) =>   { "working".blue() }
-            BuildState::Success =>      { "success".green() }
-            BuildState::Failure =>      { "failure".red() }
-            BuildState::Fatal(_, _) =>  { "fatal".bright_red() }
+            BuildState::Running(_) => { "working".blue() }
+            BuildState::Success => { "success".green() }
+            BuildState::Failure => { "failure".red() }
+            BuildState::Fatal(_, _) => { "fatal".bright_red() }
         }
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct PackagePeek {
-    pub base: String,
-    pub version: String,
-    pub enabled: bool,
-    pub devel: bool,
-    pub build: Option<BuildPeek>
-}
+pub fn get_build_hash(summary: &BuildInfo) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("{:#}", summary.started));
 
-#[derive(Serialize, Deserialize)]
-pub struct BuildPeek {
-    pub state: BuildState,
-    pub version: Option<String>,
-    pub started: DateTime<Utc>,
-    pub ended: Option<DateTime<Utc>>
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct PackageInfo {
-    pub base: String,
-    pub version: String,
-    pub enabled: bool,
-    pub devel: bool,
-    pub clean: bool,
-    pub schedule: String,
-    pub added: DateTime<Utc>,
-    pub builds: Vec<BuildPeek>
+    base32::encode(Crockford, &hasher.finalize()).as_str()[0..3].to_owned()
 }

@@ -2,9 +2,10 @@ use chrono::{Local};
 use colored::{ColoredString, Colorize};
 use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron;
 use serde::{Deserialize, Serialize};
+use serene_data::package::{PackageInfo, PackagePeek};
 use crate::config::Config;
 use crate::web::{get, post, post_empty};
-use crate::web::data::{PackageInfo, PackagePeek};
+use crate::web::data::{BuildStateFormatter, get_build_hash};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -75,6 +76,7 @@ pub fn info(c: &Config, package: &str) {
         Ok(mut info) => {
             println!();
             println!("{}", info.base.bold());
+            println!("{:<9} {}", "members:", info.members.join(" "));
             println!("{:<9} {}", "added:", info.added.with_timezone(&Local).format("%x %X"));
 
             let mut tags = vec![];
@@ -92,19 +94,20 @@ pub fn info(c: &Config, package: &str) {
 
             println!();
             println!("builds:");
-            println!("{:<15} {:<7} {:<17} {:>5}", "version".italic(), "success".italic(), "date".italic(), "time".italic());
+            println!("{:<3} {:<15} {:<7} {:<17} {:>5}", "id".italic(), "version".italic(), "success".italic(), "date".italic(), "time".italic());
 
             info.builds.sort_by_key(|b| b.started);
             info.builds.reverse();
 
             for peek in info.builds {
-                println!("{:<15.15} {:<7} {:17} {:>5}",
-                     peek.version.map(ColoredString::from).unwrap_or_else(|| "unknown".dimmed()),
-                     peek.state.colored_substantive(),
-                     peek.started.with_timezone(&Local).format("%x %X"),
-                     peek.ended.map(|ended| {
-                        format!("{}s", (ended - peek.started).num_seconds())
-                     }).map(ColoredString::from).unwrap_or_else(|| "running".blue())
+                println!("{:<3} {:<15.15} {:<7} {:17} {:>5}",
+                    get_build_hash(&peek),
+                    peek.version.map(ColoredString::from).unwrap_or_else(|| "unknown".dimmed()),
+                    peek.state.colored_substantive(),
+                    peek.started.with_timezone(&Local).format("%x %X"),
+                    peek.ended.map(|ended| {
+                       format!("{}s", (ended - peek.started).num_seconds())
+                    }).map(ColoredString::from).unwrap_or_else(|| "running".blue())
                 );
             }
         }

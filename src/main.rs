@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
     let builder = Arc::new(RwLock::new(builder));
 
     // creating scheduler
-    let mut schedule = BuildScheduler::new(builder).await
+    let mut schedule = BuildScheduler::new(builder.clone()).await
         .context("failed to start package scheduler")?;
 
     for package in store.read().await.peek() {
@@ -64,6 +64,7 @@ async fn main() -> anyhow::Result<()> {
         App::new()
             .app_data(Data::from(schedule.clone()))
             .app_data(Data::from(store.clone()))
+            .app_data(Data::from(builder.clone()))
             .service(repository::webservice())
             .service(web::add)
             .service(web::list)

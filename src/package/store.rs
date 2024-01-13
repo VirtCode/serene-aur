@@ -70,4 +70,13 @@ impl PackageStore {
         self.packages.insert(package.base.clone(), package);
         self.save().await
     }
+
+    pub async fn remove(&mut self, base: &str) -> anyhow::Result<Option<Package>> {
+        let result = self.packages.remove(base);
+        return Ok(if let Some(p) = result {
+            self.save().await?;
+
+            Some(p)
+        } else { None })
+    }
 }

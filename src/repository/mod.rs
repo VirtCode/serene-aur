@@ -104,8 +104,8 @@ impl PackageRepository {
         manage::add(&self.name, &files, Path::new(REPO_DIR)).await
             .context("failed to add files to repository")?;
 
-        // create entries
-        let entries = package.expected_packages()
+        // create entries, assuming they have the right order
+        let entries = package.source.get_packages()
             .into_iter().zip(files)
             .map(|(name, file)| PackageEntry { name, file }).collect();
 
@@ -116,7 +116,7 @@ impl PackageRepository {
     }
 
     /// removes a package from the repository
-    async fn remove(&mut self, package: &Package) -> anyhow::Result<()> {
+    pub async fn remove(&mut self, package: &Package) -> anyhow::Result<()> {
 
         if let Some(entries) = self.bases.remove(&package.base) {
             // remove old files from repository
