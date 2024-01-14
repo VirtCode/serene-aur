@@ -9,14 +9,13 @@ use log::error;
 use raur::Raur;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use serene_data::package::PackagePeek;
+use serene_data::package::{PackageAddRequest, PackagePeek, PackageSettingsRequest};
 use crate::build::Builder;
 use crate::build::schedule::BuildScheduler;
 use crate::package;
 use crate::package::{aur, Package};
 use crate::package::store::PackageStore;
 use crate::web::auth::Auth;
-use crate::web::data::PackageAddRequest;
 
 mod auth;
 mod data;
@@ -134,6 +133,41 @@ pub async fn remove(_: Auth, package: Path<String>, store: PackageStoreData, bui
     store.write().await.remove(&package.base).await.internal()?;
 
     builder.write().await.run_remove(&package).await.internal()?;
+
+    Ok(empty_response())
+}
+
+#[post("/package/{name}/set")]
+pub async fn settings(_: Auth, package: Path<String>, body: Json<PackageSettingsRequest>, store: PackageStoreData, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
+    let mut package = store.read().await.get(&package)
+        .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
+
+    // get repo and devel tag
+    let reschedule = match &body.0 {
+        PackageSettingsRequest::Clean(b) => {
+            package.clean = *b;
+            false
+        }
+        PackageSettingsRequest::Enabled(b) => {
+            package.enabled = *b;
+            true
+        }
+        PackageSettingsRequest::Schedule(s) => {
+            package.schedule = Some(s.clone());
+            true
+        }
+        PackageSettingsRequest::Prepare(s) => {
+            package.prepare = Some(s.clone());
+            false
+        }
+    };
+
+    if reschedule {
+        if package.enabled { scheduler.write().await.schedule(&package).await.internal()?; }
+        else { scheduler.write().await.unschedule(&package).await.internal()?; }
+    }
+
+    store.write().await.update(package).await.internal()?;
 
     Ok(empty_response())
 }

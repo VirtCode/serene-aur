@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ArgAction};
 
 #[derive(Parser)]
 #[clap(version, about)]
@@ -43,7 +43,7 @@ pub enum Command {
         name: String
     },
 
-    /// get info about a package
+    /// get and set info about a package
     Info {
         /// base name of the package
         name: String,
@@ -65,13 +65,49 @@ pub enum Command {
 pub enum InfoCommand {
     /// get information about a build
     Build {
-        /// id of the build
-        id: String
+        /// id of the build, latest if empty
+        id: Option<String>
     },
 
     /// get logs from a build
     Logs {
-        /// id of the build
-        id: String
+        /// id of the build, latest if empty
+        id: Option<String>
     },
+
+    /// set property of the package
+    Set {
+        /// property to set
+        #[clap(subcommand)]
+        property: SettingsSubcommand
+    }
+}
+
+#[derive(Subcommand)]
+pub enum SettingsSubcommand {
+    /// enable or disable clean build
+    Clean {
+        /// remove container after build
+        #[arg(action = ArgAction::Set)]
+        enabled: bool
+    },
+
+    /// enable or disable automatic package building
+    Enable {
+        /// enable automatic building
+        #[arg(action = ArgAction::Set)]
+        enabled: bool
+    },
+
+    /// set custom schedule
+    Schedule {
+        /// cron string of schedule
+        cron: String
+    },
+
+    /// set prepare command
+    Prepare {
+        /// commands to be run before build
+        command: String
+    }
 }

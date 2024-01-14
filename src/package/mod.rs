@@ -16,6 +16,7 @@ use crate::package::source::{Source};
 use crate::package::source::devel::DevelGitSource;
 use crate::package::source::normal::NormalSource;
 use crate::package::store::{PackageStore, PackageStoreRef};
+use crate::runner::archive;
 
 pub mod git;
 pub mod source;
@@ -52,6 +53,7 @@ pub async fn add_source(store: Arc<RwLock<PackageStore>>, source: Box<dyn Source
             base: source.base.clone(),
             version: "".to_string(),
             source,
+            prepare: None,
 
             builds: vec![]
         }).await.context("failed to persist package in store")?;
@@ -139,16 +141,9 @@ impl PackageSource {
 
     /// retrieves the source files for a package in a tar archive, inside a hyper body
     /// warning, this method will load all sources into memory, so be cautious
-    pub async fn tar(&self) -> anyhow::Result<Body> {
-        let folder = self.get_folder();
-
-        let buffer = vec![];
-        let mut archive = Builder::new(buffer);
-
-        archive.append_dir_all("", &folder).await?;
-        archive.finish().await?;
-
-        Ok(Body::from(archive.into_inner().await?))
+    pub async fn load_into_tar(&self, archive: &mut Builder<Vec<u8>>) -> anyhow::Result<()>{
+        archive.append_dir_all("", &self.get_folder()).await
+            .context("failed to load sources into tar")
     }
 
     pub fn get_version(&self) -> String {
@@ -196,7 +191,9 @@ pub struct Package {
     /// whether package should be cleaned after building
     pub clean: bool,
     /// potential custom cron schedule string
-    schedule: Option<String>,
+    pub schedule: Option<String>,
+    /// commands to run in container before package build, they are written to the shell
+    pub prepare: Option<String>,
 
     /// contains the summaries of all builds done to the package
     builds: Vec<BuildSummary>
@@ -247,6 +244,22 @@ impl Package {
         Ok(srcinfo.pkgs.iter().map(|p| &p.pkgname).map(|s| {
             format!("{s}-{epoch}{version}-{rel}-{arch}{PACKAGE_EXTENSION}")
         }).collect())
+    }
+
+    pub async fn build_files(&self) -> anyhow::Result<Body> {
+        let mut archive = archive::begin_write();
+
+        // upload sources
+        self.source.load_into_tar(&mut archive).await?;
+
+        // upload prepare script
+        archive::write_file(
+            self.prepare.clone().unwrap_or_default(),
+            "serene-prepare.sh",
+            &mut archive,
+        ).await?;
+
+        archive::end_write(archive).await
     }
 
     /// adds a build to the package

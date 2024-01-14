@@ -3,6 +3,22 @@ use serde::{Deserialize, Serialize};
 use crate::build::BuildInfo;
 
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum PackageAddRequest {
+    Aur { name: String },
+    Custom { url: String, devel: bool }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "key", content = "value", rename_all = "lowercase")]
+pub enum PackageSettingsRequest {
+    Clean(bool),
+    Enabled(bool),
+    Schedule(String),
+    Prepare(String)
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct PackagePeek {
     /// base of the package
     pub base: String,
@@ -36,6 +52,8 @@ pub struct PackageInfo {
     pub clean: bool,
     /// schedule of the package
     pub schedule: String,
+    /// prepare commands ran before build
+    pub prepare_commands: Option<String>,
 
     /// date added
     pub added: DateTime<Utc>,

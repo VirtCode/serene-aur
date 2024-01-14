@@ -18,16 +18,16 @@ redone for v0.2.0 on 30.12.23
 
 #### Improvements
 *not too heavy improvement which can be made*
-- [ ] Removal of packages from the server
+- [X] Removal of packages from the server
 - [ ] `serene check` command to compare output of `pacman -Qm`
-- [ ] allow changing of settings for package, e.g. enable, schedule, clean
-- [ ] allow inspection of builds through cli
+- [X] allow changing of settings for package, e.g. enable, schedule, clean
+- [X] allow inspection of builds through cli
 - [ ] on-boarding screen when first using the cli, with config to configure pacman
 
 #### Features
 *features which are kinda important*
 - [ ] Signing packages
-- [ ] Pre-launch scripts to configure container specifically for package (e.g. with `eww`'s keys)
+- [X] Pre-launch scripts to configure container specifically for package (e.g. with `eww`'s keys)
 - [ ] Readme & License
 - [X] CI and ghcr
 

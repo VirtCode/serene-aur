@@ -1,20 +1,15 @@
 use std::fmt::format;
+use anyhow::anyhow;
 use chrono::{Local};
 use colored::{ColoredString, Colorize};
 use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron;
 use serde::{Deserialize, Serialize};
 use serene_data::build::{BuildInfo, BuildState};
-use serene_data::package::{PackageInfo, PackagePeek};
+use serene_data::package::{PackageAddRequest, PackageInfo, PackagePeek, PackageSettingsRequest};
+use crate::command::SettingsSubcommand;
 use crate::config::Config;
-use crate::web::{delete_empty, get, post, post_empty};
+use crate::web::{delete_empty, get, post, post_empty, post_simple};
 use crate::web::data::{BuildProgressFormatter, BuildStateFormatter, get_build_id};
-
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-enum PackageAddRequest {
-    Aur { name: String },
-    Custom { url: String, devel: bool }
-}
 
 pub fn add_aur(c: &Config, name: &str) {
     info!("Adding package {} from the AUR...", name.italic());
@@ -103,6 +98,12 @@ pub fn info(c: &Config, package: &str) {
                 get_description_cron(&info.schedule).unwrap_or_else(|_| "could not parse cron".to_owned())
             );
 
+            if let Some(prepare) = &info.prepare_commands {
+                println!();
+                println!("prepare commands:");
+                println!("{}", prepare.trim());
+            }
+
             println!();
             println!("builds:");
             println!("{:<4}  {:<15}  {:<7}  {:<17}  {:>5}", "id".italic(), "version".italic(), "state".italic(), "date".italic(), "time".italic());
@@ -126,17 +127,23 @@ pub fn info(c: &Config, package: &str) {
     }
 }
 
-pub fn build_info(c: &Config, package: &str, build: &str) {
+pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
     println!("Querying server for package builds...\n");
     match get::<PackageInfo>(c, format!("package/{}", package).as_str()) {
         Ok(info) => {
 
-            let Some(b) = info.builds.iter().find(|b| get_build_id(b).as_str() == build.to_lowercase()) else {
-                error!("not build for {} with the id {} found", info.base, build);
+            let build = build.as_ref().and_then(|build|
+                info.builds.iter().find(|b| get_build_id(b).as_str() == build.to_lowercase())
+            ).or_else(||
+                info.builds.iter().max_by_key(|b| b.started)
+            );
+
+            let Some(b) = build else {
+                error!("no latest build or build unter the given id found");
                 return;
             };
 
-            println!("{} {}", "build".bold(), build.to_lowercase().bold());
+            println!("{} {}", "build".bold(), get_build_id(b).bold());
             println!("{:<8} {}", "started:",
                      b.started.with_timezone(&Local).format("%x %X"));
             println!("{:<8} {}", "ended:",
@@ -167,13 +174,19 @@ pub fn build_info(c: &Config, package: &str, build: &str) {
 }
 
 
-pub fn build_logs(c: &Config, package: &str, build: &str) {
+pub fn build_logs(c: &Config, package: &str, build: &Option<String>) {
     println!("Querying server for package builds...");
     match get::<PackageInfo>(c, format!("package/{}", package).as_str()) {
         Ok(info) => {
 
-            let Some(b) = info.builds.iter().find(|b| get_build_id(b).as_str() == build.to_lowercase()) else {
-                error!("not build for {} with the id {} found", info.base, build);
+            let build = build.as_ref().and_then(|build|
+                info.builds.iter().find(|b| get_build_id(b).as_str() == build.to_lowercase())
+            ).or_else(||
+                info.builds.iter().max_by_key(|b| b.started)
+            );
+
+            let Some(b) = build else {
+                error!("no latest build or build unter the given id found");
                 return;
             };
 
@@ -183,6 +196,39 @@ pub fn build_logs(c: &Config, package: &str, build: &str) {
                 Err(e) => { e.print() }
             }
 
+        }
+        Err(e) => { e.print() }
+    }
+}
+
+pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
+    let request = match setting {
+        SettingsSubcommand::Clean { enabled } => {
+            info!("{} clean build for package {}...", if enabled { "Enabling" } else { "Disabling" }, package);
+            PackageSettingsRequest::Clean(enabled)
+        }
+        SettingsSubcommand::Enable { enabled } => {
+            info!("{} building for package {}...", if enabled { "Enabling" } else { "Disabling" }, package);
+            PackageSettingsRequest::Enabled(enabled)
+        }
+        SettingsSubcommand::Schedule { cron } => {
+            let Ok(description) = get_description_cron(&cron) else {
+                error!("invalid cron string provided");
+                return;
+            };
+
+            info!("Setting custom schedule '{}' for package {}...", description, package);
+            PackageSettingsRequest::Schedule(cron)
+        }
+        SettingsSubcommand::Prepare { command } => {
+            info!("Setting prepare command for package {}...", package);
+            PackageSettingsRequest::Prepare(command)
+        }
+    };
+
+    match post_simple(c, &format!("package/{}/set", package), request) {
+        Ok(()) => {
+            info!("Successfully changed property")
         }
         Err(e) => { e.print() }
     }

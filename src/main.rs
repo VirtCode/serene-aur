@@ -72,6 +72,7 @@ async fn main() -> anyhow::Result<()> {
             .service(web::build)
             .service(web::get_build)
             .service(web::get_logs)
+            .service(web::settings)
     ).bind(("0.0.0.0", CONFIG.port))?.run().await?;
 
     Ok(())

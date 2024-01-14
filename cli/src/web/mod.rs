@@ -86,6 +86,17 @@ pub fn post_empty(config: &Config, path: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn post_simple<B: Serialize>(config: &Config, path: &str, body: B) -> Result<()> {
+    let result = Client::new().post(get_url(config, path))
+        .header("Authorization", &config.secret)
+        .json(&body)
+        .send();
+
+    process_errors(result)?;
+
+    Ok(())
+}
+
 pub fn delete_empty(config: &Config, path: &str) -> Result<()> {
     let result = Client::new().delete(get_url(config, path))
         .header("Authorization", &config.secret)

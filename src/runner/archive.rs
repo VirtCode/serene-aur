@@ -1,8 +1,10 @@
+use std::fs::Metadata;
 use std::path::Path;
 use anyhow::{anyhow, Context};
 use async_std::path::PathBuf;
-use async_tar::{Archive, Entries};
+use async_tar::{Archive, Builder, Entries, Header};
 use futures_util::{AsyncRead, AsyncReadExt, StreamExt};
+use hyper::Body;
 
 // TODO: Refactor this into some kind of ArchiveWrapper struct which may easily be passed around.
 //       However, I cannot store an Archive<impl AsyncRead + Unpin> in a struct.
@@ -53,4 +55,25 @@ pub async fn extract_files(entries: &mut Entries<impl AsyncRead + Unpin + Sized>
     } else {
         Ok(())
     }
+}
+
+pub fn begin_write() -> Builder<Vec<u8>> {
+    let buffer = vec![];
+    Builder::new(buffer)
+}
+
+pub async fn write_file(text: String, path: &str, archive: &mut Builder<Vec<u8>>) -> anyhow::Result<()> {
+    let data = text.as_bytes();
+
+    let mut header = Header::new_gnu();
+    header.set_size(data.len() as u64);
+    header.set_cksum();
+    header.set_mode(0o444);
+
+    archive.append_data(&mut header, path, data).await
+        .context("failed to create file in archive")
+}
+
+pub async fn end_write(archive: Builder<Vec<u8>>) -> anyhow::Result<Body> {
+    Ok(Body::from(archive.into_inner().await?))
 }

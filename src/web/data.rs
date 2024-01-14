@@ -4,12 +4,7 @@ use serene_data::package::{PackageInfo, PackagePeek};
 use crate::build::BuildSummary;
 use crate::package::Package;
 
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-pub enum PackageAddRequest {
-    Aur { name: String },
-    Custom { url: String, devel: bool }
-}
+
 
 impl Package {
     pub fn as_peek(&self) -> PackagePeek {
@@ -36,7 +31,8 @@ impl Package {
             added: self.added,
             builds: self.get_builds().iter()
                 .map(BuildSummary::as_info)
-                .collect()
+                .collect(),
+            prepare_commands: self.prepare.clone()
         }
     }
 }
