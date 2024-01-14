@@ -6,24 +6,15 @@ mod web;
 pub mod config;
 mod build;
 
-use std::any;
-use std::error::Error;
-use std::sync::{Arc, };
+use std::sync::{Arc};
 use actix_web::{App, HttpMessage, HttpServer};
 use actix_web::web::Data;
 use anyhow::Context;
-use base64::Engine;
-use base64::prelude::BASE64_STANDARD;
-use bollard::Docker;
-use futures::stream::StreamExt;
-use futures_util::AsyncReadExt;
-use log::{info, LevelFilter};
-use sha2::{Digest, Sha256};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{RwLock};
 use crate::build::schedule::BuildScheduler;
 use crate::build::Builder;
 use crate::config::CONFIG;
-use crate::runner::{archive, Runner, ContainerId};
+use crate::runner::{Runner};
 use crate::package::store::{PackageStore};
 use crate::repository::PackageRepository;
 
@@ -32,19 +23,27 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     // initializing storage
-    let store = PackageStore::init().await
-        .context("failed to create serene data storage")?;
-    let store = Arc::new(RwLock::new(store));
+    let store = Arc::new(RwLock::new(
+        PackageStore::init().await
+            .context("failed to create serene data storage")?
+    ));
 
-    // initializing builder
-    let builder = Builder::new(
-        store.clone(),
+    // initializing runner
+    let runner = Arc::new(RwLock::new(
         Runner::new()
-            .context("failed to initialize docker runner")?,
+            .context("failed to connect to docker")?
+    ));
+
+    // initializing repository
+    let repository = Arc::new(RwLock::new(
         PackageRepository::new().await
             .context("failed to create package repository")?
-    );
-    let builder = Arc::new(RwLock::new(builder));
+    ));
+
+    // initializing builder
+    let builder = Arc::new(RwLock::new(
+        Builder::new( store.clone(), runner.clone(), repository.clone())
+    ));
 
     // creating scheduler
     let mut schedule = BuildScheduler::new(builder.clone()).await
@@ -71,6 +70,8 @@ async fn main() -> anyhow::Result<()> {
             .service(web::status)
             .service(web::remove)
             .service(web::build)
+            .service(web::get_build)
+            .service(web::get_logs)
     ).bind(("0.0.0.0", CONFIG.port))?.run().await?;
 
     Ok(())

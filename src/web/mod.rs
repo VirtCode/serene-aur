@@ -96,11 +96,11 @@ pub async fn build(_: Auth, package: Path<String>, store: PackageStoreData, sche
 }
 
 #[get("/package/{name}/build/{time}")]
-pub async fn get_build(_: Auth, package: Path<String>, time: Path<DateTime<Utc>>, store: PackageStoreData) -> actix_web::Result<impl Responder> {
+pub async fn get_build(_: Auth, path: Path<(String, DateTime<Utc>)>, store: PackageStoreData) -> actix_web::Result<impl Responder> {
+    let (package, time) = path.into_inner();
+
     let package = store.read().await.get(&package)
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
-
-    let time = time.into_inner();
 
     Ok(Json(
         package.get_builds().iter()
@@ -111,11 +111,11 @@ pub async fn get_build(_: Auth, package: Path<String>, time: Path<DateTime<Utc>>
 }
 
 #[get("/package/{name}/build/{time}/logs")]
-pub async fn get_logs(_: Auth, package: Path<String>, time: Path<DateTime<Utc>>, store: PackageStoreData) -> actix_web::Result<impl Responder> {
+pub async fn get_logs(_: Auth, path: Path<(String, DateTime<Utc>)>, store: PackageStoreData) -> actix_web::Result<impl Responder> {
+    let (package, time) = path.into_inner();
+
     let package = store.read().await.get(&package)
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
-
-    let time = time.into_inner();
 
     Ok(Json(
         package.get_builds().iter()

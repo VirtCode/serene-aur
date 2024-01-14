@@ -1,11 +1,13 @@
+use std::fmt::format;
 use chrono::{Local};
 use colored::{ColoredString, Colorize};
 use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron;
 use serde::{Deserialize, Serialize};
+use serene_data::build::{BuildInfo, BuildState};
 use serene_data::package::{PackageInfo, PackagePeek};
 use crate::config::Config;
-use crate::web::{get, post, post_empty};
-use crate::web::data::{BuildStateFormatter, get_build_hash};
+use crate::web::{delete_empty, get, post, post_empty};
+use crate::web::data::{BuildProgressFormatter, BuildStateFormatter, get_build_id};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -32,6 +34,15 @@ pub fn add_git(c: &Config, url: &str, devel: bool) {
         Ok(info) => {
             info!("Successfully added package {}", info.base.bold());
         }
+        Err(e) => { e.print() }
+    }
+}
+
+pub fn delete(c: &Config, package: &str) {
+    info!("Requesting deletion of package {}...", package.italic());
+
+    match delete_empty(c, format!("package/{}", package).as_str()) {
+        Ok(()) => { info!("Successfully deleted package") }
         Err(e) => { e.print() }
     }
 }
@@ -94,22 +105,84 @@ pub fn info(c: &Config, package: &str) {
 
             println!();
             println!("builds:");
-            println!("{:<3} {:<15} {:<7} {:<17} {:>5}", "id".italic(), "version".italic(), "success".italic(), "date".italic(), "time".italic());
+            println!("{:<4}  {:<15}  {:<7}  {:<17}  {:>5}", "id".italic(), "version".italic(), "state".italic(), "date".italic(), "time".italic());
 
             info.builds.sort_by_key(|b| b.started);
             info.builds.reverse();
 
             for peek in info.builds {
-                println!("{:<3} {:<15.15} {:<7} {:17} {:>5}",
-                    get_build_hash(&peek),
+                println!("{:<4}  {:<15.15}  {:<7}  {:17}  {:>5}",
+                    get_build_id(&peek).dimmed(),
                     peek.version.map(ColoredString::from).unwrap_or_else(|| "unknown".dimmed()),
                     peek.state.colored_substantive(),
                     peek.started.with_timezone(&Local).format("%x %X"),
                     peek.ended.map(|ended| {
                        format!("{}s", (ended - peek.started).num_seconds())
-                    }).map(ColoredString::from).unwrap_or_else(|| "running".blue())
+                    }).map(ColoredString::from).unwrap_or_else(|| "??".blue())
                 );
             }
+        }
+        Err(e) => { e.print() }
+    }
+}
+
+pub fn build_info(c: &Config, package: &str, build: &str) {
+    println!("Querying server for package builds...\n");
+    match get::<PackageInfo>(c, format!("package/{}", package).as_str()) {
+        Ok(info) => {
+
+            let Some(b) = info.builds.iter().find(|b| get_build_id(b).as_str() == build.to_lowercase()) else {
+                error!("not build for {} with the id {} found", info.base, build);
+                return;
+            };
+
+            println!("{} {}", "build".bold(), build.to_lowercase().bold());
+            println!("{:<8} {}", "started:",
+                     b.started.with_timezone(&Local).format("%x %X"));
+            println!("{:<8} {}", "ended:",
+                     b.ended.map(|s| s.with_timezone(&Local).format("%x %X").to_string())
+                         .unwrap_or_else(|| "not yet".to_string()));
+            println!("{:<8} {}", "version:",
+                     b.version.as_ref()
+                         .map(|b| ColoredString::from(b.as_str()))
+                         .unwrap_or_else(|| "unknown".dimmed()));
+
+            let additive = match &b.state {
+                BuildState::Running(state) | BuildState::Fatal(_, state) => {
+                    format!("on {}", state.printable_string())
+                }
+                _ => "".to_string()
+            };
+
+            println!("\n{:<8} {} {}", "status:", b.state.colored_substantive(), additive);
+
+            match &b.state {
+                BuildState::Failure => { println!("{:<8} {}", "message:", "see logs for error messages".italic()) }
+                BuildState::Fatal(msg, _) => { println!("{:<8} {}", "message:", msg) }
+                _ => {}
+            }
+        }
+        Err(e) => { e.print() }
+    }
+}
+
+
+pub fn build_logs(c: &Config, package: &str, build: &str) {
+    println!("Querying server for package builds...");
+    match get::<PackageInfo>(c, format!("package/{}", package).as_str()) {
+        Ok(info) => {
+
+            let Some(b) = info.builds.iter().find(|b| get_build_id(b).as_str() == build.to_lowercase()) else {
+                error!("not build for {} with the id {} found", info.base, build);
+                return;
+            };
+
+            println!("Retrieving build logs...\n");
+            match get::<String>(c, format!("package/{}/build/{}/logs", package, b.started).as_str()) {
+                Ok(l) => { println!("{l}") }
+                Err(e) => { e.print() }
+            }
+
         }
         Err(e) => { e.print() }
     }

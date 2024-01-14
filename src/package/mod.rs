@@ -7,7 +7,6 @@ use chrono::{DateTime, Utc};
 use hyper::Body;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
-use sha2::digest::typenum::private::IsEqualPrivate;
 use srcinfo::Srcinfo;
 use tokio::fs;
 use tokio::sync::{Mutex, RwLock};
@@ -170,6 +169,12 @@ impl PackageSource {
 
     pub fn is_devel(&self) -> bool {
         self.source.is_devel()
+    }
+
+    /// removes the source files of the source
+    pub async fn self_destruct(&self) -> anyhow::Result<()> {
+        fs::remove_dir_all(self.get_folder()).await
+            .context("could not delete source directory")
     }
 }
 

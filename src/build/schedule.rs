@@ -110,14 +110,13 @@ impl BuildScheduler {
 
 /// runs a build for a package
 async fn run(lock: Arc<RwLock<bool>>, builder: Arc<RwLock<Builder>>, force: bool, base: String) {
+    // makes sure a package is not built twice at the same time
     if *lock.read().await {
         warn!("cancelling schedule for package {base} because the lock is set");
         return
     }
 
-    info!("waiting for ownership to build package {base}");
-
     *lock.write().await = true;
-    builder.write().await.start_build(&base, force).await;
+    builder.read().await.run_scheduled(&base, force).await;
     *lock.write().await = false;
 }

@@ -2,12 +2,10 @@ use std::{env, fs};
 use std::io::stdin;
 use std::path::{Path, PathBuf};
 use anyhow::Context;
-use base64::Engine;
-use base64::prelude::BASE64_STANDARD;
 use colored::Colorize;
 use rand::distributions::{Alphanumeric, DistString};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use serene_data::secret;
 
 const CONFIG_FILE: &str = "serene.yml";
 
@@ -24,12 +22,7 @@ fn generate_secret() -> String {
 }
 
 /// hashes the secret the way the server expects it
-fn hash_secret(secret: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(secret);
 
-    BASE64_STANDARD.encode(hasher.finalize())
-}
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
@@ -89,7 +82,7 @@ impl Config {
 
     /// prints the hashed secret to stdout together with host and username
     pub fn print_secret(&self, nice: bool) {
-        let hash = hash_secret(&self.secret);
+        let hash = secret::hash(&self.secret);
 
         if nice { println!("{hash} {}@{}", whoami::username(), whoami::hostname()) }
         else { println!("{hash}") }

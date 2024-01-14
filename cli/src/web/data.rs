@@ -1,11 +1,5 @@
-use base32::Alphabet::Crockford;
-use base64::Engine;
-use base64::prelude::BASE64_STANDARD;
-use chrono::{DateTime, Utc};
 use colored::{ColoredString, Colorize};
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use serene_data::build::{BuildInfo, BuildState};
+use serene_data::build::{BuildInfo, BuildProgress, BuildState};
 
 pub trait BuildStateFormatter {
     fn colored_passive(&self) -> ColoredString;
@@ -32,9 +26,22 @@ impl BuildStateFormatter for BuildState {
     }
 }
 
-pub fn get_build_hash(summary: &BuildInfo) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(format!("{:#}", summary.started));
+pub trait BuildProgressFormatter {
+    fn printable_string(&self) -> String;
+}
 
-    base32::encode(Crockford, &hasher.finalize()).as_str()[0..3].to_owned()
+impl BuildProgressFormatter for BuildProgress {
+    fn printable_string(&self) -> String {
+        match self {
+            BuildProgress::Update => { "updating sources" }
+            BuildProgress::Build => { "building package" }
+            BuildProgress::Publish => { "publishing repository" }
+            BuildProgress::Clean => { "cleaning up" }
+        }.to_string()
+    }
+}
+
+pub fn get_build_id(summary: &BuildInfo) -> String {
+    let string = format!("{:x}", summary.started.timestamp());
+    string[(string.len() - 4)..string.len()].to_owned()
 }

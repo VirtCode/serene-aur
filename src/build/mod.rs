@@ -33,19 +33,19 @@ pub struct BuildSummary {
 
 pub struct Builder {
     store: Arc<RwLock<PackageStore>>,
-    runner: Runner,
-    repository: PackageRepository,
+    runner: Arc<RwLock<Runner>>,
+    repository: Arc<RwLock<PackageRepository>>,
 }
 
 impl Builder {
 
     /// creates a new builder
-    pub fn new(store: Arc<RwLock<PackageStore>>, runner: Runner, repository: PackageRepository) -> Self {
+    pub fn new(store: Arc<RwLock<PackageStore>>, runner: Arc<RwLock<Runner>>, repository: Arc<RwLock<PackageRepository>>) -> Self {
         Self { store, runner, repository }
     }
 
     /// starts a build for a package, if there is no update, the build will be skipped (except when forced)
-    pub async fn start_build(&mut self, package: &str, force: bool) {
+    pub async fn run_scheduled(&self, package: &str, force: bool) {
         info!("starting build for package {package} now");
 
         let package =
@@ -70,19 +70,21 @@ impl Builder {
         }
     }
 
-    pub async fn run_remove(&mut self, package: &Package) -> anyhow::Result<()> {
+    pub async fn run_remove(&self, package: &Package) -> anyhow::Result<()> {
         // remove container if exists
-        if let Some(container) = self.runner.find_container(package).await? {
+        if let Some(container) = self.runner.read().await.find_container(package).await? {
             self.clean(&container).await?;
         }
 
-        self.repository.remove(package).await?;
+        self.repository.write().await.remove(package).await?;
+
+        package.source.self_destruct().await?;
 
         Ok(())
     }
 
     /// this runs a complete build of a package
-    pub async fn run_build(&mut self, mut package: Package, update: bool) -> anyhow::Result<()> {
+    pub async fn run_build(&self, mut package: Package, update: bool) -> anyhow::Result<()> {
         let start = Utc::now();
 
         let mut summary = BuildSummary {
@@ -172,34 +174,34 @@ impl Builder {
     }
 
     /// updates the sources of a given package
-    async fn update(&mut self, package: &mut Package) -> anyhow::Result<()> {
+    async fn update(&self, package: &mut Package) -> anyhow::Result<()> {
         package.source.update().await
     }
 
     /// builds a given package
-    async fn build(&mut self, package: &mut Package) -> anyhow::Result<(RunStatus, ContainerId)> {
-        let container = self.runner.prepare(package).await?;
+    async fn build(&self, package: &mut Package) -> anyhow::Result<(RunStatus, ContainerId)> {
+        let container = self.runner.read().await.prepare(package).await?;
 
-        self.runner.upload_sources(&container, package).await?;
+        self.runner.read().await.upload_sources(&container, package).await?;
 
-        let status = self.runner.build(&container).await?;
+        let status = self.runner.read().await.build(&container).await?;
 
         Ok((status, container))
     }
 
     /// publishes a given package to the repository
-    async fn publish(&mut self, package: &mut Package, container: &ContainerId) -> anyhow::Result<()> {
-        let stream = self.runner.download_packages(&container).await?;
+    async fn publish(&self, package: &mut Package, container: &ContainerId) -> anyhow::Result<()> {
+        let stream = self.runner.read().await.download_packages(&container).await?;
         let mut archive = begin_read(stream)?;
 
         let version = read_version(&mut archive).await?;
         package.upgrade_version(&version).await?;
 
-        self.repository.publish(package, archive).await
+        self.repository.write().await.publish(package, archive).await
     }
 
     /// cleans the container for a given package
-    async fn clean(&mut self, container: &ContainerId) -> anyhow::Result<()> {
-        self.runner.clean(container).await
+    async fn clean(&self, container: &ContainerId) -> anyhow::Result<()> {
+        self.runner.read().await.clean(container).await
     }
 }

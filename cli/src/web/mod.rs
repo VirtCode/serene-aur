@@ -26,15 +26,13 @@ impl Error {
     pub fn print(&self) {
         match self {
             Error::Client { error } => {
-                error!("failed to make request");
-                error!("{:#}", error);
+                error!("failed to connect to server: {:#}", error);
             }
             Error::Server { message } => {
-                error!("failed to process request");
                 error!("{}", message);
             }
             Error::Input { message, code} => {
-                error!("{}", message);
+                error!("({code}) {}", message);
             }
         }
     }
@@ -80,6 +78,16 @@ pub fn post<B: Serialize, R: DeserializeOwned>(config: &Config, path: &str, body
 
 pub fn post_empty(config: &Config, path: &str) -> Result<()> {
     let result = Client::new().post(get_url(config, path))
+        .header("Authorization", &config.secret)
+        .send();
+
+    process_errors(result)?;
+
+    Ok(())
+}
+
+pub fn delete_empty(config: &Config, path: &str) -> Result<()> {
+    let result = Client::new().delete(get_url(config, path))
         .header("Authorization", &config.secret)
         .send();
 

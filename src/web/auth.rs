@@ -5,9 +5,7 @@ use actix_web::{FromRequest, HttpRequest};
 use actix_web::dev::Payload;
 use actix_web::error::{ErrorForbidden, ErrorInternalServerError, ErrorUnauthorized};
 use actix_web::http::header::AUTHORIZATION;
-use base64::Engine;
-use base64::prelude::BASE64_STANDARD;
-use sha2::{Sha256, Digest};
+use serene_data::secret;
 
 const AUTHORIZED_PATH: &str = "authorized_secrets";
 
@@ -32,10 +30,6 @@ impl FromRequest for Auth {
 
 /// checks whether a given secret is authorized
 async fn secret_authorized(secret: &str) -> Result<bool, actix_web::Error> {
-    let mut hasher = Sha256::new();
-    hasher.update(secret);
-    let hashed = BASE64_STANDARD.encode(hasher.finalize());
-
     let file = tokio::fs::read_to_string(AUTHORIZED_PATH).await
         .map_err(|_e| ErrorInternalServerError("failed to read authorized secrets"))?;
 
@@ -44,5 +38,5 @@ async fn secret_authorized(secret: &str) -> Result<bool, actix_web::Error> {
         .filter_map(|s| s.split_whitespace().next())
         .collect::<Vec<&str>>();
 
-    Ok(secrets.contains(&hashed.as_str()))
+    Ok(secrets.contains(&secret::hash(secret).as_str()))
 }
