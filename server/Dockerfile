@@ -8,7 +8,7 @@ ENV OPENSSL_DIR=/usr
 
 # run build
 COPY . .
-RUN cargo build --release
+RUN cargo build --release --bin serene
 
 FROM alpine:3.18 as runner
 
