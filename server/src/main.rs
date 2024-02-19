@@ -5,6 +5,7 @@ mod repository;
 mod web;
 pub mod config;
 mod build;
+mod database;
 
 use std::sync::{Arc};
 use actix_web::{App, HttpMessage, HttpServer};

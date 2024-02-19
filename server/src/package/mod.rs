@@ -196,7 +196,7 @@ pub struct Package {
     pub prepare: Option<String>,
 
     /// contains the summaries of all builds done to the package
-    builds: Vec<BuildSummary>
+    pub(crate) builds: Vec<BuildSummary>
 }
 
 impl Package {
