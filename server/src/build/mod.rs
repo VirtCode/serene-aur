@@ -1,14 +1,14 @@
 use std::sync::Arc;
 use anyhow::Context;
 use chrono::{DateTime, Utc};
-use log::{error, info};
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use serene_data::build::BuildProgress::{Build, Clean, Publish, Update};
 use serene_data::build::BuildState;
 use serene_data::build::BuildState::{Failure, Fatal, Running, Success};
+use crate::database::Database;
 use crate::package::{Package};
-use crate::package::store::PackageStore;
 use crate::repository::PackageRepository;
 use crate::runner::{ContainerId, Runner, RunStatus};
 use crate::runner::archive::{begin_read, read_version};
@@ -34,7 +34,7 @@ pub struct BuildSummary {
 }
 
 pub struct Builder {
-    store: Arc<RwLock<PackageStore>>,
+    db: Database,
     runner: Arc<RwLock<Runner>>,
     repository: Arc<RwLock<PackageRepository>>,
 }
@@ -42,22 +42,27 @@ pub struct Builder {
 impl Builder {
 
     /// creates a new builder
-    pub fn new(store: Arc<RwLock<PackageStore>>, runner: Arc<RwLock<Runner>>, repository: Arc<RwLock<PackageRepository>>) -> Self {
-        Self { store, runner, repository }
+    pub fn new(db: Database, runner: Arc<RwLock<Runner>>, repository: Arc<RwLock<PackageRepository>>) -> Self {
+        Self { db, runner, repository }
     }
 
     /// starts a build for a package, if there is no update, the build will be skipped (except when forced)
     pub async fn run_scheduled(&self, package: &str, force: bool) {
         info!("starting build for package {package} now");
 
-        let package =
-            if let Some(p) = self.store.read().await.get(package) { p }
-            else {
-                error!("package scheduled for build is no longer in package store");
-                return
-            };
+        let package = match Package::find(package, &self.db).await {
+            Ok(Some(p)) => p,
+            Ok(None) => {
+                warn!("package scheduled for build is no longer in package store");
+                return;
+            },
+            Err(e) => {
+                error!("failed to read package from database: {e:#}");
+                return;
+            }
+        };
 
-        let updatable = match package.source.updatable().await
+        let updatable = match package.updatable().await
             .context("failed to check for package updates on scheduled build") {
             Ok(u) => { u }
             Err(e) => { error!("{e:#}"); return }
@@ -72,6 +77,7 @@ impl Builder {
         }
     }
 
+    /// Removes a package from the system, by removing the container, from the repo, and the database
     pub async fn run_remove(&self, package: &Package) -> anyhow::Result<()> {
         // remove container if exists
         if let Some(container) = self.runner.read().await.find_container(package).await? {
@@ -80,7 +86,8 @@ impl Builder {
 
         self.repository.write().await.remove(package).await?;
 
-        package.source.self_destruct().await?;
+        package.self_destruct().await?;
+        package.delete(&self.db).await?;
 
         Ok(())
     }
@@ -95,9 +102,7 @@ impl Builder {
             started: start.clone(),
             logs: None, version: None, ended: None,
         };
-
-        package.update_build(summary.clone());
-        self.store.write().await.update(package.clone()).await?;
+        summary.save(&self.db).await?;
 
         'run: {
             // UPDATE
@@ -112,8 +117,7 @@ impl Builder {
 
                 summary.state = Running(Build);
 
-                package.update_build(summary.clone());
-                self.store.write().await.update(package.clone()).await?;
+                summary.change(&self.db).await?;
             }
 
             // BUILD
@@ -128,10 +132,9 @@ impl Builder {
                     break 'run;
                 }
             };
-            summary.state = Running(if success { Publish } else { Clean });
 
-            package.update_build(summary.clone());
-            self.store.write().await.update(package.clone()).await?;
+            summary.state = Running(if success { Publish } else { Clean });
+            summary.change(&self.db).await?;
 
             // PUBLISH
             if success {
@@ -143,11 +146,13 @@ impl Builder {
                     }
                 }
 
-                summary.version = Some(package.version.clone());
+                summary.version = package.version.clone();
                 summary.state = Running(Clean);
 
-                package.update_build(summary.clone());
-                self.store.write().await.update(package.clone()).await?;
+                summary.change(&self.db).await?;
+
+                // change sources here as the new package was successfully published
+                package.change_sources(&self.db).await?;
             }
 
             // CLEAN
@@ -169,16 +174,14 @@ impl Builder {
         };
 
         summary.ended = Some(Utc::now());
-
-        package.update_build(summary);
-        self.store.write().await.update(package).await?;
+        summary.change(&self.db).await?;
 
         Ok(())
     }
 
     /// updates the sources of a given package
     async fn update(&self, package: &mut Package) -> anyhow::Result<()> {
-        package.source.update().await
+        package.update().await
     }
 
     /// builds a given package
@@ -198,7 +201,7 @@ impl Builder {
         let mut archive = begin_read(stream)?;
 
         let version = read_version(&mut archive).await?;
-        package.upgrade_version(&version).await?;
+        package.upgrade(&version).await?;
 
         self.repository.write().await.publish(package, archive).await
     }

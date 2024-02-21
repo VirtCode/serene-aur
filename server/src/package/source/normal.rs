@@ -27,7 +27,7 @@ impl NormalSource {
 #[typetag::serde]
 impl Source for NormalSource {
 
-    async fn create(&mut self, folder: &Path) -> anyhow::Result<String> {
+    async fn create(&mut self, folder: &Path) -> anyhow::Result<()> {
         debug!("creating {}", self.repository);
         git::clone(&self.repository, folder).await?;
 
@@ -41,7 +41,7 @@ impl Source for NormalSource {
         Ok(current_commit != self.last_commit)
     }
 
-    async fn update(&mut self, folder: &Path) -> anyhow::Result<String> {
+    async fn update(&mut self, folder: &Path) -> anyhow::Result<()> {
         debug!("upgrading {}", &self.repository);
 
         // pull repo
@@ -49,8 +49,7 @@ impl Source for NormalSource {
         // set commit to newest (could also be done by looking at the local repository...)
         self.last_commit = git::latest_commit(&self.repository).await?;
 
-        read_srcinfo_string(folder).await
-            .context("failed to parse .SRCINFO")
+        Ok(())
     }
 
     fn is_devel(&self) -> bool { false }

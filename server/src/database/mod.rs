@@ -13,7 +13,7 @@ use anyhow::Result;
 
 const FILE: &str = "serene.db";
 
-type Database = SqlitePool;
+pub type Database = SqlitePool;
 
 /// connects to the local sqlite database
 pub async fn connect() -> Result<Database> {
@@ -36,28 +36,4 @@ pub async fn connect() -> Result<Database> {
 trait DatabaseConversion<T> {
     fn create_record(&self) -> Result<T>;
     fn from_record(other: T) -> Result<Self> where Self: Sized;
-}
-
-#[cfg(test)]
-mod tests {
-    use std::env;
-    use crate::package::store::PackageStore;
-    use super::*;
-
-    #[tokio::test]
-    pub async fn insert_local() {
-        env::set_current_dir("../app/").unwrap();
-
-        let db = connect().await.unwrap();
-
-        let store = PackageStore::init().await
-            .context("failed to create serene data storage").unwrap();
-
-        for x in store.peek() {
-            x.save(&db).await.unwrap();
-            for b in &x.builds {
-                b.save(&db).await.unwrap();
-            }
-        }
-    }
 }

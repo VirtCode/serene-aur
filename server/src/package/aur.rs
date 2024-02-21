@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use raur::Raur;
 
 // this struct represents information about a package in the aur

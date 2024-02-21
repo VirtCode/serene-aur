@@ -83,15 +83,15 @@ impl DatabaseConversion<BuildRecord> for BuildSummary {
 }
 
 impl BuildSummary {
-    pub async fn find(base: DateTime<Utc>, db: &Database) -> Result<Self> {
+    pub async fn find(date: &DateTime<Utc>, package: &Package, db: &Database) -> Result<Option<Self>> {
         let record = query_as!(BuildRecord, r#"
-            SELECT * FROM build WHERE started = $1
+            SELECT * FROM build WHERE started = $1 AND package = $2
         "#,
-            base
+            date, package.base
         )
-            .fetch_one(db).await?;
+            .fetch_optional(db).await?;
 
-        BuildSummary::from_record(record)
+        record.map(BuildSummary::from_record).transpose()
     }
 
     pub async fn find_all_for_package(package: &Package, db: &Database) -> Result<Vec<Self>> {
@@ -105,15 +105,15 @@ impl BuildSummary {
         records.into_iter().map(BuildSummary::from_record).collect()
     }
 
-    pub async fn find_latest_for_package(package: &Package, db: &Database) -> Result<Self> {
+    pub async fn find_latest_for_package(package: &Package, db: &Database) -> Result<Option<Self>> {
         let record = query_as!(BuildRecord, r#"
             SELECT * FROM build WHERE package = $1 ORDER BY started DESC LIMIT 1
         "#,
             package.base
         )
-            .fetch_one(db).await?;
+            .fetch_optional(db).await?;
 
-        BuildSummary::from_record(record)
+        record.map(BuildSummary::from_record).transpose()
     }
 
     pub async fn save(&self, db: &Database) -> Result<()> {
@@ -130,7 +130,7 @@ impl BuildSummary {
         Ok(())
     }
 
-    pub async fn update(&self, db: &Database) -> Result<()> {
+    pub async fn change(&self, db: &Database) -> Result<()> {
         let record = self.create_record()?;
 
         query!(r#"

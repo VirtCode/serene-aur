@@ -1,8 +1,10 @@
+use std::str::FromStr;
 use chrono::NaiveDateTime;
 use sqlx::{query, query_as};
 use crate::database::{Database, DatabaseConversion };
 use crate::package::Package;
 use anyhow::{Context, Result};
+use crate::package::source::SrcinfoWrapper;
 
 /// See server/migrations/20240210163236_package.sql
 #[derive(Debug)]
@@ -27,9 +29,9 @@ impl DatabaseConversion<PackageRecord> for Package {
             base: self.base.clone(),
             added: self.added.naive_utc(),
             source: serde_json::to_string(&self.source).context("failed to serialize source")?,
-            srcinfo: None,
-            pkgbuild: None,
-            version: Some(self.version.clone()),
+            srcinfo: self.srcinfo.as_ref().map(|s| s.to_string()),
+            pkgbuild: self.pkgbuild.clone(),
+            version: self.version.clone(),
             enabled: self.enabled,
             clean: self.clean,
             schedule: self.schedule.clone(),
@@ -42,28 +44,44 @@ impl DatabaseConversion<PackageRecord> for Package {
             base: value.base,
             added: value.added.and_utc(),
             source: serde_json::from_str(&value.source).context("failed to deserialize source")?,
-            version: value.version.unwrap_or("unknown".to_owned()), // TODO: represent as option in Package
+            version: value.version,
+            pkgbuild: value.pkgbuild,
+            srcinfo: value.srcinfo.map(|a| SrcinfoWrapper::from_str(&a)).transpose()?,
             enabled: value.enabled,
             clean: value.clean,
             schedule: value.schedule,
             prepare: value.prepare,
-            builds: vec![]
         })
     }
 }
 
 impl Package {
-    pub async fn find(base: &str, db: &Database) -> Result<Self> {
+
+    /// Returns whether the database contains a specific package
+    pub async fn has(base: &str, db: &Database) -> Result<bool> {
+        let amount = query!(r#"
+            SELECT COUNT(base) as count FROM package WHERE base == $1
+        "#,
+            base
+        )
+            .fetch_one(db).await?.count;
+
+        Ok(amount > 0)
+    }
+
+    /// Find a specific package from the database
+    pub async fn find(base: &str, db: &Database) -> Result<Option<Self>> {
         let record = query_as!(PackageRecord, r#"
             SELECT * FROM package WHERE base = $1
         "#,
             base
         )
-            .fetch_one(db).await?;
+            .fetch_optional(db).await?;
 
-        Package::from_record(record)
+        record.map(Package::from_record).transpose()
     }
 
+    /// Find all packages from the database
     pub async fn find_all(db: &Database) -> Result<Vec<Self>> {
         let records = query_as!(PackageRecord, r#"
             SELECT * FROM package
@@ -73,6 +91,7 @@ impl Package {
         records.into_iter().map(Package::from_record).collect()
     }
 
+    /// Saves the package to the database for a first time
     pub async fn save(&self, db: &Database) -> Result<()> {
         let record = self.create_record()?;
 
@@ -87,21 +106,39 @@ impl Package {
         Ok(())
     }
 
-    pub async fn update(&self, db: &Database) -> Result<()> {
+    /// Updates the settings inside the database
+    pub async fn change_settings(&self, db: &Database) -> Result<()> {
         let record = self.create_record()?;
 
         query!(r#"
             UPDATE package
-            SET source = $2, srcinfo = $3, pkgbuild = $4, version = $5, enabled = $6, clean = $7, schedule = $8, prepare = $9
+            SET enabled = $2, clean = $3, schedule = $4, prepare = $5
             WHERE base = $1
         "#,
-            record.base, record.source, record.srcinfo, record.pkgbuild, record.version, record.enabled, record.clean, record.schedule, record. prepare
+            record.base, record.enabled, record.clean, record.schedule, record. prepare
         )
             .execute(db).await?;
 
         Ok(())
     }
 
+    /// Updates the sources inside the database
+    pub async fn change_sources(&self, db: &Database) -> Result<()> {
+        let record = self.create_record()?;
+
+        query!(r#"
+            UPDATE package
+            SET source = $2, srcinfo = $3, pkgbuild = $4, version = $5
+            WHERE base = $1
+        "#,
+            record.base, record.source, record.srcinfo, record.pkgbuild, record.version
+        )
+            .execute(db).await?;
+
+        Ok(())
+    }
+
+    /// Deletes the package from the database
     pub async fn delete(&self, db: &Database) -> Result<()> {
         let base = &self.base;
 

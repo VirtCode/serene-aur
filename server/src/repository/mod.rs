@@ -105,7 +105,7 @@ impl PackageRepository {
             .context("failed to add files to repository")?;
 
         // create entries, assuming they have the right order
-        let entries = package.source.get_packages()
+        let entries = package.get_packages()
             .into_iter().zip(files)
             .map(|(name, file)| PackageEntry { name, file }).collect();
 
