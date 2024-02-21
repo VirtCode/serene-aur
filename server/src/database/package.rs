@@ -1,29 +1,32 @@
-use anyhow::{Context};
 use chrono::NaiveDateTime;
 use sqlx::{query, query_as};
-use crate::database::{Database, DatabaseConversion, MapDatabaseError};
+use crate::database::{Database, DatabaseConversion };
 use crate::package::Package;
+use anyhow::{Context, Result};
 
+/// See server/migrations/20240210163236_package.sql
 #[derive(Debug)]
-pub(super) struct PackageRecord {
-    pub base: String,
-    pub added: NaiveDateTime,
-    pub source: String,
-    pub srcinfo: Option<String>,
-    pub pkgbuild: Option<String>,
-    pub version: Option<String>,
-    pub enabled: bool,
-    pub clean: bool,
-    pub schedule: Option<String>,
-    pub prepare: Option<String>
+struct PackageRecord {
+    /// id
+    base: String,
+
+    added: NaiveDateTime,
+    source: String,
+    srcinfo: Option<String>,
+    pkgbuild: Option<String>,
+    version: Option<String>,
+    enabled: bool,
+    clean: bool,
+    schedule: Option<String>,
+    prepare: Option<String>
 }
 
 impl DatabaseConversion<PackageRecord> for Package {
-    fn create_record(&self) -> anyhow::Result<PackageRecord> {
+    fn create_record(&self) -> Result<PackageRecord> {
         Ok(PackageRecord {
             base: self.base.clone(),
             added: self.added.naive_utc(),
-            source: serde_json::to_string(&self.source).db_error("source")?,
+            source: serde_json::to_string(&self.source).context("failed to serialize source")?,
             srcinfo: None,
             pkgbuild: None,
             version: Some(self.version.clone()),
@@ -34,11 +37,11 @@ impl DatabaseConversion<PackageRecord> for Package {
         })
     }
 
-    fn from_record(value: PackageRecord) -> anyhow::Result<Self> where Self: Sized {
+    fn from_record(value: PackageRecord) -> Result<Package> where Self: Sized {
         Ok(Self {
             base: value.base,
             added: value.added.and_utc(),
-            source: serde_json::from_str(&value.source).db_error("source")?,
+            source: serde_json::from_str(&value.source).context("failed to deserialize source")?,
             version: value.version.unwrap_or("unknown".to_owned()), // TODO: represent as option in Package
             enabled: value.enabled,
             clean: value.clean,
@@ -50,7 +53,7 @@ impl DatabaseConversion<PackageRecord> for Package {
 }
 
 impl Package {
-    pub async fn find(base: &str, db: &Database) -> anyhow::Result<Self> {
+    pub async fn find(base: &str, db: &Database) -> Result<Self> {
         let record = query_as!(PackageRecord, r#"
             SELECT * FROM package WHERE base = $1
         "#,
@@ -61,17 +64,17 @@ impl Package {
         Package::from_record(record)
     }
 
-    pub async fn find_all(db: &Database) -> anyhow::Result<Vec<Self>> {
+    pub async fn find_all(db: &Database) -> Result<Vec<Self>> {
         let records = query_as!(PackageRecord, r#"
             SELECT * FROM package
         "#)
             .fetch_all(db).await?;
 
-        records.into_iter().map(|r| Package::from_record(r)).collect()
+        records.into_iter().map(Package::from_record).collect()
     }
 
-    pub async fn save(&self, db: &Database) -> anyhow::Result<()> {
-        let record = self.create_record().context("failed to convert package to record")?;
+    pub async fn save(&self, db: &Database) -> Result<()> {
+        let record = self.create_record()?;
 
         query!(r#"
             INSERT INTO package (base, added, source, srcinfo, pkgbuild, version, enabled, clean, schedule, prepare)
@@ -84,8 +87,8 @@ impl Package {
         Ok(())
     }
 
-    pub async fn update(&self, db: &Database) -> anyhow::Result<()> {
-        let record = self.create_record().context("failed to convert package to record")?;
+    pub async fn update(&self, db: &Database) -> Result<()> {
+        let record = self.create_record()?;
 
         query!(r#"
             UPDATE package
@@ -99,7 +102,7 @@ impl Package {
         Ok(())
     }
 
-    pub async fn delete(&self, db: &Database) -> anyhow::Result<()> {
+    pub async fn delete(&self, db: &Database) -> Result<()> {
         let base = &self.base;
 
         query!(r#"
@@ -111,5 +114,4 @@ impl Package {
 
         Ok(())
     }
-
 }

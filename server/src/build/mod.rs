@@ -17,6 +17,8 @@ pub mod schedule;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BuildSummary {
+    /// package the summary belongs to
+    pub package: String,
     /// state of the build
     pub state: BuildState,
 
@@ -88,6 +90,7 @@ impl Builder {
         let start = Utc::now();
 
         let mut summary = BuildSummary {
+            package: package.base.clone(),
             state: Running(if update { Update } else { Build }),
             started: start.clone(),
             logs: None, version: None, ended: None,

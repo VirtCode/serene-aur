@@ -24,8 +24,8 @@ pub struct RunStatus {
     pub success: bool,
     pub logs: String,
 
-    started: DateTime<Utc>,
-    ended: DateTime<Utc>,
+    pub started: DateTime<Utc>,
+    pub ended: DateTime<Utc>,
 }
 
 pub type ContainerId = String;

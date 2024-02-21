@@ -1,4 +1,5 @@
 mod package;
+mod build;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -8,15 +9,14 @@ use anyhow::{Context, };
 use serde::de::DeserializeOwned;
 use sqlx::error::DatabaseError;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteRow};
-use crate::database::package::PackageRecord;
-use crate::package::Package;
+use anyhow::Result;
 
 const FILE: &str = "serene.db";
 
 type Database = SqlitePool;
 
 /// connects to the local sqlite database
-pub async fn connect() -> anyhow::Result<Database> {
+pub async fn connect() -> Result<Database> {
 
     // connecting
     let pool = SqlitePool::connect_with(
@@ -34,55 +34,8 @@ pub async fn connect() -> anyhow::Result<Database> {
 }
 
 trait DatabaseConversion<T> {
-    fn create_record(&self) -> anyhow::Result<T>;
-    fn from_record(other: T) -> anyhow::Result<Self> where Self: Sized;
-}
-
-trait MapDatabaseError<D> {
-    fn db_error(self, column: &str) -> Result<D, Error>;
-}
-
-impl<D> MapDatabaseError<D> for serde_json::Result<D> {
-    fn db_error(self, column: &str) -> Result<D, Error> {
-        self.map_err(|e| Error::ColumnDecode { index: column.to_string(), source: Box::new(e) })
-    }
-}
-
-trait AdvancedGet {
-    fn try_get_utc(&self, index: &str) -> Result<DateTime<Utc>, Error>;
-    fn try_get_json<D>(&self, index: &str) -> Result<D, Error> where D: DeserializeOwned;
-}
-
-impl AdvancedGet for SqliteRow {
-    fn try_get_utc(&self, index: &str) -> Result<DateTime<Utc>, Error> {
-        Ok(self.try_get::<NaiveDateTime, &str>(index)?.and_utc())
-    }
-
-    fn try_get_json<D>(&self, index: &str) -> Result<D, Error> where D: DeserializeOwned {
-        let source = self.try_get::<String, &str>(index)?;
-        serde_json::from_str(&source).map_err(|e|
-            Error::ColumnDecode { index: index.to_owned(), source: Box::new(e) }
-        )
-    }
-}
-
-
-impl FromRow<'_, SqliteRow> for Package {
-    fn from_row(row: &'_ SqliteRow) -> Result<Self, Error> {
-
-        Ok(Self {
-            base: row.try_get("base")?,
-            added: row.try_get_utc("added")?,
-            source: row.try_get_json("source")?,
-            version: row.try_get("version")?,
-            enabled: row.try_get("enabled")?,
-            clean: row.try_get("clean")?,
-            schedule: row.try_get("schedule")?,
-            prepare: row.try_get("prepare")?,
-            builds: vec![],
-        })
-
-    }
+    fn create_record(&self) -> Result<T>;
+    fn from_record(other: T) -> Result<Self> where Self: Sized;
 }
 
 #[cfg(test)]
@@ -102,6 +55,9 @@ mod tests {
 
         for x in store.peek() {
             x.save(&db).await.unwrap();
+            for b in &x.builds {
+                b.save(&db).await.unwrap();
+            }
         }
     }
 }

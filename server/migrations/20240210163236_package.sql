@@ -1,7 +1,6 @@
 CREATE TABLE IF NOT EXISTS package
 (
     base     VARCHAR  NOT NULL PRIMARY KEY,
-    -- utc
     added    DATETIME NOT NULL,
 
     -- json
@@ -11,7 +10,7 @@ CREATE TABLE IF NOT EXISTS package
     srcinfo  VARCHAR,
     pkgbuild VARCHAR,
 
-    -- actual version, may be different from srcinfo
+    -- actual version, may be different from srcinfo (because of devel packages)
     version  VARCHAR,
 
     enabled  BOOLEAN  NOT NULL,

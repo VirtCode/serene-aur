@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -39,4 +40,29 @@ pub struct BuildInfo {
     pub started: DateTime<Utc>,
     /// end time of the build
     pub ended: Option<DateTime<Utc>>
+}
+
+impl FromStr for BuildProgress {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "update" => Ok(Self::Update),
+            "build" => Ok(Self::Build),
+            "publish" => Ok(Self::Publish),
+            "clean" => Ok(Self::Clean),
+            _ => Err(())
+        }
+    }
+}
+
+impl ToString for BuildProgress {
+    fn to_string(&self) -> String {
+        match &self {
+            BuildProgress::Update => { "update" }
+            BuildProgress::Build => { "build" }
+            BuildProgress::Publish => { "publish" }
+            BuildProgress::Clean => { "clean" }
+        }.to_owned()
+    }
 }

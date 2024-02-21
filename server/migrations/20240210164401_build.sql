@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS build
     ended       DATETIME,
 
     state       VARCHAR  NOT NULL,
-    progress    VARCHAR  NOT NULL,
+    progress    VARCHAR,
 
     -- error message if present
     fatal       VARCHAR,
