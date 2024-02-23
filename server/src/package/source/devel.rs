@@ -31,7 +31,7 @@ impl DevelGitSource {
 #[typetag::serde]
 impl Source for DevelGitSource {
 
-    async fn create(&mut self, folder: &Path) -> anyhow::Result<String> {
+    async fn create(&mut self, folder: &Path) -> anyhow::Result<()> {
         debug!("creating {}", self.repository);
         git::clone(&self.repository, folder).await?;
 
@@ -54,7 +54,7 @@ impl Source for DevelGitSource {
         Ok(false)
     }
 
-    async fn update(&mut self, folder: &Path) -> anyhow::Result<String> {
+    async fn update(&mut self, folder: &Path) -> anyhow::Result<()> {
         // pull pkg repo
         debug!("upgrading {}", &self.repository);
         git::pull(folder).await?;
@@ -79,7 +79,7 @@ impl Source for DevelGitSource {
             }
         }
 
-        Ok(srcinfo_src)
+        Ok(())
     }
 
     fn is_devel(&self) -> bool { true }

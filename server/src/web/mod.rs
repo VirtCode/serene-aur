@@ -1,27 +1,22 @@
-use std::io::repeat;
-use std::sync::Arc;
-use actix_web::{delete, get, HttpResponse, post, Responder};
+use actix_web::{delete, get, post, Responder};
 use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound};
 use actix_web::web::{Data, Json, Path};
+use async_std::stream;
 use chrono::{DateTime, Utc};
 use hyper::StatusCode;
-use log::error;
-use raur::Raur;
-use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use serene_data::package::{PackageAddRequest, PackagePeek, PackageSettingsRequest};
-use crate::build::Builder;
+use crate::build::{Builder, BuildSummary};
 use crate::build::schedule::BuildScheduler;
+use crate::database::Database;
 use crate::package;
 use crate::package::{aur, Package};
-use crate::package::store::PackageStore;
 use crate::web::auth::Auth;
 
 mod auth;
 mod data;
 
 type BuildSchedulerData = Data<RwLock<BuildScheduler>>;
-type PackageStoreData = Data<RwLock<PackageStore>>;
 type BuilderData = Data<RwLock<Builder>>;
 
 pub trait InternalError<T> {
@@ -39,7 +34,7 @@ fn empty_response() -> impl Responder {
 }
 
 #[post("/package/add")]
-pub async fn add(_: Auth, body: Json<PackageAddRequest>, store: PackageStoreData, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
+pub async fn add(_: Auth, body: Json<PackageAddRequest>, db: Data<Database>, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
 
     // get repo and devel tag
     let (repository, devel) = match &body.0 {
@@ -53,10 +48,8 @@ pub async fn add(_: Auth, body: Json<PackageAddRequest>, store: PackageStoreData
     };
 
     // create package
-    let base = package::add_repository(store.clone().into_inner(), &repository, devel).await.internal()?
+    let package = package::add_repository(&db, &repository, devel).await.internal()?
         .ok_or_else(|| ErrorBadRequest("package with the same base is already added"))?;
-
-    let package = store.read().await.get(&base).ok_or_else(|| ErrorInternalServerError("failed to add package"))?;
 
     { // scheduling package
         let mut scheduler = scheduler.write().await;
@@ -64,29 +57,33 @@ pub async fn add(_: Auth, body: Json<PackageAddRequest>, store: PackageStoreData
         scheduler.run(&package).await.internal()?;
     }
 
-    Ok(Json(package.as_peek()))
+    Ok(Json(package.to_peek(&db).await.internal()?))
 }
 
 #[get("/package/list")]
-pub async fn list(_: Auth, store: PackageStoreData) -> actix_web::Result<impl Responder> {
-    Ok(Json(
-        store.read().await.peek().iter()
-            .map(|p| p.as_peek())
-            .collect::<Vec<PackagePeek>>()
-    ))
+pub async fn list(_: Auth, db: Data<Database>) -> actix_web::Result<impl Responder> {
+    let package = Package::find_all(&db).await.internal()?;
+
+    // TODO: make efficient
+    let mut peeks = vec![];
+    for p in package {
+        peeks.push(p.to_peek(&db).await.internal()?);
+    }
+
+    Ok(Json(peeks))
 }
 
 #[get("/package/{name}")]
-pub async fn status(_: Auth, package: Path<String>, store: PackageStoreData) -> actix_web::Result<impl Responder> {
-    let package = store.read().await.get(&package)
+pub async fn status(_: Auth, package: Path<String>, db: Data<Database>) -> actix_web::Result<impl Responder> {
+    let package = Package::find(&package, &db).await.internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    Ok(Json(package.as_info()))
+    Ok(Json(package.to_info(&db).await.internal()?))
 }
 
 #[post("/package/{name}/build")]
-pub async fn build(_: Auth, package: Path<String>, store: PackageStoreData, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
-    let package = store.read().await.get(&package)
+pub async fn build(_: Auth, package: Path<String>, db: Data<Database>, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
+    let package = Package::find(&package, &db).await.internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
     scheduler.write().await.run(&package).await.internal()?;
@@ -95,42 +92,37 @@ pub async fn build(_: Auth, package: Path<String>, store: PackageStoreData, sche
 }
 
 #[get("/package/{name}/build/{time}")]
-pub async fn get_build(_: Auth, path: Path<(String, DateTime<Utc>)>, store: PackageStoreData) -> actix_web::Result<impl Responder> {
+pub async fn get_build(_: Auth, path: Path<(String, DateTime<Utc>)>, db: Data<Database>) -> actix_web::Result<impl Responder> {
     let (package, time) = path.into_inner();
 
-    let package = store.read().await.get(&package)
+    let package = Package::find(&package, &db).await.internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
     Ok(Json(
-        package.get_builds().iter()
-            .find(|b| b.started == time)
+        BuildSummary::find(&time, &package, &db).await.internal()?
             .map(|b| b.as_info())
             .ok_or_else(|| ErrorNotFound("not build at this time found"))?
     ))
 }
 
 #[get("/package/{name}/build/{time}/logs")]
-pub async fn get_logs(_: Auth, path: Path<(String, DateTime<Utc>)>, store: PackageStoreData) -> actix_web::Result<impl Responder> {
+pub async fn get_logs(_: Auth, path: Path<(String, DateTime<Utc>)>, db: Data<Database>) -> actix_web::Result<impl Responder> {
     let (package, time) = path.into_inner();
 
-    let package = store.read().await.get(&package)
+    let package = Package::find(&package, &db).await.internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
     Ok(Json(
-        package.get_builds().iter()
-            .find(|b| b.started == time)
-            .and_then(|b| b.logs.clone())
+        BuildSummary::find(&time, &package, &db).await.internal()?
             .map(|s| s.logs)
             .ok_or_else(|| ErrorNotFound("no build at this time or it has no logs"))?
     ))
 }
 
 #[delete("/package/{name}")]
-pub async fn remove(_: Auth, package: Path<String>, store: PackageStoreData, builder: BuilderData) -> actix_web::Result<impl Responder> {
-    let package = store.read().await.get(&package)
+pub async fn remove(_: Auth, package: Path<String>, db: Data<Database>, builder: BuilderData) -> actix_web::Result<impl Responder> {
+    let package = Package::find(&package, &db).await.internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
-
-    store.write().await.remove(&package.base).await.internal()?;
 
     builder.write().await.run_remove(&package).await.internal()?;
 
@@ -138,8 +130,8 @@ pub async fn remove(_: Auth, package: Path<String>, store: PackageStoreData, bui
 }
 
 #[post("/package/{name}/set")]
-pub async fn settings(_: Auth, package: Path<String>, body: Json<PackageSettingsRequest>, store: PackageStoreData, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
-    let mut package = store.read().await.get(&package)
+pub async fn settings(_: Auth, package: Path<String>, body: Json<PackageSettingsRequest>, db: Data<Database>, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
+    let mut package = Package::find(&package, &db).await.internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
     // get repo and devel tag
@@ -167,7 +159,7 @@ pub async fn settings(_: Auth, package: Path<String>, body: Json<PackageSettings
         else { scheduler.write().await.unschedule(&package).await.internal()?; }
     }
 
-    store.write().await.update(package).await.internal()?;
+    package.change_settings(&db).await.internal()?;
 
     Ok(empty_response())
 }
