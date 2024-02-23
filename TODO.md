@@ -1,5 +1,5 @@
 ## TODO
-redone for v0.2.0 on 30.12.23
+adjusted for v0.3.0 on 23.02.24
 
 #### Polish 
 *polish for a better user experience*
@@ -15,6 +15,7 @@ redone for v0.2.0 on 30.12.23
 - [X] Figure something out to avoid code duplication from server to cli
 - [X] Cache more data inside the sources after upgrading, so that we don't have to read the filesystem as often
 - [ ] Create aur-specific normal source, so that we can check for updating without git
+- [ ] Be able to view pkgbuild from cli
 
 #### Improvements
 *not too heavy improvement which can be made*
@@ -23,17 +24,24 @@ redone for v0.2.0 on 30.12.23
 - [X] allow changing of settings for package, e.g. enable, schedule, clean
 - [X] allow inspection of builds through cli
 - [ ] on-boarding screen when first using the cli, with config to configure pacman
+- [ ] Build cli by default on server
+- [ ] Pull runner image automatically on startup and periodically
+- [ ] Rebuild cleaned when non-clean containers fail
+
+#### Must haves
+- [X] Store state in a database and not a json file
+- [ ] Signing packages
+- [ ] Local / Custom source, where a user can upload a custom pkgbuild
 
 #### Features
 *features which are kinda important*
-- [ ] Signing packages
+- [ ] Add itself as a source to build container, so we have rudimentary aur dependency support
 - [X] Pre-launch scripts to configure container specifically for package (e.g. with `eww`'s keys)
 - [ ] Readme & License
 - [X] CI and ghcr
 
 ## Future
-*things that would be nice but are not priority*
+*things that would be nice but are absolutely not priority*
 - [ ] Handle in-aur dependencies
-- [ ] Store state in a database and not a json file
 - [ ] Allow attachment at build process to view logs real-time
 - [ ] Web frontend to view package status
