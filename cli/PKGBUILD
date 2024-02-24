@@ -1,0 +1,41 @@
+pkgname="serene-cli"
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Serene CLI"
+arch=(x86_64)
+url="https://github.com/VirtCode/serene-aur"
+license=(MIT)
+depends=()
+makedepends=(cargo-nightly jq)
+source=("git+https://github.com/VirtCode/serene-aur.git")
+md5sums=('SKIP')
+
+pkgver() {
+	cd serene-aur/cli
+
+	serene_commit=$(git describe --always)
+	cli_version=$(cargo read-manifest | jq -r '.version')
+
+	echo "$cli_version.$serene_commit"
+}
+
+prepare() {
+    cd serene-aur/cli
+
+    export RUSTUP_TOOLCHAIN=nightly
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd serene-aur/cli
+    export RUSTUP_TOOLCHAIN=nightly
+
+    cargo build --frozen --release
+}
+
+package() {
+    cd serene-aur
+
+    # install under serene, not serene-cli
+    install -Dm0755 -t "$pkgdir/usr/bin/serene" "target/release/serene-cli"
+}

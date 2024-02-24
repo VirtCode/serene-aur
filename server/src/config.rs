@@ -3,6 +3,9 @@ use std::env;
 use std::str::FromStr;
 use anyhow::Context;
 
+pub const SOURCE_REPOSITORY: &str = "https://github.com/VirtCode/serene-aur";
+pub const CLI_PACKAGE_NAME: &str = "serene-cli";
+
 lazy_static! {
     pub static ref CONFIG: Config = Config::env();
 }
@@ -19,7 +22,9 @@ pub struct Config {
     /// container name prefix xxxxx-my-package
     pub container_prefix: String,
     /// port to bind to
-    pub port: u16
+    pub port: u16,
+    /// build the cli by default
+    pub build_cli: bool
 }
 
 impl Config {
@@ -32,7 +37,8 @@ impl Config {
             schedule_devel: env::var("SCHEDULE_DEVEL").unwrap_or(schedule.clone()),
             schedule_default: schedule,
             container_prefix: env::var("RUNNER_PREFIX").unwrap_or("serene-aur-runner-".to_string()),
-            port: env::var("PORT").context("").and_then(|s| u16::from_str(&s).context("malformed port number")).unwrap_or(80)
+            port: env::var("PORT").context("").and_then(|s| u16::from_str(&s).context("malformed port number")).unwrap_or(80),
+            build_cli: env::var("BUILD_CLI").context("").and_then(|s| bool::from_str(&s).context("malformed boolean")).unwrap_or(true)
         }
     }
 }

@@ -46,13 +46,14 @@ Now you are done and can start your deployment. Note that the container **requir
 Move on to [installing the cli](#installation) and follow the steps there to access your server.
 
 ## Installation
-To start using your server, you should install the corresponding cli to communicate with the server to download and build packages. Currently, the CLI has to be built from source. To do that, make sure you have the rust toolchain installed and have cloned this repository:
-```shell
-cargo build --bin serene-cli --release
-sudo cp target/release/serene-cli /usr/bin/serene
-```
+To start using your server, you should install the corresponding cli to communicate with the server to download and build packages. You have the following options to install the cli:
 
-Now you have installed the cli under `serene`. You can now just run it in your terminal, and it will tell you the next steps. It'll walk you through adding the repository to your pacman config and adding your secret to your server.
+- **Build via makepkg**: You can download and build the corresponding [PKGBUILD](https://raw.githubusercontent.com/VirtCode/serene-aur/main/cli/PKGBUILD) manually on your system, and install the package.
+- **Download Manually**: Your server will automatically build the cli by default. If you have not yet added the server to your repositories, you can download the package manually by heading to `https://your-host/x86_64` and finding the package called `serene-cli`. Install it with pacman.
+- **Add the Repository**: As the cli is built by default, you could already add as a repository to pacman, as seen [below](#only-as-a-repository). Now install `serene-cli` with pacman.
+- **Build Manually**: You can also build it completely manually from source.
+
+The CLI is available under `serene`. You can now run it in your terminal, and it will tell you the next steps. It'll walk you through adding the repository to your pacman config and adding your secret to your server.
 
 ### Only as a Repository
 If you want to use the repository without instructions from the cli, also quite easy. The hosted server can be used as a normal pacman repository, by adding it to `/etc/pacman.conf`:

@@ -54,6 +54,9 @@ async fn main() -> anyhow::Result<()> {
 
     schedule.start().await?;
 
+    // add cli if enabled
+    if config::CONFIG.build_cli { package::try_add_cli(&db, &mut schedule).await?; }
+
     let schedule = Arc::new(RwLock::new(schedule));
 
     // web app

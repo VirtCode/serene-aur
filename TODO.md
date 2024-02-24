@@ -24,9 +24,10 @@ adjusted for v0.3.0 on 23.02.24
 - [X] allow changing of settings for package, e.g. enable, schedule, clean
 - [X] allow inspection of builds through cli
 - [ ] on-boarding screen when first using the cli, with config to configure pacman
-- [ ] Build cli by default on server
+- [X] Build cli by default on server
 - [ ] Pull runner image automatically on startup and periodically
 - [ ] Rebuild cleaned when non-clean containers fail
+- [ ] Add itself as a source to build container, so we have rudimentary aur dependency support
 
 #### Must haves
 - [X] Store state in a database and not a json file
@@ -35,7 +36,6 @@ adjusted for v0.3.0 on 23.02.24
 
 #### Features
 *features which are kinda important*
-- [ ] Add itself as a source to build container, so we have rudimentary aur dependency support
 - [X] Pre-launch scripts to configure container specifically for package (e.g. with `eww`'s keys)
 - [ ] Readme & License
 - [X] CI and ghcr

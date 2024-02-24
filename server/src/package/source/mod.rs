@@ -1,11 +1,13 @@
 pub mod normal;
 pub mod devel;
+pub mod cli;
 
 use std::ops::Deref;
 use std::path::Path;
 use std::str::FromStr;
 use actix_web::HttpMessage;
 use anyhow::Context;
+use async_tar::Builder;
 use async_trait::async_trait;
 use dyn_clone::{clone_trait_object, DynClone};
 use srcinfo::Srcinfo;
@@ -40,6 +42,12 @@ pub trait Source: Sync + Send + DynClone {
     async fn get_pkgbuild(&self, folder: &Path) -> anyhow::Result<String> {
         tokio::fs::read_to_string(folder.join(PKGBUILD)).await
             .context("failed to read PKGBUILD")
+    }
+
+    /// loads files required for build into archive
+    async fn load_build_files(&self, folder: &Path, archive: &mut Builder<Vec<u8>>) -> anyhow::Result<()> {
+        archive.append_dir_all("", folder).await
+            .context("failed to load sources into tar")
     }
 
     fn is_devel(&self) -> bool;

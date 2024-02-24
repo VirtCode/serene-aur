@@ -3,12 +3,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use hyper::Body;
-use log::{debug};
-use srcinfo::Srcinfo;
+use log::{debug, info};
 use tokio::fs;
-use crate::config::CONFIG;
+use crate::build::schedule::BuildScheduler;
+use crate::config::{CLI_PACKAGE_NAME, CONFIG};
 use crate::database::Database;
 use crate::package::source::{Source, SrcinfoWrapper};
+use crate::package::source::cli::SereneCliSource;
 use crate::package::source::devel::DevelGitSource;
 use crate::package::source::normal::NormalSource;
 use crate::runner::archive;
@@ -103,7 +104,20 @@ pub async fn add_source(db: &Database, mut source: Box<dyn Source + Sync + Send>
     result
 }
 
+/// adds the cli to the current packages
+pub async fn try_add_cli(db: &Database, scheduler: &mut BuildScheduler) -> anyhow::Result<()> {
+    if Package::has(CLI_PACKAGE_NAME, db).await? { return Ok(()) }
 
+    info!("adding and building serene-cli");
+    if let Some(package) = add_source(db, Box::new(SereneCliSource::new())).await? {
+        scheduler.schedule(&package).await?;
+        scheduler.run(&package).await?;
+
+        info!("successfully added serene-cli");
+    }
+
+    Ok(())
+}
 
 /// this struct represents a package built by serene
 #[derive(Clone)]
@@ -196,8 +210,7 @@ impl Package {
         let mut archive = archive::begin_write();
 
         // upload sources
-        archive.append_dir_all("", &self.get_folder()).await
-            .context("failed to load sources into tar")?;
+        self.source.load_build_files(&self.get_folder(), &mut archive).await?;
 
         // upload prepare script
         archive::write_file(
