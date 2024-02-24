@@ -11,6 +11,7 @@ use std::sync::{Arc};
 use actix_web::{App, HttpMessage, HttpServer};
 use actix_web::web::Data;
 use anyhow::Context;
+use log::warn;
 use tokio::sync::{RwLock};
 use crate::build::schedule::BuildScheduler;
 use crate::build::Builder;
@@ -55,7 +56,11 @@ async fn main() -> anyhow::Result<()> {
     schedule.start().await?;
 
     // add cli if enabled
-    if config::CONFIG.build_cli { package::try_add_cli(&db, &mut schedule).await?; }
+    if config::CONFIG.build_cli {
+        if let Err(e) = package::try_add_cli(&db, &mut schedule).await {
+            warn!("Failed to add cli package: {e:#}")
+        }
+    }
 
     let schedule = Arc::new(RwLock::new(schedule));
 
@@ -74,6 +79,7 @@ async fn main() -> anyhow::Result<()> {
             .service(web::get_build)
             .service(web::get_logs)
             .service(web::settings)
+            .service(web::pkgbuild)
     ).bind(("0.0.0.0", CONFIG.port))?.run().await?;
 
     Ok(())

@@ -75,6 +75,9 @@ pub enum InfoCommand {
         id: Option<String>
     },
 
+    /// get the pkgbuild used to build the current package
+    Pkgbuild,
+
     /// set property of the package
     Set {
         /// property to set

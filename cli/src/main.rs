@@ -48,6 +48,7 @@ fn main() -> anyhow::Result<()> {
         Command::Info { name, what } => {
             match what {
                 None => { requests::info(&config, &name); }
+                Some(InfoCommand::Pkgbuild) => { requests::pkgbuild(&config, &name); }
                 Some(InfoCommand::Build { id }) => { requests::build_info(&config, &name, &id); }
                 Some(InfoCommand::Logs { id }) => { requests::build_logs(&config, &name, &id); }
                 Some(InfoCommand::Set { property }) => { requests::set_setting(&config, &name, property) }

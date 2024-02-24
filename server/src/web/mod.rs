@@ -81,6 +81,14 @@ pub async fn status(_: Auth, package: Path<String>, db: Data<Database>) -> actix
     Ok(Json(package.to_info(&db).await.internal()?))
 }
 
+#[get("/package/{name}/pkgbuild")]
+pub async fn pkgbuild(_: Auth, package: Path<String>, db: Data<Database>) -> actix_web::Result<impl Responder> {
+    let package = Package::find(&package, &db).await.internal()?
+        .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
+
+    Ok(Json(package.pkgbuild.ok_or_else(|| ErrorNotFound("package was never built and has thus no used package build"))?))
+}
+
 #[post("/package/{name}/build")]
 pub async fn build(_: Auth, package: Path<String>, db: Data<Database>, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
     let package = Package::find(&package, &db).await.internal()?
@@ -114,7 +122,8 @@ pub async fn get_logs(_: Auth, path: Path<(String, DateTime<Utc>)>, db: Data<Dat
 
     Ok(Json(
         BuildSummary::find(&time, &package, &db).await.internal()?
-            .map(|s| s.logs)
+            .and_then(|s| s.logs)
+            .map(|l| l.logs)
             .ok_or_else(|| ErrorNotFound("no build at this time or it has no logs"))?
     ))
 }

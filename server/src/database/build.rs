@@ -84,10 +84,12 @@ impl DatabaseConversion<BuildRecord> for BuildSummary {
 
 impl BuildSummary {
     pub async fn find(date: &DateTime<Utc>, package: &Package, db: &Database) -> Result<Option<Self>> {
+        let naive = date.naive_utc();
+
         let record = query_as!(BuildRecord, r#"
             SELECT * FROM build WHERE started = $1 AND package = $2
         "#,
-            date, package.base
+            naive, package.base
         )
             .fetch_optional(db).await?;
 

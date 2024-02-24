@@ -233,3 +233,12 @@ pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
         Err(e) => { e.print() }
     }
 }
+
+pub fn pkgbuild(c: &Config, package: &str) {
+    // we do print nothing, as this may be used to store in file
+
+    match get::<String>(c, format!("package/{}/pkgbuild", package).as_str()) {
+        Ok(l) => { println!("{l}") }
+        Err(e) => { e.print() }
+    }
+}
