@@ -6,8 +6,14 @@ WORKDIR /app
 RUN apk add --no-cache musl-dev openssl-dev
 ENV OPENSSL_DIR=/usr
 
+# install sqlx cli
+RUN cargo install sqlx-cli
+
 # run build
 COPY . .
+ENV DATABASE_URL=sqlite:///app/database.db
+
+RUN cargo sqlx database setup --source server/migrations
 RUN cargo build --release --bin serene
 
 FROM alpine:3.18 as runner
