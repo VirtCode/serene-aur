@@ -1,9 +1,8 @@
 pub mod requests;
 pub mod data;
 
-use chrono::{DateTime, Utc};
 use reqwest::blocking::{Client, Response};
-use serde::{Deserialize, Serialize};
+use serde::{Serialize};
 use serde::de::DeserializeOwned;
 use crate::config::Config;
 
@@ -37,9 +36,6 @@ impl Error {
         }
     }
 }
-
-
-
 
 fn get_url(config: &Config, path: &str) -> String {
     format!("{}/{}", config.url, path)

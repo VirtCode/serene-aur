@@ -1,9 +1,6 @@
-use std::fmt::format;
-use anyhow::anyhow;
 use chrono::{Local};
 use colored::{ColoredString, Colorize};
 use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron;
-use serde::{Deserialize, Serialize};
 use serene_data::build::{BuildInfo, BuildState};
 use serene_data::package::{PackageAddRequest, PackageInfo, PackagePeek, PackageSettingsRequest};
 use crate::command::SettingsSubcommand;
@@ -64,7 +61,7 @@ pub fn list(c: &Config) {
             for peek in list {
                 println!("{:<20.20} {:<15.15} {:^5} {:^5} {:<7}",
                     peek.base.bold(),
-                    peek.version,
+                    peek.version.map(|s| s.normal()).unwrap_or_else(|| "unknown".dimmed()),
                     if peek.devel { "X".dimmed() } else { "".dimmed() },
                     if peek.enabled { "X".yellow() } else { "".dimmed() },
                     peek.build.map(|p| p.state.colored_passive()).unwrap_or_else(|| "none".dimmed())
@@ -75,11 +72,16 @@ pub fn list(c: &Config) {
     }
 }
 
-pub fn info(c: &Config, package: &str) {
+pub fn info(c: &Config, package: &str, all: bool) {
     info!("Querying server...");
 
-    match get::<PackageInfo>(c, format!("package/{}", package).as_str()) {
-        Ok(mut info) => {
+    let query = if all { "" } else { "?count=8" };
+
+    match (
+        get::<PackageInfo>(c, format!("package/{}", package).as_str()),
+        get::<Vec<BuildInfo>>(c, format!("package/{}/build{}", package, query).as_str())
+    ) {
+        (Ok(mut info), Ok(mut builds)) => {
             println!();
             println!("{}", info.base.bold());
             println!("{:<9} {}", "members:", info.members.join(" "));
@@ -108,10 +110,7 @@ pub fn info(c: &Config, package: &str) {
             println!("builds:");
             println!("{:<4}  {:<15}  {:<7}  {:<17}  {:>5}", "id".italic(), "version".italic(), "state".italic(), "date".italic(), "time".italic());
 
-            info.builds.sort_by_key(|b| b.started);
-            info.builds.reverse();
-
-            for peek in info.builds {
+            for peek in builds {
                 println!("{:<4}  {:<15.15}  {:<7}  {:17}  {:>5}",
                     get_build_id(&peek).dimmed(),
                     peek.version.map(ColoredString::from).unwrap_or_else(|| "unknown".dimmed()),
@@ -123,27 +122,17 @@ pub fn info(c: &Config, package: &str) {
                 );
             }
         }
-        Err(e) => { e.print() }
+        (Err(e), _) => { e.print() }
+        (_, Err(e)) => { e.print() }
     }
 }
 
 pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
     println!("Querying server for package builds...\n");
-    match get::<PackageInfo>(c, format!("package/{}", package).as_str()) {
-        Ok(info) => {
+    match get::<BuildInfo>(c, format!("package/{}/build/{}", package, build.as_ref().unwrap_or(&"latest".to_string())).as_str()) {
+        Ok(b) => {
 
-            let build = build.as_ref().and_then(|build|
-                info.builds.iter().find(|b| get_build_id(b).as_str() == build.to_lowercase())
-            ).or_else(||
-                info.builds.iter().max_by_key(|b| b.started)
-            );
-
-            let Some(b) = build else {
-                error!("no latest build or build unter the given id found");
-                return;
-            };
-
-            println!("{} {}", "build".bold(), get_build_id(b).bold());
+            println!("{} {}", "build".bold(), get_build_id(&b).bold());
             println!("{:<8} {}", "started:",
                      b.started.with_timezone(&Local).format("%x %X"));
             println!("{:<8} {}", "ended:",
@@ -176,27 +165,8 @@ pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
 
 pub fn build_logs(c: &Config, package: &str, build: &Option<String>) {
     println!("Querying server for package builds...");
-    match get::<PackageInfo>(c, format!("package/{}", package).as_str()) {
-        Ok(info) => {
-
-            let build = build.as_ref().and_then(|build|
-                info.builds.iter().find(|b| get_build_id(b).as_str() == build.to_lowercase())
-            ).or_else(||
-                info.builds.iter().max_by_key(|b| b.started)
-            );
-
-            let Some(b) = build else {
-                error!("no latest build or build unter the given id found");
-                return;
-            };
-
-            println!("Retrieving build logs...\n");
-            match get::<String>(c, format!("package/{}/build/{}/logs", package, b.started).as_str()) {
-                Ok(l) => { println!("{l}") }
-                Err(e) => { e.print() }
-            }
-
-        }
+    match get::<String>(c, format!("package/{}/build/{}/logs", package, build.as_ref().unwrap_or(&"latest".to_string())).as_str()) {
+        Ok(logs) => { println!("{logs}") }
         Err(e) => { e.print() }
     }
 }

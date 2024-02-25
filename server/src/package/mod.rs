@@ -109,7 +109,10 @@ pub async fn try_add_cli(db: &Database, scheduler: &mut BuildScheduler) -> anyho
     if Package::has(CLI_PACKAGE_NAME, db).await? { return Ok(()) }
 
     info!("adding and building serene-cli");
-    if let Some(package) = add_source(db, Box::new(SereneCliSource::new())).await? {
+    if let Some(mut package) = add_source(db, Box::new(SereneCliSource::new())).await? {
+        package.clean = true;
+        package.change_settings(db).await?;
+
         scheduler.schedule(&package).await?;
         scheduler.run(&package).await?;
 
@@ -200,8 +203,7 @@ impl Package {
         let epoch = srcinfo.base.epoch.as_ref().map(|s| format!("{}:", s)).unwrap_or_else(|| "".to_string());
         let arch = select_arch(&srcinfo.pkg.arch);
 
-        // TODO: use SRCINFO names function
-        Ok(srcinfo.pkgs.iter().map(|p| &p.pkgname).map(|s| {
+        Ok(srcinfo.names().map(|s| {
             format!("{s}-{epoch}{version}-{rel}-{arch}{PACKAGE_EXTENSION}")
         }).collect())
     }
@@ -229,11 +231,7 @@ impl Package {
     }
 
     pub fn get_packages(&self) -> Vec<String> {
-        self.srcinfo.as_ref().map(|s|
-            s.pkgs.iter()
-            .map(|p| p.pkgname.to_owned())
-            .collect()
-        ).unwrap_or_else(|| vec![])
+        self.srcinfo.as_ref().map(|s| s.names().map(|s| s.to_owned()).collect()).unwrap_or_else(|| vec![])
     }
 }
 

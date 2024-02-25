@@ -83,39 +83,50 @@ impl DatabaseConversion<BuildRecord> for BuildSummary {
 }
 
 impl BuildSummary {
-    pub async fn find(date: &DateTime<Utc>, package: &Package, db: &Database) -> Result<Option<Self>> {
+    pub async fn find(date: &DateTime<Utc>, base: &str, db: &Database) -> Result<Option<Self>> {
         let naive = date.naive_utc();
 
         let record = query_as!(BuildRecord, r#"
             SELECT * FROM build WHERE started = $1 AND package = $2
         "#,
-            naive, package.base
+            naive, base
         )
             .fetch_optional(db).await?;
 
         record.map(BuildSummary::from_record).transpose()
     }
 
-    pub async fn find_all_for_package(package: &Package, db: &Database) -> Result<Vec<Self>> {
+    pub async fn find_all_for_package(base: &str, db: &Database) -> Result<Vec<Self>> {
         let records = query_as!(BuildRecord, r#"
-            SELECT * FROM build WHERE package = $1
+            SELECT * FROM build WHERE package = $1 ORDER BY started DESC
         "#,
-            package.base
+            base
         )
             .fetch_all(db).await?;
 
         records.into_iter().map(BuildSummary::from_record).collect()
     }
 
-    pub async fn find_latest_for_package(package: &Package, db: &Database) -> Result<Option<Self>> {
+    pub async fn find_latest_for_package(base: &str, db: &Database) -> Result<Option<Self>> {
         let record = query_as!(BuildRecord, r#"
             SELECT * FROM build WHERE package = $1 ORDER BY started DESC LIMIT 1
         "#,
-            package.base
+            base
         )
             .fetch_optional(db).await?;
 
         record.map(BuildSummary::from_record).transpose()
+    }
+
+    pub async fn find_latest_n_for_package(base: &str, n: u32, db: &Database) -> Result<Vec<Self>> {
+        let record = query_as!(BuildRecord, r#"
+            SELECT * FROM build WHERE package = $1 ORDER BY started DESC LIMIT $2
+        "#,
+            base, n
+        )
+            .fetch_all(db).await?;
+
+        record.into_iter().map(BuildSummary::from_record).collect()
     }
 
     pub async fn save(&self, db: &Database) -> Result<()> {

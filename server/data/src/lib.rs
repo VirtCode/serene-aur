@@ -4,7 +4,6 @@ pub mod build;
 pub mod package;
 pub mod secret;
 
-
 #[derive(Serialize, Deserialize)]
 pub struct SereneInfo {
     version: String,

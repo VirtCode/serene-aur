@@ -45,9 +45,9 @@ fn main() -> anyhow::Result<()> {
         Command::List => {
             requests::list(&config);
         }
-        Command::Info { name, what } => {
+        Command::Info { name, what, all } => {
             match what {
-                None => { requests::info(&config, &name); }
+                None => { requests::info(&config, &name, all); }
                 Some(InfoCommand::Pkgbuild) => { requests::pkgbuild(&config, &name); }
                 Some(InfoCommand::Build { id }) => { requests::build_info(&config, &name, &id); }
                 Some(InfoCommand::Logs { id }) => { requests::build_logs(&config, &name, &id); }

@@ -48,6 +48,10 @@ pub enum Command {
         /// base name of the package
         name: String,
 
+        /// show all builds
+        #[clap(short, long)]
+        all: bool,
+
         /// what type of info to get
         #[clap(subcommand)]
         what: Option<InfoCommand>

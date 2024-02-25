@@ -22,8 +22,10 @@ pub enum PackageSettingsRequest {
 pub struct PackagePeek {
     /// base of the package
     pub base: String,
+    /// members of the package
+    pub members: Vec<String>,
     /// current serving version
-    pub version: String,
+    pub version: Option<String>,
 
     /// is the package enabled
     pub enabled: bool,
@@ -31,7 +33,10 @@ pub struct PackagePeek {
     pub devel: bool,
 
     /// latest build of the package
-    pub build: Option<BuildInfo>
+    pub build: Option<BuildInfo>,
+
+    /// date added
+    pub added: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -42,7 +47,7 @@ pub struct PackageInfo {
     pub members: Vec<String>,
 
     /// version of the package
-    pub version: String,
+    pub version: Option<String>,
     /// is development package
     pub devel: bool,
 
@@ -57,7 +62,4 @@ pub struct PackageInfo {
 
     /// date added
     pub added: DateTime<Utc>,
-
-    /// all build info
-    pub builds: Vec<BuildInfo>
 }
