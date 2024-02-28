@@ -3,11 +3,10 @@ FROM rust:alpine3.18 as builder
 WORKDIR /app
 
 # install openssl
-RUN apk add --no-cache musl-dev openssl-dev
-ENV OPENSSL_DIR=/usr
+RUN apk add --no-cache musl-dev
 
 # install sqlx cli
-RUN cargo install sqlx-cli
+RUN cargo install sqlx-cli --no-default-features --features rustls,sqlite
 
 # run build
 COPY . .
