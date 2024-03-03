@@ -104,4 +104,4 @@ When hosting a repository with this project, this repository is **your** respons
 This means that it is your job to check `PKGBUILDs` before adding a package to the repository, as building the packages on an isolated environment does **in no way protect you from malware** if you install the package on your system. So make sure you trust the **software and AUR package maintainers** before adding it into the repository. This is especially important as the server will **automatically build new versions** without any actions from your side.
 
 ## License
-TODO: Include licensing information here!
+This project is licensed under the MIT License, see the [LICENSE file](LICENSE) for more information.

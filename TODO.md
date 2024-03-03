@@ -39,7 +39,7 @@ adjusted for v0.3.0 on 23.02.24
 *features which are kinda important*
 - [X] Pre-launch scripts to configure container specifically for package (e.g. with `eww`'s keys)
 - [X] Readme and Documentation
-- [ ] License
+- [X] License
 - [X] CI and ghcr
 
 ## Future
