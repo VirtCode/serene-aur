@@ -1,9 +1,9 @@
 # serene-aur
 > *serene* is an easy to deploy, self-hosted, AUR build server that aims at replacing your AUR helper.
 
-This project aims to solve some of the inconveniences when using AUR packages. It is often annoying having to **build your AUR packages on every device** when a new version arrives. Existing prebuilt repositories often don't quite do the trick as they **don't have all the software you need**. Current self-hosted solutions are **not flexible enough** and cumbersome to maintain.
+This project aims to solve some inconveniences when using AUR packages. It is often annoying having to **build your AUR packages on every device** when a new version arrives. Existing prebuilt repositories often don't quite do the trick as they **don't have all the software you need**. Current self-hosted solutions are **not flexible enough** and cumbersome to maintain.
 
-This is where *serene* comes in. It is a self-hosted package repository and build server which is intended to be really flexible and easy to use, to the point of it to be able to replace an AUR helper. It is also easy to set up and features containerized builds. These are the main features:
+This is where *serene* comes in. It is a self-hosted package repository and build server which is intended to be really flexible and easy to use, to the point of it being able to replace an AUR helper. It makes heavy use of containerization for easier setup and clean builds. These are the main features:
 
 - **Easy Hosting**: The whole setup is just one docker container, making it easy to host.
 - **Powerful CLI**: You can add, build, remove and diagnose the packages you want to build easily from your shell via the CLI.
@@ -74,16 +74,16 @@ Now you are done and can start your deployment. Note that the container **requir
 ### Installing the CLI
 To start using your server, you should install the corresponding cli to communicate with the server to download and build packages. You have the following options to install the cli:
 
-- **Build via makepkg**: You can download and build the corresponding [PKGBUILD](https://raw.githubusercontent.com/VirtCode/serene-aur/main/cli/PKGBUILD) manually on your system, and install the package.
+- **Build via makepkg**: You can download and build the corresponding [PKGBUILD](cli/PKGBUILD) manually on your system, and install the package.
 - **Download Manually**: Your server will automatically build the cli by default. If you have not yet added the server to your repositories, you can download the package manually by heading to `https://your-host/x86_64` and finding the package called `serene-cli`. Install it with pacman.
-- **Add the Repository**: As the cli is built by default, you could already add as a repository to pacman, as seen [below](#only-as-a-repository). Now install `serene-cli` with pacman.
+- **Add the Repository**: As the cli is built by default, you could already add as a repository to pacman, as seen [below](#installing-only-the-repository). Now install `serene-cli` with pacman.
 - **Build Manually**: You can also build it completely manually from source.
 
 The CLI is available under `serene`. You can now run it in your terminal, and it will tell you the next steps. It'll walk you through adding the repository to your pacman config and adding your secret to your server. For all the other features, see the full documentation:
 
 **[<kbd>&ensp;<br>&ensp;CLI Documentation&ensp;<br>&ensp;</kbd>](./cli/README.md)**
 
-### Installing only the Repository 
+### Installing only the Repository
 If you want to use the repository without instructions from the cli, also quite easy. The hosted server can be used as a normal pacman repository, by adding it to `/etc/pacman.conf`:
 ```ini
 [serene]

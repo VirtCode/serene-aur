@@ -24,7 +24,7 @@ adjusted for v0.3.0 on 23.02.24
 - [ ] `serene check` command to compare output of `pacman -Qm`
 - [X] allow changing of settings for package, e.g. enable, schedule, clean
 - [X] allow inspection of builds through cli
-- [ ] on-boarding screen when first using the cli, with config to configure pacman
+- [ ] on-boarding screen when first using the cli, with config to configure pacman, validate server connection
 - [X] Build cli by default on server
 - [ ] Pull runner image automatically on startup and periodically
 - [ ] Rebuild cleaned when non-clean containers fail
@@ -38,7 +38,8 @@ adjusted for v0.3.0 on 23.02.24
 #### Features
 *features which are kinda important*
 - [X] Pre-launch scripts to configure container specifically for package (e.g. with `eww`'s keys)
-- [ ] Readme & License
+- [X] Readme and Documentation
+- [ ] License
 - [X] CI and ghcr
 
 ## Future

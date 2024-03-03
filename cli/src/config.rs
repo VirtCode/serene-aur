@@ -1,6 +1,7 @@
 use std::{env, fs};
 use std::io::stdin;
 use std::path::{Path, PathBuf};
+use std::process::exit;
 use anyhow::Context;
 use colored::Colorize;
 use rand::distributions::{Alphanumeric, DistString};
@@ -51,7 +52,7 @@ impl Config {
             fs::write(&file, string)
                 .context("failed to save new configuration file")?;
 
-            Ok(config)
+            exit(0);
         }
     }
 
@@ -60,7 +61,7 @@ impl Config {
         println!("Welcome to {}!", "serene".bold());
 
         println!();
-        println!("In order to use this cli, you need to host the corresponding build server.");
+        println!("1. In order to use this cli, you need to host the corresponding build server.");
         println!("Please enter the url to that server:");
         let mut url = String::new();
         stdin().read_line(&mut url)
@@ -68,11 +69,17 @@ impl Config {
         url = url.trim().to_owned();
 
         println!();
-        println!("Great, now add the following line to its {} file:", "authorized_secrets".italic());
+        println!("2. Great, now add the following line to its {} file:", "authorized_secrets".italic());
 
         let secret = generate_secret();
         let config = Self { url, secret };
         config.print_secret(true);
+
+        println!();
+        println!("3. To now use the repository with your pacman, add the following to your pacman configuration:");
+        println!("[serene]                        # or something else if you've changed that");
+        println!("SigLevel = Optional TrustAll    # signatures are not yet supported");
+        println!("Server = {}/{}", &config.url, env::consts::ARCH);
 
         println!();
         println!("After that, you're all set and ready to go!");
