@@ -9,6 +9,7 @@ depends=()
 makedepends=(cargo-nightly jq)
 source=("git+https://github.com/VirtCode/serene-aur.git")
 md5sums=('SKIP')
+options=(!lto) # see https://github.com/briansmith/ring/issues/1444
 
 pkgver() {
 	cd serene-aur/cli
@@ -37,5 +38,5 @@ package() {
     cd serene-aur
 
     # install under serene, not serene-cli
-    install -Dm0755 -t "$pkgdir/usr/bin/serene" "target/release/serene-cli"
+    install -Dm0755 -T "target/release/serene-cli" "$pkgdir/usr/bin/serene"
 }
