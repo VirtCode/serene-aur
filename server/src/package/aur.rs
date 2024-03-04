@@ -1,5 +1,8 @@
+use std::fs::Permissions;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use anyhow::{anyhow, Context};
+use std::time::{SystemTime, UNIX_EPOCH};
+use anyhow::anyhow;
 use raur::Raur;
 
 // this struct represents information about a package in the aur
@@ -33,16 +36,35 @@ fn to_aur_git(base: &str) -> String {
 }
 
 /// Returns the srcinfo string for a pkgbuild located in the given directory
+/// TODO: This method of using makepkg quite dubious, as it switches to another user just for that. Improve this!
 pub async fn generate_srcinfo_string(pkgbuild: &Path) -> anyhow::Result<String> {
-    let parent = pkgbuild.parent().map(|p| p.to_owned()).unwrap_or(PathBuf::new());
-    let file = pkgbuild.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or("PKGBUILD".to_string());
+    let dir = PathBuf::from("/tmp").join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string());
 
-    let status = tokio::process::Command::new("makepkg")
-        .current_dir(parent)
-        .arg("-p")
-        .arg(file)
-        .arg("--printsrcinfo")
-        .output().await?;
+    tokio::fs::create_dir(&dir).await?;
+    tokio::fs::copy(pkgbuild, dir.join("PKGBUILD")).await?;
+
+    let uid_output = tokio::process::Command::new("id").arg("-u").output().await?;
+    let uid = String::from_utf8_lossy(&uid_output.stdout);
+
+    // detect whether running in container (as root)
+    let status = if uid.trim() == "0" {
+        tokio::fs::set_permissions(&dir, Permissions::from_mode(0o777)).await?;
+        tokio::fs::set_permissions(dir.join("PKGBUILD"), Permissions::from_mode(0o777)).await?;
+
+        tokio::process::Command::new("su")
+            .arg("user")
+            .arg("sh")
+            .arg("-c")
+            .arg("makepkg --printsrcinfo")
+            .current_dir(&dir)
+            .output().await?
+    } else {
+        tokio::process::Command::new("makepkg").arg("--printsrcinfo")
+            .current_dir(&dir)
+            .output().await?
+    };
+
+    tokio::fs::remove_dir_all(dir).await?;
 
     if !status.status.success() { Err(anyhow!("failed generate srcinfo: {}", String::from_utf8_lossy(&status.stderr))) }
     else {

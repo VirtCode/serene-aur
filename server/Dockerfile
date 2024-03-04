@@ -23,6 +23,9 @@ WORKDIR /app
 COPY --from=builder /app/target/release/serene /usr/bin/serene
 
 # install required utilities
-RUN apk add git pacman
+RUN apk add git pacman binutils
+
+# create local user
+RUN adduser -D --uid 1000 user
 
 CMD serene
