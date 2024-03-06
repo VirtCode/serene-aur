@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use hyper::Body;
 use log::{debug, info};
 use tokio::fs;
+use serene_data::package::MakepkgFlag;
 use crate::build::schedule::BuildScheduler;
 use crate::config::{CLI_PACKAGE_NAME, CONFIG};
 use crate::database::Database;
@@ -77,6 +78,7 @@ pub async fn add_source(db: &Database, mut source: Box<dyn Source + Sync + Send>
             enabled: true,
             schedule: None,
             prepare: None,
+            flags: vec![],
 
             version: None,
             srcinfo: None,
@@ -148,6 +150,8 @@ pub struct Package {
     pub schedule: Option<String>,
     /// commands to run in container before package build, they are written to the shell
     pub prepare: Option<String>,
+    /// special makepkg flags
+    pub flags: Vec<MakepkgFlag>
 }
 
 impl Package {
@@ -218,6 +222,13 @@ impl Package {
         archive::write_file(
             self.prepare.clone().unwrap_or_default(),
             "serene-prepare.sh",
+            &mut archive,
+        ).await?;
+
+        // upload makepkg flags
+        archive::write_file(
+            self.flags.iter().map(|f| format!("--{f} ")).collect::<String>(),
+            "makepkg-flags",
             &mut archive,
         ).await?;
 

@@ -116,5 +116,11 @@ pub enum SettingsSubcommand {
     Prepare {
         /// commands to be run before build
         command: String
-    }
+    },
+
+    /// set additional makepkg flags
+    Flags {
+        /// flags to add, space separated, full without dashes
+        flags: String
+    },
 }

@@ -11,3 +11,7 @@ chrono = { version = "0.4.31", features = ["serde"] }
 # secret
 sha2 = "0.10.8"
 base64 = "0.21.7"
+
+# i am lazy
+strum = "0.26.1"
+strum_macros = "0.26.1"

@@ -59,6 +59,9 @@ serene info my-package set schedule "0 * * * *"
 
 # Set commands to run before the package is built. This is mainly used to add e.g. required keys, or change something else about the container. It will be executed with bash.
 serene info my-package set prepare "echo 'i am run before the package'"
+
+# Set additional flags which are passed to makepkg when building. See `makepkg --help` for more information. Note that only some options are supported.
+serene info my-package set flags "nocheck holdver"
 ```
 
 **Print the local secret of the CLI:** To print the local secret again, run the following:

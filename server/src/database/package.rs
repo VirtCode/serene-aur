@@ -6,7 +6,9 @@ use crate::package::Package;
 use anyhow::{Context, Result};
 use crate::package::source::SrcinfoWrapper;
 
-/// See server/migrations/20240210163236_package.sql
+/// See migrations:
+/// server/migrations/20240210163236_package.sql,
+/// server/migrations/20240306195926_makepkg_flags.sql
 #[derive(Debug)]
 struct PackageRecord {
     /// id
@@ -20,7 +22,8 @@ struct PackageRecord {
     enabled: bool,
     clean: bool,
     schedule: Option<String>,
-    prepare: Option<String>
+    prepare: Option<String>,
+    flags: Option<String>
 }
 
 impl DatabaseConversion<PackageRecord> for Package {
@@ -35,7 +38,8 @@ impl DatabaseConversion<PackageRecord> for Package {
             enabled: self.enabled,
             clean: self.clean,
             schedule: self.schedule.clone(),
-            prepare: self.prepare.clone()
+            prepare: self.prepare.clone(),
+            flags: if !self.flags.is_empty() { Some(serde_json::to_string(&self.flags).context("failed to serialize flags")?) } else { None }
         })
     }
 
@@ -51,6 +55,7 @@ impl DatabaseConversion<PackageRecord> for Package {
             clean: value.clean,
             schedule: value.schedule,
             prepare: value.prepare,
+            flags: value.flags.map(|s| serde_json::from_str(&s).context("failed to deserialize source")).unwrap_or_else(|| Ok(vec![]))?
         })
     }
 }
@@ -96,10 +101,10 @@ impl Package {
         let record = self.create_record()?;
 
         query!(r#"
-            INSERT INTO package (base, added, source, srcinfo, pkgbuild, version, enabled, clean, schedule, prepare)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            INSERT INTO package (base, added, source, srcinfo, pkgbuild, version, enabled, clean, schedule, prepare, flags)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         "#,
-            record.base, record.added, record.source, record.srcinfo, record.pkgbuild, record.version, record.enabled, record.clean, record.schedule, record.prepare
+            record.base, record.added, record.source, record.srcinfo, record.pkgbuild, record.version, record.enabled, record.clean, record.schedule, record.prepare, record.flags
         )
             .execute(db).await?;
 
@@ -112,10 +117,10 @@ impl Package {
 
         query!(r#"
             UPDATE package
-            SET enabled = $2, clean = $3, schedule = $4, prepare = $5
+            SET enabled = $2, clean = $3, schedule = $4, prepare = $5, flags = $6
             WHERE base = $1
         "#,
-            record.base, record.enabled, record.clean, record.schedule, record. prepare
+            record.base, record.enabled, record.clean, record.schedule, record.prepare, record.flags
         )
             .execute(db).await?;
 

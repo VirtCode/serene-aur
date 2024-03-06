@@ -24,6 +24,10 @@ source ./serene-prepare.sh
 
 # build
 printf "\n\n:: SERENE :: Building package\n"
-makepkg -sf --noconfirm
+# read additional flags
+FLAGS=$(cat makepkg-flags)
+echo "running with custom flags: $FLAGS"
+# run makepkg
+makepkg --syncdeps --force --noconfirm $FLAGS
 # also add built version, primarily for devel packages
 makepkg --printsrcinfo | grep -oP 'pkgver = \K[^ ]+' > ../target/VERSION

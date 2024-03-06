@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use strum_macros::{Display, EnumString};
 use crate::build::BuildInfo;
 
 #[derive(Serialize, Deserialize)]
@@ -15,7 +16,45 @@ pub enum PackageSettingsRequest {
     Clean(bool),
     Enabled(bool),
     Schedule(String),
-    Prepare(String)
+    Prepare(String),
+    Flags(Vec<MakepkgFlag>),
+}
+
+
+/// All supported makepkg flags which make sense to supply. Name the enum entries just like the args (caseinsenitive).
+/// See `makepkg --help` for these args
+#[derive(Serialize, Deserialize, EnumString, Display, Clone)]
+#[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum MakepkgFlag {
+    /// Ignore incomplete arch field in PKGBUILD
+    IgnoreArch,
+    /// Clean up work files after build
+    Clean,
+    /// Remove $srcdir/ dir before building the package
+    CleanBuild,
+    /// Skip all dependency checks
+    NoDeps,
+    /// Do not extract source files (use existing $srcdir/ dir)
+    NoExtract,
+    /// Install package after successful build
+    Install,
+    /// Remove installed dependencies after a successful build
+    RmDeps,
+    /// Repackage contents of the package without rebuilding
+    Repackage,
+    /// Do not update VCS sources
+    HoldVer,
+    /// Do not run the check() function in the PKGBUILD
+    NoCheck,
+    /// Do not run the prepare() function in the PKGBUILD
+    NoPrepare,
+    /// Do not verify checksums of the source files
+    SkipChecksums,
+    /// Do not perform any verification checks on source files
+    SkipInteg,
+    /// Do not verify source files with PGP signatures
+    SkipPgpCheck,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -59,6 +98,8 @@ pub struct PackageInfo {
     pub schedule: String,
     /// prepare commands ran before build
     pub prepare_commands: Option<String>,
+    /// makepkg flags
+    pub makepkg_flags: Vec<MakepkgFlag>,
 
     /// date added
     pub added: DateTime<Utc>,

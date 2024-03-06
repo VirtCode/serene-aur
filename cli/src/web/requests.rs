@@ -1,8 +1,10 @@
+use std::str::FromStr;
+use anyhow::Context;
 use chrono::{Local};
 use colored::{ColoredString, Colorize};
 use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron;
 use serene_data::build::{BuildInfo, BuildState};
-use serene_data::package::{PackageAddRequest, PackageInfo, PackagePeek, PackageSettingsRequest};
+use serene_data::package::{MakepkgFlag, PackageAddRequest, PackageInfo, PackagePeek, PackageSettingsRequest};
 use crate::command::SettingsSubcommand;
 use crate::config::Config;
 use crate::web::{delete_empty, get, post, post_empty, post_simple};
@@ -100,6 +102,11 @@ pub fn info(c: &Config, package: &str, all: bool) {
                 get_description_cron(&info.schedule).unwrap_or_else(|_| "could not parse cron".to_owned())
             );
 
+            println!("{:<9} {}", "flags:",
+                if info.makepkg_flags.is_empty() { "none".italic().dimmed() }
+                else { info.makepkg_flags.iter().map(|f| format!("--{f} ")).collect::<String>().normal() }
+            );
+
             if let Some(prepare) = &info.prepare_commands {
                 println!();
                 println!("prepare commands:");
@@ -193,6 +200,19 @@ pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
         SettingsSubcommand::Prepare { command } => {
             info!("Setting prepare command for package {}...", package);
             PackageSettingsRequest::Prepare(command)
+        }
+        SettingsSubcommand::Flags { flags } => {
+            let flags = flags.split_whitespace()
+                .map(|s| MakepkgFlag::from_str(s).map_err(|e| format!("makepkg flag --{s} not supported")))
+                .collect::<Result<Vec<MakepkgFlag>, String>>();
+
+            match flags {
+                Ok(f) => { PackageSettingsRequest::Flags(f) }
+                Err(e) => {
+                    error!("{e}");
+                    return;
+                }
+            }
         }
     };
 

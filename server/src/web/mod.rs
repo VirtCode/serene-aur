@@ -190,6 +190,11 @@ pub async fn settings(_: AuthWrite, package: Path<String>, body: Json<PackageSet
 
             false
         }
+        PackageSettingsRequest::Flags(f) => {
+            package.flags = f.clone();
+
+            false
+        }
     };
 
     if reschedule {
