@@ -13,6 +13,7 @@ use crate::package::source::{Source, SrcinfoWrapper};
 use crate::package::source::cli::SereneCliSource;
 use crate::package::source::devel::DevelGitSource;
 use crate::package::source::normal::NormalSource;
+use crate::runner;
 use crate::runner::archive;
 
 pub mod git;
@@ -217,6 +218,13 @@ impl Package {
 
         // upload sources
         self.source.load_build_files(&self.get_folder(), &mut archive).await?;
+
+        // upload repository file
+        archive::write_file(
+            runner::repository_file(),
+            "custom-repo",
+            &mut archive,
+        ).await?;
 
         // upload prepare script
         archive::write_file(

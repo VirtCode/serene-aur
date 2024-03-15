@@ -73,6 +73,10 @@ NAME=serene
 # whether the serene-cli is added and built automatically
 BUILD_CLI=true
 
+# http url to use to reference own package store from the outside
+# if this url is provided, packages can use dependencies of others inside the container
+OWN_REPOSITORY_URL=none
+
 # default schedules for checking and building the packages
 # for devel packages (i.e. -git) a separate option exists, it is the normal one if unset
 SCHEDULE=0 0 0 * * *

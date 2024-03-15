@@ -29,7 +29,9 @@ pub struct Config {
     /// port to bind to
     pub port: u16,
     /// build the cli by default
-    pub build_cli: bool
+    pub build_cli: bool,
+    /// url to reach itself to pull dependencies from itself
+    pub own_repository_url: Option<String>,
 }
 
 impl Default for Config {
@@ -47,7 +49,8 @@ impl Default for Config {
             runner_image: "ghcr.io/virtcode/serene-aur-runner:main".to_string(),
 
             port: 80,
-            build_cli: true
+            build_cli: true,
+            own_repository_url: None
         }
     }
 }
@@ -63,6 +66,7 @@ impl Config {
 
             architecture: env::var("ARCH").unwrap_or(default.architecture),
             repository_name: env::var("NAME").unwrap_or(default.repository_name),
+            own_repository_url: env::var("OWN_REPOSITORY_URL").ok().or(default.own_repository_url),
 
             schedule_devel: env::var("SCHEDULE_DEVEL").or(env::var("SCHEUDLE")).unwrap_or(default.schedule_devel.clone()),
             schedule_default: env::var("SCHEUDLE").unwrap_or(default.schedule_default),

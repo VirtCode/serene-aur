@@ -163,3 +163,10 @@ impl Runner {
 fn container_name(package: &Package) -> String{
     format!("{}{}", CONFIG.container_prefix, &package.base)
 }
+
+/// creates the repository string which adds itself as a repository
+pub fn repository_file() -> String {
+    if let Some(s) = &CONFIG.own_repository_url {
+        format!("[{}]\nSigLevel = Never\nServer = {}", &CONFIG.repository_name, s)
+    } else { "".to_string() }
+}
