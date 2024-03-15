@@ -84,7 +84,9 @@ impl Builder {
             self.clean(&container).await?;
         }
 
-        self.repository.write().await.remove(package).await?;
+        if let Err(e) = self.repository.write().await.remove(package).await {
+            warn!("removing package: {e:#}");
+        }
 
         package.self_destruct().await?;
         package.delete(&self.db).await?;

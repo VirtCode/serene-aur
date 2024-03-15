@@ -5,6 +5,7 @@ use anyhow::{anyhow, Context};
 use async_tar::Entries;
 use futures_util::AsyncRead;
 use hyper::body::HttpBody;
+use log::warn;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use crate::runner::archive;
@@ -86,13 +87,15 @@ impl PackageRepository {
         // remove old things if present
         if let Some(entries) = self.bases.get(&package.base) {
             // remove old files from repository
-            manage::remove(&self.name, &entries.iter().map(|e| e.name.clone()).collect(), Path::new(REPO_DIR)).await
-                .context("failed to remove files from repository")?;
+            if let Err(e) = manage::remove(&self.name, &entries.iter().map(|e| e.name.clone()).collect(), Path::new(REPO_DIR)).await {
+                warn!("failed to remove files from repository: {e:#}");
+            }
 
             // delete package files
             for entry in entries {
-                fs::remove_file(Path::new(REPO_DIR).join(&entry.file)).await
-                    .context(format!("failed to delete file from repository: {}", entry.file))?
+                if let Err(e) = fs::remove_file(Path::new(REPO_DIR).join(&entry.file)).await {
+                    warn!("failed to delete file from repository ({e}): {}", entry.file);
+                }
             }
         }
 
