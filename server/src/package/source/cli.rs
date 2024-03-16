@@ -60,7 +60,7 @@ impl Source for SereneCliSource {
     }
 
     async fn get_srcinfo(&self, folder: &Path) -> anyhow::Result<SrcinfoWrapper> {
-        generate_srcinfo_string(&folder.join("cli").join(PKGBUILD)).await
+        generate_srcinfo_string(&self.get_pkgbuild(folder).await?).await
             .context("failed to generate .SRCINFO for cli")
             .and_then(|s| SrcinfoWrapper::from_str(&s).context("failed to parse .SRCINFO for cli"))
     }

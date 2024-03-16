@@ -1,12 +1,12 @@
 pkgname="serene-cli"
 pkgver=0.1.0
 pkgrel=1
-pkgdesc="Serene CLI"
+pkgdesc="CLI for the serene build server"
 arch=(x86_64)
 url="https://github.com/VirtCode/serene-aur"
 license=(MIT)
 depends=()
-makedepends=(cargo-nightly jq)
+makedepends=(cargo-nightly)
 source=("git+https://github.com/VirtCode/serene-aur.git")
 md5sums=('SKIP')
 options=(!lto) # see https://github.com/briansmith/ring/issues/1444
@@ -14,10 +14,7 @@ options=(!lto) # see https://github.com/briansmith/ring/issues/1444
 pkgver() {
 	cd serene-aur/cli
 
-	serene_commit=$(git describe --always)
-	cli_version=$(cargo read-manifest | jq -r '.version')
-
-	echo "$cli_version.$serene_commit"
+	git describe --long --abbrev=7 --tags | sed 's/\([^-]*-g\)/r\1/;s/-/./g'
 }
 
 prepare() {

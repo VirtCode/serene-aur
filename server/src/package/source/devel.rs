@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use log::debug;
 use serde::{Deserialize, Serialize};
 use srcinfo::Srcinfo;
-use crate::package::git;
+use crate::package::{aur, git};
 use crate::package::source::{read_srcinfo_string, Source};
 
 /// this is the source of a -git development package
@@ -61,23 +61,7 @@ impl Source for DevelGitSource {
         self.last_commit = git::latest_commit(&self.repository).await?;
 
         // refresh sources
-        self.last_source_commits = HashMap::new();
-        let srcinfo_src = read_srcinfo_string(folder).await?;
-        let srcinfo: Srcinfo = srcinfo_src.parse()
-            .context("failed to parse .SRCINFO")?;
-
-        for src in srcinfo.base.source.iter().flat_map(|s| &s.vec) { // TODO: only use required arch
-            let mut split = src.split('+');
-
-            if split.next() != Some("git") { continue } // skip non-git sources
-
-            // TODO: Support more complex git urls
-            if let Some(repo) = split.next() {
-                debug!("upgrading source {}", repo);
-                let commit = git::latest_commit(repo).await?;
-                self.last_source_commits.insert(repo.to_owned(), commit);
-            }
-        }
+        self.last_source_commits = aur::source_latest_commits(&self.get_srcinfo(folder).await?).await?;
 
         Ok(())
     }

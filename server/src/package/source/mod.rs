@@ -1,6 +1,7 @@
 pub mod normal;
 pub mod devel;
 pub mod cli;
+pub mod single;
 
 use std::ops::Deref;
 use std::path::Path;

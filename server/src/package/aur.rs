@@ -1,9 +1,13 @@
+use std::collections::HashMap;
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::anyhow;
+use log::debug;
 use raur::Raur;
+use crate::package::git;
+use crate::package::source::SrcinfoWrapper;
 
 // this struct represents information about a package in the aur
 pub struct AurInfo {
@@ -37,11 +41,11 @@ fn to_aur_git(base: &str) -> String {
 
 /// Returns the srcinfo string for a pkgbuild located in the given directory
 /// TODO: This method of using makepkg quite dubious, as it switches to another user just for that. Improve this!
-pub async fn generate_srcinfo_string(pkgbuild: &Path) -> anyhow::Result<String> {
+pub async fn generate_srcinfo_string(pkgbuild: &str) -> anyhow::Result<String> {
     let dir = PathBuf::from("/tmp").join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string());
 
     tokio::fs::create_dir(&dir).await?;
-    tokio::fs::copy(pkgbuild, dir.join("PKGBUILD")).await?;
+    tokio::fs::write(dir.join("PKGBUILD"), pkgbuild).await?;
 
     let uid_output = tokio::process::Command::new("id").arg("-u").output().await?;
     let uid = String::from_utf8_lossy(&uid_output.stdout);
@@ -70,4 +74,23 @@ pub async fn generate_srcinfo_string(pkgbuild: &Path) -> anyhow::Result<String> 
     else {
         Ok(String::from_utf8_lossy(&status.stdout).to_string())
     }
+}
+
+pub async fn source_latest_commits(srcinfo: &SrcinfoWrapper) -> anyhow::Result<HashMap<String, String>> {
+    let mut commits = HashMap::new();
+
+    for src in srcinfo.base.source.iter().flat_map(|s| &s.vec) { // TODO: only use required arch
+        let mut split = src.split('+');
+
+        if split.next().map(|s| s.ends_with("git")) != Some(true) { continue } // skip non-git sources
+
+        // TODO: Support more complex git urls
+        if let Some(repo) = split.next() {
+            debug!("fetching state of {}", repo);
+            let commit = git::latest_commit(repo).await?;
+            commits.insert(repo.to_owned(), commit);
+        }
+    }
+
+    Ok(commits)
 }

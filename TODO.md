@@ -15,6 +15,7 @@ adjusted for v0.3.0 on 23.02.24
 - [X] Figure something out to avoid code duplication from server to cli
 - [X] Cache more data inside the sources after upgrading, so that we don't have to read the filesystem as often
 - [ ] Create aur-specific normal source, so that we can check for updating without git
+- [ ] Combine devel and non-devel git sources 
 - [X] Be able to view pkgbuild from cli
 - [ ] More efficient queries for the web handlers
 
@@ -33,7 +34,7 @@ adjusted for v0.3.0 on 23.02.24
 #### Must haves
 - [X] Store state in a database and not a json file
 - [ ] Signing packages
-- [ ] Local / Custom source, where a user can upload a custom pkgbuild
+- [X] Local / Custom source, where a user can upload a custom pkgbuild
 
 #### Features
 *features which are kinda important*

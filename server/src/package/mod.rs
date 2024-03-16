@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, Context, Error};
 use chrono::{DateTime, Utc};
 use hyper::Body;
-use log::{debug, info};
+use log::{debug, info, warn};
 use tokio::fs;
 use serene_data::package::MakepkgFlag;
 use crate::build::schedule::BuildScheduler;
@@ -30,19 +30,9 @@ fn get_folder_tmp() -> PathBuf {
         .join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string())
 }
 
-/// adds a repository as a package
-pub async fn add_repository(store: &Database, repository: &str, devel: bool) -> anyhow::Result<Option<Package>>{
-    debug!("adding package from {repository}, devel: {devel}");
-
-    if devel {
-        add_source(store, Box::new(DevelGitSource::empty(repository))).await
-    } else {
-        add_source(store, Box::new(NormalSource::empty(repository))).await
-    }
-}
-
 /// adds a source to the package store as a package, returns none if base is already present, otherwise the base is returned
-pub async fn add_source(db: &Database, mut source: Box<dyn Source + Sync + Send>) -> anyhow::Result<Option<Package>> {
+/// this is able to replace a source of a given package if it already exists
+pub async fn add_source(db: &Database, mut source: Box<dyn Source + Sync + Send>, replace: bool) -> anyhow::Result<Option<Package>> {
 
     let folder = get_folder_tmp();
     fs::create_dir_all(&folder).await?;
@@ -59,33 +49,37 @@ pub async fn add_source(db: &Database, mut source: Box<dyn Source + Sync + Send>
             Err(e) => break 'create Err(e)
         };
 
-        // get pkgbuild
-        let pkgbuild: String = match source.get_pkgbuild(&folder).await {
-            Ok(s) => s,
-            Err(e) => break 'create Err(e)
-        };
-
         // check other packages
-        if Package::has(&srcinfo.base.pkgbase, db).await? {
-            break 'create Ok(None);
-        }
+        let (package, new) = if let Some(mut package) = Package::find(&srcinfo.base.pkgbase, db).await? {
 
-        // create package
-        let package = Package {
-            base: srcinfo.base.pkgbase.clone(),
-            added: Utc::now(),
+            // only proceed if replacing enabled
+            if !replace { break 'create Ok(None) }
 
-            clean: !source.is_devel(),
-            enabled: true,
-            schedule: None,
-            prepare: None,
-            flags: vec![],
+            if let Err(e) = package.self_destruct().await {
+                break 'create Err(anyhow!("failed to remove old source: {e:#}"))
+            }
 
-            version: None,
-            srcinfo: None,
-            pkgbuild: None,
+            package.source = source;
 
-            source,
+            (package, false)
+        } else {
+            // create package
+            (Package {
+                base: srcinfo.base.pkgbase.clone(),
+                added: Utc::now(),
+
+                clean: !source.is_devel(),
+                enabled: true,
+                schedule: None,
+                prepare: None,
+                flags: vec![],
+
+                version: None,
+                srcinfo: None,
+                pkgbuild: None,
+
+                source,
+            }, true)
         };
 
         // move package
@@ -93,18 +87,19 @@ pub async fn add_source(db: &Database, mut source: Box<dyn Source + Sync + Send>
             break 'create Err(anyhow!("failed to copy source: {e:#}"))
         }
 
-        break 'create Ok(Some(package));
+        Ok(Some((package, new)))
     };
 
-    if let Ok(Some(p)) = &result {
+    if let Ok(Some((p, new))) = &result {
         // store on success
-        p.save(db).await?;
+        if *new { p.save(db).await? }
+        else { p.change_sources(db).await? }
     } else {
         // cleanup when failed
         fs::remove_dir_all(folder).await?;
     }
 
-    result
+    result.map(|o| o.map(|(p, _)| p))
 }
 
 /// adds the cli to the current packages
@@ -112,7 +107,7 @@ pub async fn try_add_cli(db: &Database, scheduler: &mut BuildScheduler) -> anyho
     if Package::has(CLI_PACKAGE_NAME, db).await? { return Ok(()) }
 
     info!("adding and building serene-cli");
-    if let Some(mut package) = add_source(db, Box::new(SereneCliSource::new())).await? {
+    if let Some(mut package) = add_source(db, Box::new(SereneCliSource::new()), false).await? {
         package.clean = true;
         package.change_settings(db).await?;
 

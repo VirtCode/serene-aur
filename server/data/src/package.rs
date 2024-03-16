@@ -4,10 +4,17 @@ use strum_macros::{Display, EnumString};
 use crate::build::BuildInfo;
 
 #[derive(Serialize, Deserialize)]
+pub struct PackageAddRequest {
+    pub replace: bool,
+    pub source: PackageAddSource
+}
+
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
-pub enum PackageAddRequest {
+pub enum PackageAddSource {
     Aur { name: String },
-    Custom { url: String, devel: bool }
+    Custom { url: String, devel: bool },
+    Single { pkgbuild: String, devel: bool }
 }
 
 #[derive(Serialize, Deserialize)]

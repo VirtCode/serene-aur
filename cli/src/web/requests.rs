@@ -4,16 +4,19 @@ use chrono::{Local};
 use colored::{ColoredString, Colorize};
 use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron;
 use serene_data::build::{BuildInfo, BuildState};
-use serene_data::package::{MakepkgFlag, PackageAddRequest, PackageInfo, PackagePeek, PackageSettingsRequest};
+use serene_data::package::{MakepkgFlag, PackageAddRequest, PackageAddSource, PackageInfo, PackagePeek, PackageSettingsRequest};
 use crate::command::SettingsSubcommand;
 use crate::config::Config;
 use crate::web::{delete_empty, get, post, post_empty, post_simple};
 use crate::web::data::{BuildProgressFormatter, BuildStateFormatter, get_build_id};
 
-pub fn add_aur(c: &Config, name: &str) {
+pub fn add_aur(c: &Config, name: &str, replace: bool) {
     info!("Adding package {} from the AUR...", name.italic());
 
-    match post::<PackageAddRequest, PackagePeek>(c, "package/add", PackageAddRequest::Aur { name: name.to_owned() }) {
+    match post::<PackageAddRequest, PackagePeek>(c, "package/add", PackageAddRequest {
+        replace,
+        source: PackageAddSource::Aur { name: name.to_owned() }
+    }) {
         Ok(info) => {
             info!("Successfully added package {}", info.base.bold());
         }
@@ -21,10 +24,27 @@ pub fn add_aur(c: &Config, name: &str) {
     }
 }
 
-pub fn add_git(c: &Config, url: &str, devel: bool) {
+pub fn add_git(c: &Config, url: &str, devel: bool, replace: bool) {
     info!("Adding custom package at {}...", url.italic());
 
-    match post::<PackageAddRequest, PackagePeek>(c, "package/add", PackageAddRequest::Custom{ url: url.to_owned(), devel }) {
+    match post::<PackageAddRequest, PackagePeek>(c, "package/add", PackageAddRequest {
+        replace,
+        source: PackageAddSource::Custom { url: url.to_owned(), devel }
+    }) {
+        Ok(info) => {
+            info!("Successfully added package {}", info.base.bold());
+        }
+        Err(e) => { e.print() }
+    }
+}
+
+pub fn add_pkgbuild(c: &Config, pkgbuild: &str, devel: bool, replace: bool) {
+    info!("Adding custom pkgbuild package...");
+
+    match post::<PackageAddRequest, PackagePeek>(c, "package/add", PackageAddRequest {
+        replace,
+        source: PackageAddSource::Single { pkgbuild: pkgbuild.to_owned(), devel }
+    }) {
         Ok(info) => {
             info!("Successfully added package {}", info.base.bold());
         }

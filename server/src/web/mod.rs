@@ -6,12 +6,16 @@ use chrono::{DateTime};
 use hyper::StatusCode;
 use serde::Deserialize;
 use tokio::sync::RwLock;
-use serene_data::package::{PackageAddRequest, PackageSettingsRequest};
+use serene_data::package::{PackageAddRequest, PackageAddSource, PackageSettingsRequest};
 use crate::build::{Builder, BuildSummary};
 use crate::build::schedule::BuildScheduler;
 use crate::database::Database;
 use crate::package;
-use crate::package::{aur, Package};
+use crate::package::{add_source, aur, Package};
+use crate::package::source::devel::DevelGitSource;
+use crate::package::source::normal::NormalSource;
+use crate::package::source::single::SingleSource;
+use crate::package::source::Source;
 use crate::web::auth::{AuthRead, AuthWrite};
 
 mod auth;
@@ -38,18 +42,31 @@ fn empty_response() -> impl Responder {
 pub async fn add(_: AuthWrite, body: Json<PackageAddRequest>, db: Data<Database>, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
 
     // get repo and devel tag
-    let (repository, devel) = match &body.0 {
-        PackageAddRequest::Aur { name } => {
+    let source: Box<dyn Source + Sync + Send> = match &body.0.source {
+        PackageAddSource::Aur { name } => {
             let package = aur::find(name).await.internal()?
                 .ok_or_else(|| ErrorNotFound(format!("aur package '{}' does not exist", name)))?;
 
-            (package.repository, package.devel)
+            if package.devel {
+                Box::new(DevelGitSource::empty(&package.repository))
+            } else {
+                Box::new(NormalSource::empty(&package.repository))
+            }
         }
-        PackageAddRequest::Custom { url, devel } => { (url.clone(), *devel) }
+        PackageAddSource::Custom { url, devel } => {
+            if *devel {
+                Box::new(DevelGitSource::empty(url))
+            } else {
+                Box::new(NormalSource::empty(url))
+            }
+        }
+        PackageAddSource::Single { pkgbuild: source, devel } => {
+            Box::new(SingleSource::initialize(source.to_owned(), *devel))
+        }
     };
 
     // create package
-    let package = package::add_repository(&db, &repository, devel).await.internal()?
+    let package = package::add_source(&db, source, body.0.replace).await.internal()?
         .ok_or_else(|| ErrorBadRequest("package with the same base is already added"))?;
 
     { // scheduling package

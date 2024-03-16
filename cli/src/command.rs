@@ -19,16 +19,24 @@ pub enum Command {
 
     /// adds a package
     Add {
-        /// base name for the aur package or custom url
-        name: String,
+        /// what to add, by default aur package name
+        what: String,
+
+        /// name is custom repository
+        #[clap(short, long)]
+        pkgbuild: bool,
 
         /// name is custom repository
         #[clap(short, long)]
         custom: bool,
 
-        /// is development package, only works on custom urls
+        /// is development package, ignored for aur
         #[clap(short, long)]
         devel: bool,
+
+        /// replace source with new
+        #[clap(short, long)]
+        replace: bool,
     },
 
     /// removes a package

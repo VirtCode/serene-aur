@@ -29,11 +29,19 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
-        Command::Add { name, custom, devel } => {
+        Command::Add { what, pkgbuild, custom, devel, replace } => {
+            if pkgbuild && custom {
+                error!("can either be a pkgbuild or a custom repository, not both");
+                return Ok(());
+            }
+
             if custom {
-                requests::add_git(&config, &name, devel);
+                requests::add_git(&config, &what, devel, replace);
+            } else if pkgbuild {
+                requests::add_pkgbuild(&config, &what, devel, replace);
             } else {
-                requests::add_aur(&config, &name);
+                if devel { info!("{} devel flag is ignored for aur packages", "warn:".bright_yellow().bold())}
+                requests::add_aur(&config, &what, replace);
             }
         }
         Command::Remove { name } => {
