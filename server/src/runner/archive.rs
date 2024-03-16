@@ -62,13 +62,13 @@ pub fn begin_write() -> Builder<Vec<u8>> {
     Builder::new(buffer)
 }
 
-pub async fn write_file(text: String, path: &str, archive: &mut Builder<Vec<u8>>) -> anyhow::Result<()> {
+pub async fn write_file(text: String, path: &str, writeable: bool, archive: &mut Builder<Vec<u8>>) -> anyhow::Result<()> {
     let data = text.as_bytes();
 
     let mut header = Header::new_gnu();
     header.set_size(data.len() as u64);
     header.set_cksum();
-    header.set_mode(0o444);
+    header.set_mode(if writeable { 0o666 } else { 0o444 });
 
     archive.append_data(&mut header, path, data).await
         .context("failed to create file in archive")

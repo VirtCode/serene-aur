@@ -10,13 +10,16 @@ This section will cover all the ways one can use the cli to interact with the se
 serene list
 ```
 
-**Adding packages:** Serene currently supports two types of packages, those from the AUR, and custom git repositories. The custom git repositories must be formulated the same way as AUR repositories are. An added package is built immediately. Adding them is straight forward:
+**Adding packages:** Serene currently supports three types of packages, those from the AUR, custom git repositories, and custom PKGBUILDs. The custom git repositories must be formulated the same way as AUR repositories are. An added package is built immediately. Supplying `--replace` replaces the source of a package if it is already added, which is often used when updating custom pkgbuilds. Adding them is straight forward:
 ```shell
 # Adding an AUR package called `my-package`.
 serene add my-package
 
 # Adding a custom repository from github. The optional devel flag specifies that it is a development package (e.g. it works like -git).
 serene add --custom --devel https://github.com/my-user/my-package
+
+# Adding a custom pkgbuild for a git package from the filesystem, replacing the previous version. We load the pkgbuild from the filesystem.
+serene add --pkgbuild --devel --replace "$(cat PKGBUILD)"
 ```
 
 **Removing packages:** To remove a package, just call the remove subcommand with the package base:

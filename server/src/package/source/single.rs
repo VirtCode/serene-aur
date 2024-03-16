@@ -75,7 +75,7 @@ impl Source for SingleSource {
     async fn load_build_files(&self, _folder: &Path, archive: &mut Builder<Vec<u8>>) -> anyhow::Result<()> {
         archive::write_file(
             self.pkgbuild.clone(),
-            PKGBUILD,
+            PKGBUILD, true,
             archive,
         ).await
     }

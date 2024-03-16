@@ -217,21 +217,21 @@ impl Package {
         // upload repository file
         archive::write_file(
             runner::repository_file(),
-            "custom-repo",
+            "custom-repo", false,
             &mut archive,
         ).await?;
 
         // upload prepare script
         archive::write_file(
             self.prepare.clone().unwrap_or_default(),
-            "serene-prepare.sh",
+            "serene-prepare.sh", false,
             &mut archive,
         ).await?;
 
         // upload makepkg flags
         archive::write_file(
             self.flags.iter().map(|f| format!("--{f} ")).collect::<String>(),
-            "makepkg-flags",
+            "makepkg-flags", false,
             &mut archive,
         ).await?;
 
