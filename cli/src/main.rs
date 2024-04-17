@@ -6,6 +6,7 @@ pub mod log;
 mod web;
 mod config;
 mod command;
+mod table;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;

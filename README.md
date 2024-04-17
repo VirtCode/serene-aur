@@ -42,7 +42,7 @@ Many more commands are found on the documentation for the CLI:
 This project is still in its early stages, but already usable on a daily basis. There are also a couple of features and improvements that still need to be implemented. 
 Notable missing features include:
 - [ ] Package Signing
-- [ ] Entirely custom PKGBUILDs without a git repository
+- [X] Entirely custom PKGBUILDs without a git repository
 
 Refer to the [TODO File](TODO.md) for more features, tasks and enhancements and don't hesitate to contribute if interested.
 

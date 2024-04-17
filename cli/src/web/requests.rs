@@ -1,12 +1,13 @@
 use std::str::FromStr;
 use anyhow::Context;
-use chrono::{Local};
+use chrono::{Local, Utc};
 use colored::{ColoredString, Colorize};
 use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron;
 use serene_data::build::{BuildInfo, BuildState};
 use serene_data::package::{MakepkgFlag, PackageAddRequest, PackageAddSource, PackageInfo, PackagePeek, PackageSettingsRequest};
 use crate::command::SettingsSubcommand;
 use crate::config::Config;
+use crate::table::{ago, Column, table};
 use crate::web::{delete_empty, get, post, post_empty, post_simple};
 use crate::web::data::{BuildProgressFormatter, BuildStateFormatter, get_build_id};
 
@@ -76,19 +77,35 @@ pub fn list(c: &Config) {
     match get::<Vec<PackagePeek>>(c, "package/list") {
         Ok(mut list) => {
             println!();
-            println!("{:<20} {:<15} {:<5} {:<5} {:<7}", "name".italic(), "version".italic(), "devel".italic(), "enabl".italic(), "build".italic());
-
             list.sort_by_key(|p| p.base.clone());
-
-            for peek in list {
-                println!("{:<20.20} {:<15.15} {:^5} {:^5} {:<7}",
-                    peek.base.bold(),
-                    peek.version.map(|s| s.normal()).unwrap_or_else(|| "unknown".dimmed()),
+            
+            let columns = [
+                Column::new("name").ellipse(),
+                Column::new("version"),
+                Column::new("devel").force().centered(),
+                Column::new("enabl").force().centered(),
+                Column::new("build").force().centered(),
+                Column::new("time ago").force()
+            ];
+            
+            let rows = list.iter().map(|peek| {
+                [
+                    peek.base.bold(), 
+                    peek.version.as_ref().map(|s| s.normal()).unwrap_or_else(|| "unknown".dimmed()),
                     if peek.devel { "X".dimmed() } else { "".dimmed() },
                     if peek.enabled { "X".yellow() } else { "".dimmed() },
-                    peek.build.map(|p| p.state.colored_passive()).unwrap_or_else(|| "none".dimmed())
-                );
-            }
+                    peek.build.as_ref().map(|p| p.state.colored_passive()).unwrap_or_else(|| "none".dimmed()),
+                    peek.build.as_ref().map(|p| {
+                        let duration = Utc::now() - p.ended.unwrap_or(p.started);
+                        let string = ago::difference(duration);
+                        
+                        if duration.num_weeks() > 0 { string.dimmed() }
+                        else { string.normal() }
+                    }).unwrap_or("never".to_string().bold())
+                ]
+            }).collect();
+            
+            table(columns, rows, "  ");
         }
         Err(e) => { e.print() }
     }
@@ -135,19 +152,28 @@ pub fn info(c: &Config, package: &str, all: bool) {
 
             println!();
             println!("builds:");
-            println!("{:<4}  {:<15}  {:<7}  {:<17}  {:>5}", "id".italic(), "version".italic(), "state".italic(), "date".italic(), "time".italic());
+            
+            let columns = [
+                Column::new("id").force(),
+                Column::new("version"),
+                Column::new("state").force(),
+                Column::new("date").force(),
+                Column::new("time").force()
+            ];
 
-            for peek in builds {
-                println!("{:<4}  {:<15.15}  {:<7}  {:17}  {:>5}",
-                    get_build_id(&peek).dimmed(),
-                    peek.version.map(ColoredString::from).unwrap_or_else(|| "unknown".dimmed()),
+            let rows = builds.iter().map(|peek| {
+                [
+                    get_build_id(peek).dimmed(),
+                    peek.version.as_ref().map(|s| s.normal()).unwrap_or_else(|| "unknown".dimmed()),
                     peek.state.colored_substantive(),
-                    peek.started.with_timezone(&Local).format("%x %X"),
+                    peek.started.with_timezone(&Local).format("%x %X").to_string().normal(),
                     peek.ended.map(|ended| {
-                       format!("{}s", (ended - peek.started).num_seconds())
+                        format!("{}s", (ended - peek.started).num_seconds())
                     }).map(ColoredString::from).unwrap_or_else(|| "??".blue())
-                );
-            }
+                ]
+            }).collect();
+            
+            table(columns, rows, "  ");
         }
         (Err(e), _) => { e.print() }
         (_, Err(e)) => { e.print() }

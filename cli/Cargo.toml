@@ -19,6 +19,7 @@ colored = "2.1.0"
 whoami = "1.4.1"
 anyhow = "1.0.77"
 cron-descriptor = "0.1.1"
+terminal_size = "0.3.0"
 
 # secret
 rand = "0.8.5"

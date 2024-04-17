@@ -4,7 +4,7 @@ adjusted for v0.3.0 on 23.02.24
 #### Polish 
 *polish for a better user experience*
 - [ ] Add more debug and info logs
-- [ ] Make tables of cli adaptive to text width
+- [X] Make tables of cli adaptive to text width
 - [ ] Disclaimer about pkgbuilds
 - [ ] Clear versioning
 
@@ -29,7 +29,7 @@ adjusted for v0.3.0 on 23.02.24
 - [X] Build cli by default on server
 - [ ] Pull runner image automatically on startup and periodically
 - [ ] Rebuild cleaned when non-clean containers fail
-- [ ] Add itself as a source to build container, so we have rudimentary aur dependency support
+- [X] Add itself as a source to build container, so we have rudimentary aur dependency support
 
 #### Must haves
 - [X] Store state in a database and not a json file
