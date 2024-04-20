@@ -3,7 +3,9 @@ name = "serene-cli"
 version = "0.3.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[build-dependencies]
+clap = { version = "4.4.11", features = ["derive"] }
+clap_complete = "*"
 
 [dependencies]
 serene-data = { path = "../server/data" }
@@ -20,6 +22,7 @@ whoami = "1.4.1"
 anyhow = "1.0.77"
 cron-descriptor = "0.1.1"
 terminal_size = "0.3.0"
+clap_complete = "4.5.2"
 
 # secret
 rand = "0.8.5"
@@ -27,4 +30,3 @@ rand = "0.8.5"
 # web, TODO: for some reason, when this builds with openssl (i.e. not rustls), the server does too, which causes problems with the container. WHYYY?
 reqwest = { version = "0.11.23", default-features = false, features = ["rustls-tls", "blocking", "json"] }
 chrono = { version = "0.4.31", features = ["serde"] }
-

@@ -11,6 +11,9 @@ source=("git+https://github.com/VirtCode/serene-aur.git")
 md5sums=('SKIP')
 options=(!lto) # see https://github.com/briansmith/ring/issues/1444
 
+# install under serene, not serene-cli
+_binary_name="serene"
+
 pkgver() {
 	cd serene-aur/cli
 
@@ -26,7 +29,9 @@ prepare() {
 
 build() {
     cd serene-aur/cli
+
     export RUSTUP_TOOLCHAIN=nightly
+    export COMPLETIONS_DIR=$PWD/../completions
 
     cargo build --frozen --release
 }
@@ -34,6 +39,9 @@ build() {
 package() {
     cd serene-aur
 
-    # install under serene, not serene-cli
-    install -Dm0755 -T "target/release/serene-cli" "$pkgdir/usr/bin/serene"
+    install -Dm0755 -T "target/release/serene-cli" "$pkgdir/usr/bin/$_binary_name"
+
+    install -Dm0644 "completions/$_binary_name.bash" "$pkgdir/usr/share/bash-completion/completions/$_binary_name"
+    install -Dm0644 "completions/$_binary_name.fish" -t "$pkgdir/usr/share/fish/vendor_completions.d/"
+    install -Dm0644 "completions/_$_binary_name" -t "$pkgdir/usr/share/zsh/site_functions/"
 }

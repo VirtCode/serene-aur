@@ -6,6 +6,7 @@ use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cro
 use serene_data::build::{BuildInfo, BuildState};
 use serene_data::package::{MakepkgFlag, PackageAddRequest, PackageAddSource, PackageInfo, PackagePeek, PackageSettingsRequest};
 use crate::command::SettingsSubcommand;
+use crate::complete::save_completions;
 use crate::config::Config;
 use crate::table::{ago, Column, table};
 use crate::web::{delete_empty, get, post, post_empty, post_simple};
@@ -76,6 +77,8 @@ pub fn list(c: &Config) {
 
     match get::<Vec<PackagePeek>>(c, "package/list") {
         Ok(mut list) => {
+            save_completions(&list);
+            
             println!();
             list.sort_by_key(|p| p.base.clone());
             

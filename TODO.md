@@ -7,6 +7,7 @@ adjusted for v0.3.0 on 23.02.24
 - [X] Make tables of cli adaptive to text width
 - [ ] Disclaimer about pkgbuilds
 - [ ] Clear versioning
+- [X] Shell completions with dynamic packages
 
 #### Cleanness
 *changes for a cleaner overall process*

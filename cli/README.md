@@ -84,12 +84,19 @@ cd serene-aur/cli
 makepkg -irsc
 ```
 
+Shell completions will be automatically installed alongside the package.
+
 ### Building Directly
 You can also build the package directly using cargo. To do that, clone the repository and build it from the **root directory** of the package:
 ```shell
 cargo build --release --bin serene-cli
 ```
 Now, copy the built binary (at `target/release/serene-cli`) to your path, preferably as `serene`, as that is how the package will call the binary.
+
+You can generate shell completions for your current shell and add them manually. Use the following command to generate the completions:
+```shell
+serene completions
+```
 
 ## Configuration
 The cli does not offer much local configuration. It does set up everything needed automatically on the first startup, like prompting the user for the location of the server, generating a secret, etc. This makes it very easy to set up.
@@ -102,3 +109,10 @@ secret: [my-secret]
 # Url of the server that is used.
 url: [my-server-url]
 ```
+
+## Shell Completions
+As seen in the [Building Manually](#building-manually) section, the cli includes shell completions. These will be installed automatically for most shells (unless you're [building directly](#building-directly)). Make sure to enable them in your preferred shell.
+
+Some shells (currently only Bash) also feature dynamic completions. This means you can complete package names for commands like `serene info` or `serene build`. The names that can be completed are sourced from a cache file, which is updated every time `serene list` is invoked. This avoids unintended network usage when just completing your command, but might not be totally accurate. 
+
+So if your package completions are not up-to-date, make sure your shell supports them and run `serene list` to update the completions in the background. Contributions for support for other shells are welcomed.

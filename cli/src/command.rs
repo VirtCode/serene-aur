@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand, ArgAction};
 #[command(disable_help_subcommand = true)]
 pub struct Args {
     #[clap(subcommand)]
-    pub command: Command,
+    pub command: Action,
 
     /// override the host url that is used
     #[clap(short, long)]
@@ -13,7 +13,7 @@ pub struct Args {
 }
 
 #[derive(Subcommand)]
-pub enum Command {
+pub enum Action {
     /// list all packages which are added
     List,
 
@@ -71,6 +71,9 @@ pub enum Command {
         #[clap(short, long)]
         machine: bool
     },
+    
+    #[command(hide = true)]
+    Completions
 }
 
 #[derive(Subcommand)]
