@@ -13,7 +13,7 @@ use actix_web::web::Data;
 use anyhow::Context;
 use log::warn;
 use tokio::sync::{RwLock};
-use crate::build::schedule::BuildScheduler;
+use crate::build::schedule::{BuildScheduler, ImageScheduler};
 use crate::build::Builder;
 use crate::config::CONFIG;
 use crate::package::Package;
@@ -47,6 +47,10 @@ async fn main() -> anyhow::Result<()> {
     // creating scheduler
     let mut schedule = BuildScheduler::new(builder.clone()).await
         .context("failed to start package scheduler")?;
+    
+    // creating image scheduler
+    let _image_scheduler = ImageScheduler::new(runner.clone()).await
+        .context("failed to start image scheduler")?;
 
     for package in Package::find_all(&db).await? {
         schedule.schedule(&package).await

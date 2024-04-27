@@ -5,8 +5,8 @@ on:
     branches: ['main']
     paths: ["runner/**", ".github/workflows/publish-runner.yml"]
   workflow_dispatch:
-  release:
-    types: ['published']
+  schedule:
+    - cron: "0 22 * * *"
 
 env:
   REGISTRY: ghcr.io

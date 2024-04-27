@@ -2,12 +2,15 @@ use std::collections::HashMap;
 use std::sync::{Arc};
 use std::time::Duration;
 use anyhow::{anyhow, Context};
-use log::{debug, info, warn};
+use hyper::body::HttpBody;
+use log::{debug, error, info, warn};
 use tokio::sync::RwLock;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use uuid::Uuid;
 use crate::build::Builder;
+use crate::config::CONFIG;
 use crate::package::Package;
+use crate::runner::Runner;
 
 /// this struct schedules builds for all packages
 pub struct BuildScheduler {
@@ -119,4 +122,50 @@ async fn run(lock: Arc<RwLock<bool>>, builder: Arc<RwLock<Builder>>, force: bool
     *lock.write().await = true;
     builder.read().await.run_scheduled(&base, force, clean).await;
     *lock.write().await = false;
+}
+
+/// Schedules the pulling of the runner image 
+pub struct ImageScheduler {
+    runner: Arc<RwLock<Runner>>,
+    sched: JobScheduler,
+    job: Uuid
+}
+
+impl ImageScheduler {
+    /// creates a new image scheduler
+    pub async fn new(runner: Arc<RwLock<Runner>>) -> anyhow::Result<Self> {
+        let mut s = Self {
+            runner,
+            sched: JobScheduler::new().await
+                .context("failed to initialize job scheduler")?,
+            job: Uuid::from_u128(0u128)
+        };
+        
+        s.schedule().await?;
+        Ok(s)
+    }
+    
+    async fn schedule(&mut self) -> anyhow::Result<()> {
+        let runner = self.runner.clone();
+
+        info!("scheduling image update");
+        
+        let job = Job::new_async(CONFIG.schedule_image.as_str(), move |_, _| {
+            let runner = runner.clone();
+
+            Box::pin(async move { 
+                info!("updating runner image");
+                
+                if let Err(e) = runner.read().await.update_image().await {
+                    error!("failed to update runner image: {e:#}");
+                } else {
+                    info!("successfully updated runner image");
+                }
+            })
+        }).context("failed to schedule job image updating")?;
+        
+        self.job = job.guid();
+        
+        Ok(())
+    }
 }

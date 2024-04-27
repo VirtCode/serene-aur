@@ -22,6 +22,8 @@ pub struct Config {
     pub schedule_default: String,
     /// scheduling of development packages
     pub schedule_devel: String,
+    /// schedule for pulling the runner image
+    pub schedule_image: String,
     /// container name prefix xxxxx-my-package
     pub container_prefix: String,
     /// runner docker image
@@ -44,6 +46,7 @@ impl Default for Config {
 
             schedule_default: "0 0 0 * * *".to_string(), // 00:00 UTC every day
             schedule_devel: "0 0 0 * * *".to_string(),
+            schedule_image: "0 0 0 * * *".to_string(),
 
             container_prefix: "serene-aur-runner-".to_string(),
             runner_image: "ghcr.io/virtcode/serene-aur-runner:main".to_string(),
@@ -68,6 +71,7 @@ impl Config {
             repository_name: env::var("NAME").unwrap_or(default.repository_name),
             own_repository_url: env::var("OWN_REPOSITORY_URL").ok().or(default.own_repository_url),
 
+            schedule_image: env::var("SCHEUDLE_IMAGE").unwrap_or(default.schedule_image),
             schedule_devel: env::var("SCHEDULE_DEVEL").or(env::var("SCHEUDLE")).unwrap_or(default.schedule_devel.clone()),
             schedule_default: env::var("SCHEUDLE").unwrap_or(default.schedule_default),
 

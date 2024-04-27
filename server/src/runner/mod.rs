@@ -6,8 +6,10 @@ use anyhow::{Context};
 use async_tar::Archive;
 use bollard::container::{Config, CreateContainerOptions, DownloadFromContainerOptions, ListContainersOptions, LogsOptions, StartContainerOptions, UploadToContainerOptions, WaitContainerOptions};
 use bollard::Docker;
+use bollard::image::CreateImageOptions;
 use chrono::{DateTime, Utc};
-use futures_util::{AsyncRead, StreamExt};
+use futures_util::{AsyncRead, StreamExt, TryStreamExt};
+use hyper::body::HttpBody;
 use serde::{Deserialize, Serialize};
 use tokio_util::io::StreamReader;
 use tokio_util::compat::{TokioAsyncReadCompatExt};
@@ -150,6 +152,22 @@ impl Runner {
         };
 
         Ok(self.docker.create_container(Some(options), config).await?.id)
+    }
+
+    pub async fn update_image(&self) -> anyhow::Result<()> {
+        let results = self.docker.create_image(Some(CreateImageOptions {
+            from_image: CONFIG.runner_image.clone(),
+            ..Default::default()
+        }), None, None)
+            .collect::<Vec<Result<_, _>>>().await;
+
+        // can this be directly collected into a result? probably... but streams suck
+        let _statuses = results.into_iter().collect::<Result<Vec<_>, _>>()
+            .context("failed to pull new docker image")?;
+        
+        // we just make sure the stream is finished, and don't process the results (yet?)
+        
+        Ok(())
     }
 
     /// cleans the container, i.e. removes it
