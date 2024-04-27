@@ -47,7 +47,7 @@ impl Builder {
     }
 
     /// starts a build for a package, if there is no update, the build will be skipped (except when forced)
-    pub async fn run_scheduled(&self, package: &str, force: bool) {
+    pub async fn run_scheduled(&self, package: &str, force: bool, clean: bool) {
         info!("starting build for package {package} now");
 
         let package = match Package::find(package, &self.db).await {
@@ -69,7 +69,7 @@ impl Builder {
         };
 
         if updatable || force {
-            match self.run_build(package, updatable).await
+            match self.run_build(package, updatable, clean).await
                 .context("build run for package failed extremely fatally"){
                 Ok(_) => {}
                 Err(e) => { error!("{e:#}") }
@@ -95,12 +95,12 @@ impl Builder {
     }
 
     /// this runs a complete build of a package
-    pub async fn run_build(&self, mut package: Package, update: bool) -> anyhow::Result<()> {
+    pub async fn run_build(&self, mut package: Package, update: bool, force_clean: bool) -> anyhow::Result<()> {
         let start = Utc::now();
 
         let mut summary = BuildSummary {
             package: package.base.clone(),
-            state: Running(if update { Update } else { Build }),
+            state: Running(Build), 
             started: start.clone(),
             logs: None, version: None, ended: None,
         };
@@ -109,6 +109,8 @@ impl Builder {
         'run: {
             // UPDATE
             if update {
+                // state is already correct
+                
                 match self.update(&mut package).await {
                     Ok(_) => {}
                     Err(e) => {
@@ -116,13 +118,26 @@ impl Builder {
                         break 'run;
                     }
                 };
+            }
 
-                summary.state = Running(Build);
-
+            // CLEAN (when changed to clean or force clean)
+            if package.clean || force_clean {
+                summary.state = Running(Clean);
                 summary.change(&self.db).await?;
+                
+                match self.try_clean(&package).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        summary.state = Fatal(format!("{e:#}"), Clean);
+                        break 'run;
+                    }
+                }
             }
 
             // BUILD
+            summary.state = Running(Build);
+            summary.change(&self.db).await?;
+            
             let (container, success) = match self.build(&mut package).await {
                 Ok((status, container)) => {
                     let next = status.success;
@@ -135,11 +150,13 @@ impl Builder {
                 }
             };
 
-            summary.state = Running(if success { Publish } else { Clean });
-            summary.change(&self.db).await?;
+            
 
             // PUBLISH
             if success {
+                summary.state = Running(Publish);
+                summary.change(&self.db).await?;
+                
                 match self.publish(&mut package, &container).await {
                     Ok(()) => { }
                     Err(e) => {
@@ -159,6 +176,9 @@ impl Builder {
 
             // CLEAN
             if package.clean {
+                summary.state = Running(Publish);
+                summary.change(&self.db).await?;
+                
                 match self.clean(&container).await {
                     Ok(()) => {}
                     Err(e) => {
@@ -208,8 +228,17 @@ impl Builder {
         self.repository.write().await.publish(package, archive).await
     }
 
-    /// cleans the container for a given package
+    /// cleans a given container
     async fn clean(&self, container: &ContainerId) -> anyhow::Result<()> {
         self.runner.read().await.clean(container).await
+    }
+
+    /// cleans the container for a given package if available
+    async fn try_clean(&self, package: &Package) -> anyhow::Result<()> {
+        if let Some(container) = self.runner.read().await.find_container(package).await? {
+            self.clean(&container).await?;
+        }
+        
+        Ok(())
     }
 }

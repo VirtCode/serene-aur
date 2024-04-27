@@ -53,8 +53,8 @@ fn main() -> anyhow::Result<()> {
         Action::Remove { name } => {
             requests::delete(&config, &name);
         }
-        Action::Build { name } => {
-            requests::build(&config, &name);
+        Action::Build { name, clean } => {
+            requests::build(&config, &name, clean);
         }
         Action::List => {
             requests::list(&config);

@@ -48,7 +48,11 @@ pub enum Action {
     /// schedules an immediate build for a package
     Build {
         /// base name of the package
-        name: String
+        name: String,
+
+        /// force clean before the next build
+        #[clap(short, long)]
+        clean: bool
     },
 
     /// get and set info about a package

@@ -27,6 +27,10 @@ pub enum PackageSettingsRequest {
     Flags(Vec<MakepkgFlag>),
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct PackageBuildRequest {
+    pub clean: bool
+}
 
 /// All supported makepkg flags which make sense to supply. Name the enum entries just like the args (caseinsenitive).
 /// See `makepkg --help` for these args

@@ -6,7 +6,7 @@ use chrono::{DateTime};
 use hyper::StatusCode;
 use serde::Deserialize;
 use tokio::sync::RwLock;
-use serene_data::package::{PackageAddRequest, PackageAddSource, PackageSettingsRequest};
+use serene_data::package::{PackageAddRequest, PackageAddSource, PackageBuildRequest, PackageSettingsRequest};
 use crate::build::{Builder, BuildSummary};
 use crate::build::schedule::BuildScheduler;
 use crate::database::Database;
@@ -72,7 +72,7 @@ pub async fn add(_: AuthWrite, body: Json<PackageAddRequest>, db: Data<Database>
     { // scheduling package
         let mut scheduler = scheduler.write().await;
         scheduler.schedule(&package).await.internal()?;
-        scheduler.run(&package).await.internal()?;
+        scheduler.run(&package, true).await.internal()?;
     }
 
     Ok(Json(package.to_info()))
@@ -127,11 +127,11 @@ pub async fn get_all_builds(_: AuthRead, package: Path<String>, Query(count): Qu
 }
 
 #[post("/package/{name}/build")]
-pub async fn build(_: AuthWrite, package: Path<String>, db: Data<Database>, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
+pub async fn build(_: AuthWrite, package: Path<String>, db: Data<Database>, body: Json<PackageBuildRequest>, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
     let package = Package::find(&package, &db).await.internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    scheduler.write().await.run(&package).await.internal()?;
+    scheduler.write().await.run(&package, body.into_inner().clean).await.internal()?;
 
     Ok(empty_response())
 }

@@ -4,7 +4,7 @@ use chrono::{Local, Utc};
 use colored::{ColoredString, Colorize};
 use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron;
 use serene_data::build::{BuildInfo, BuildState};
-use serene_data::package::{MakepkgFlag, PackageAddRequest, PackageAddSource, PackageInfo, PackagePeek, PackageSettingsRequest};
+use serene_data::package::{MakepkgFlag, PackageAddRequest, PackageAddSource, PackageBuildRequest, PackageInfo, PackagePeek, PackageSettingsRequest};
 use crate::command::SettingsSubcommand;
 use crate::complete::save_completions;
 use crate::config::Config;
@@ -63,10 +63,12 @@ pub fn delete(c: &Config, package: &str) {
     }
 }
 
-pub fn build(c: &Config, package: &str) {
+pub fn build(c: &Config, package: &str, clean: bool) {
     info!("Requesting build for package {}...", package.italic());
 
-    match post_empty(c, format!("package/{}/build", package).as_str()) {
+    match post_simple(c, format!("package/{}/build", package).as_str(), PackageBuildRequest {
+        clean
+    }) {
         Ok(()) => { info!("Successfully dispatched build") }
         Err(e) => { e.print() }
     }

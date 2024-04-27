@@ -112,7 +112,7 @@ pub async fn try_add_cli(db: &Database, scheduler: &mut BuildScheduler) -> anyho
         package.change_settings(db).await?;
 
         scheduler.schedule(&package).await?;
-        scheduler.run(&package).await?;
+        scheduler.run(&package, true).await?;
 
         info!("successfully added serene-cli");
     }

@@ -46,7 +46,7 @@ impl BuildScheduler {
     }
 
     /// runs a one-shot build for a package
-    pub async fn run(&mut self, package: &Package) -> anyhow::Result<()> {
+    pub async fn run(&mut self, package: &Package, clean: bool) -> anyhow::Result<()> {
         info!("scheduling one-shot build for package {} now", &package.base);
 
         let lock = self.get_lock(package);
@@ -62,7 +62,7 @@ impl BuildScheduler {
             let base = base.clone();
             let builder = builder.clone();
 
-            Box::pin(async move { run(lock, builder, true, base).await })
+            Box::pin(async move { run(lock, builder, true, base, clean).await })
         }).context(format!("failed to create job for package {}", package.base))?;
 
         self.sched.add(job).await
@@ -96,7 +96,7 @@ impl BuildScheduler {
             let base = base.clone();
             let builder = builder.clone();
 
-            Box::pin(async move { run(lock, builder, false, base).await })
+            Box::pin(async move { run(lock, builder, false, base, false).await })
         }).context(format!("failed to create job for package {}", package.base))?;
 
         self.jobs.insert(package.base.clone(), job.guid());
@@ -109,7 +109,7 @@ impl BuildScheduler {
 }
 
 /// runs a build for a package
-async fn run(lock: Arc<RwLock<bool>>, builder: Arc<RwLock<Builder>>, force: bool, base: String) {
+async fn run(lock: Arc<RwLock<bool>>, builder: Arc<RwLock<Builder>>, force: bool, base: String, clean: bool) {
     // makes sure a package is not built twice at the same time
     if *lock.read().await {
         warn!("cancelling schedule for package {base} because the lock is set");
@@ -117,6 +117,6 @@ async fn run(lock: Arc<RwLock<bool>>, builder: Arc<RwLock<Builder>>, force: bool
     }
 
     *lock.write().await = true;
-    builder.read().await.run_scheduled(&base, force).await;
+    builder.read().await.run_scheduled(&base, force, clean).await;
     *lock.write().await = false;
 }
