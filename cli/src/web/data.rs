@@ -1,4 +1,10 @@
+use std::str::FromStr;
+use anyhow::{anyhow, Context};
+use chrono::format::Fixed::TimezoneOffset;
+use chrono::{Local, Offset, TimeZone, Utc};
 use colored::{ColoredString, Colorize};
+use cron_descriptor::cronparser::cron_expression_descriptor::{get_description_cron, get_description_cron_options};
+use cron_descriptor::cronparser::Options;
 use serene_data::build::{BuildInfo, BuildProgress, BuildState};
 
 pub trait BuildStateFormatter {
@@ -44,4 +50,38 @@ impl BuildProgressFormatter for BuildProgress {
 pub fn get_build_id(summary: &BuildInfo) -> String {
     let string = format!("{:x}", summary.started.timestamp());
     string[(string.len() - 4)..string.len()].to_owned()
+}
+
+/// this converts a cron string from utc to local time
+/// note that this is a very hacky implementation and does not work in all cases
+pub fn describe_cron_timezone_hack(schedule: &str) -> anyhow::Result<String> {
+    let mut parts = schedule.split(" ").map(|s| s.to_owned()).collect::<Vec<_>>();
+    
+    if parts.len() < 5 { return Err(anyhow!("invalid cron string provided")) }
+    let index = parts.len() - 4; // fourth entry from the left
+
+    // hack is only possible if it is comma separated or a single number
+    let possible = parts[index].chars().into_iter().all(|c| {
+        "0123456789,".contains(c)
+    });
+
+    if possible {
+        let offset = Local::now().offset().fix().local_minus_utc() / (60 * 60);
+
+        parts[index] = parts[index]
+            .split(",")
+            .map(|s|
+                i32::from_str(s)
+                .map(|i| (i + offset % 24).to_string())
+                .unwrap_or_else(|e| s.to_string())
+            )
+            .intersperse(",".to_string()).collect();
+    }
+
+    get_description_cron_options(
+        &parts.into_iter().intersperse(" ".to_string()).collect::<String>(),
+        &Options::twenty_four_hour()
+    )
+        .map(|s| format!("{}{}", s, if possible { "" } else { " (UTC)" }))
+        .map_err(|_| anyhow!("failed to parse cron string"))
 }

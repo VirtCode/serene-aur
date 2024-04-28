@@ -2,7 +2,6 @@ use std::str::FromStr;
 use anyhow::Context;
 use chrono::{Local, Utc};
 use colored::{ColoredString, Colorize};
-use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron;
 use serene_data::build::{BuildInfo, BuildState};
 use serene_data::package::{MakepkgFlag, PackageAddRequest, PackageAddSource, PackageBuildRequest, PackageInfo, PackagePeek, PackageSettingsRequest};
 use crate::command::SettingsSubcommand;
@@ -10,7 +9,7 @@ use crate::complete::save_completions;
 use crate::config::Config;
 use crate::table::{ago, Column, table};
 use crate::web::{delete_empty, get, post, post_empty, post_simple};
-use crate::web::data::{BuildProgressFormatter, BuildStateFormatter, get_build_id};
+use crate::web::data::{BuildProgressFormatter, BuildStateFormatter, describe_cron_timezone_hack, get_build_id};
 
 pub fn add_aur(c: &Config, name: &str, replace: bool) {
     info!("Adding package {} from the AUR...", name.italic());
@@ -140,8 +139,8 @@ pub fn info(c: &Config, package: &str, all: bool) {
                      tags.iter().map(|s| s.to_string()).intersperse(" ".to_string()).collect::<String>()
             );
 
-            println!("{:<9} {} (UTC)", "schedule:",
-                get_description_cron(&info.schedule).unwrap_or_else(|_| "could not parse cron".to_owned())
+            println!("{:<9} {}", "schedule:",
+                describe_cron_timezone_hack(&info.schedule).unwrap_or_else(|_| "could not parse cron".to_owned())
             );
 
             println!("{:<9} {}", "flags:",
@@ -240,7 +239,7 @@ pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
             PackageSettingsRequest::Enabled(enabled)
         }
         SettingsSubcommand::Schedule { cron } => {
-            let Ok(description) = get_description_cron(&cron) else {
+            let Ok(description) = describe_cron_timezone_hack(&cron) else {
                 error!("invalid cron string provided");
                 return;
             };
