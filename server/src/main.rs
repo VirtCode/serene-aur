@@ -11,7 +11,7 @@ use std::sync::{Arc};
 use actix_web::{App, HttpMessage, HttpServer};
 use actix_web::web::Data;
 use anyhow::Context;
-use log::warn;
+use log::{error, info, warn};
 use tokio::sync::{RwLock};
 use crate::build::schedule::{BuildScheduler, ImageScheduler};
 use crate::build::Builder;
@@ -49,25 +49,33 @@ async fn main() -> anyhow::Result<()> {
         .context("failed to start package scheduler")?;
     
     // creating image scheduler
-    let _image_scheduler = ImageScheduler::new(runner.clone()).await
+    let image_scheduler = ImageScheduler::new(runner.clone()).await
         .context("failed to start image scheduler")?;
 
+    // schedule packages
     for package in Package::find_all(&db).await? {
         schedule.schedule(&package).await
             .context(format!("failed to start schedule for package {}", &package.base))?;
     }
 
-    schedule.start().await?;
+    // pull image before cli build
+    if let Err(e) = runner.read().await.update_image().await {
+        error!("failed to update runner image on startup: {e:#}");
+    }
 
     // add cli if enabled
     if config::CONFIG.build_cli {
         if let Err(e) = package::try_add_cli(&db, &mut schedule).await {
-            warn!("Failed to add cli package: {e:#}")
+            error!("Failed to add cli package: {e:#}")
         }
     }
 
+    image_scheduler.start().await?;
+    schedule.start().await?;
+
     let schedule = Arc::new(RwLock::new(schedule));
 
+    info!("serene started successfully!");
     // web app
     HttpServer::new(move ||
         App::new()

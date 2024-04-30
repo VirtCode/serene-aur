@@ -144,7 +144,14 @@ impl ImageScheduler {
         s.schedule().await?;
         Ok(s)
     }
+
+    /// starts the scheduler
+    pub async fn start(&self) -> anyhow::Result<()> {
+        self.sched.start().await
+            .context("failed to start image scheduler")
+    }
     
+    // schedules an image update
     async fn schedule(&mut self) -> anyhow::Result<()> {
         let runner = self.runner.clone();
 
@@ -165,6 +172,8 @@ impl ImageScheduler {
         }).context("failed to schedule job image updating")?;
         
         self.job = job.guid();
+        self.sched.add(job).await
+            .context("failed to schedule image update")?;
         
         Ok(())
     }
