@@ -5,11 +5,12 @@ use std::io::Read;
 use anyhow::{Context};
 use async_tar::Archive;
 use bollard::container::{Config, CreateContainerOptions, DownloadFromContainerOptions, ListContainersOptions, LogsOptions, StartContainerOptions, UploadToContainerOptions, WaitContainerOptions};
-use bollard::Docker;
+use bollard::{API_DEFAULT_VERSION, Docker};
 use bollard::image::CreateImageOptions;
 use chrono::{DateTime, Utc};
 use futures_util::{AsyncRead, StreamExt, TryStreamExt};
 use hyper::body::HttpBody;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use tokio_util::io::StreamReader;
 use tokio_util::compat::{TokioAsyncReadCompatExt};
@@ -40,9 +41,26 @@ impl Runner {
 
     /// creates a new runner by taking the docker from the default socket
     pub fn new() -> anyhow::Result<Self> {
+        let docker = if let Some(url) = &CONFIG.docker_url {
+
+            if url.starts_with("tcp://") || url.starts_with("http://") {
+
+                info!("using docker via tcp at '{url}'");
+                Docker::connect_with_http(url, 120, API_DEFAULT_VERSION)
+
+            } else {
+                if !url.starts_with("unix://") { warn!("missing docker url scheme, assuming path to unix socket"); }
+
+                info!("using docker via unix socket at '{url}'");
+                Docker::connect_with_unix(url, 120, API_DEFAULT_VERSION)
+            }
+        } else {
+            info!("using docker via the default unix socket");
+            Docker::connect_with_unix_defaults()
+        };
+
         Ok(Self {
-            docker: Docker::connect_with_socket_defaults()
-                .context("failed to connect to docker via default socket")?
+            docker: docker.context("failed to initialize docker")?
         })
     }
 

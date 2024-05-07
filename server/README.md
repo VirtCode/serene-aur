@@ -95,6 +95,10 @@ RUNNER_PREFIX=serene-aur-runner-
 # do not require authentication for the read-only parts of the api
 ALLOW_READS=false
 
+# DEBUG the unix or tcp url to docker with a prefix (e.g. tcp://127.0.0.1:2375)
+#       the runner containers will be spun up on this docker instance
+DOCKER_URL=unix:///var/run/docker.sock
+
 # DEBUG the port the server binds to in the container
 PORT=80
 

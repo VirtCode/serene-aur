@@ -28,11 +28,13 @@ pub struct Config {
     pub container_prefix: String,
     /// runner docker image
     pub runner_image: String,
+    /// custom url for docker instance to use
+    pub docker_url: Option<String>,
     /// port to bind to
     pub port: u16,
     /// build the cli by default
     pub build_cli: bool,
-    /// url to reach itself to pull dependencies from itself
+    /// url for runners to reach the server to pull dependencies from its repo
     pub own_repository_url: Option<String>,
 }
 
@@ -50,6 +52,8 @@ impl Default for Config {
 
             container_prefix: "serene-aur-runner-".to_string(),
             runner_image: "ghcr.io/virtcode/serene-aur-runner:main".to_string(),
+            
+            docker_url: None,
 
             port: 80,
             build_cli: true,
@@ -77,6 +81,8 @@ impl Config {
 
             container_prefix: env::var("RUNNER_PREFIX").unwrap_or(default.container_prefix),
             runner_image: env::var("RUNNER_IMAGE").unwrap_or(default.runner_image),
+            
+            docker_url: env::var("DOCKER_URL").ok().or(default.docker_url),
 
             port: env::var("PORT").ok()
                 .and_then(|s| u16::from_str(&s).map_err(|_| warn!("failed to parse PORT, using default")).ok())
