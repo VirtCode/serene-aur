@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::anyhow;
 use log::debug;
 use raur::Raur;
+use crate::config::CONFIG;
 use crate::package::git;
 use crate::package::source::SrcinfoWrapper;
 
@@ -76,19 +77,26 @@ pub async fn generate_srcinfo_string(pkgbuild: &str) -> anyhow::Result<String> {
     }
 }
 
-pub async fn source_latest_commits(srcinfo: &SrcinfoWrapper) -> anyhow::Result<HashMap<String, String>> {
+pub async fn source_latest_version(srcinfo: &SrcinfoWrapper) -> anyhow::Result<HashMap<String, String>> {
     let mut commits = HashMap::new();
 
-    for src in srcinfo.base.source.iter().flat_map(|s| &s.vec) { // TODO: only use required arch
-        let mut split = src.split('+');
+    for src in srcinfo.base.source.iter()
+        .filter(|f| f.arch.as_ref().map(|a| a == &CONFIG.architecture).unwrap_or(true)) // only include relevant archs
+        .flat_map(|s| &s.vec) {
+        
+        let url_start = src.find("::").map(|i| i + 2).unwrap_or(0);
+        let url = &src[url_start..];
+        
+        debug!("considering source url: {url}");
+        
+        // we only support git urls, other urls are either static or not supported (like hg+, etc.)
+        if url.starts_with("git+") {
+            debug!("fetching state via git");
+            
+            let git_url = &url["git+".len()..];
 
-        if split.next().map(|s| s.ends_with("git")) != Some(true) { continue } // skip non-git sources
-
-        // TODO: Support more complex git urls
-        if let Some(repo) = split.next() {
-            debug!("fetching state of {}", repo);
-            let commit = git::latest_commit(repo).await?;
-            commits.insert(repo.to_owned(), commit);
+            // we insert with the `git_url` for backwards compatibility
+            commits.insert(git_url.to_owned(), git::find_commit(git_url).await?);
         }
     }
 

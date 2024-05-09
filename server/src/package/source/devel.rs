@@ -41,13 +41,14 @@ impl Source for DevelGitSource {
     async fn update_available(&self) -> anyhow::Result<bool> {
         // check pkgbuild repository
         debug!("updating {}", &self.repository);
-        let current_commit = git::latest_commit(&self.repository).await?;
+        let current_commit = git::find_commit(&self.repository).await?;
         if current_commit != self.last_commit { return Ok(true) }
 
         // check sources
+        // FIXME: compare this with aur::source_latest_version, as not everything has to be a git commit
         for (repo, commit) in &self.last_source_commits {
             debug!("updating source {}", repo);
-            let latest = git::latest_commit(repo).await?;
+            let latest = git::find_commit(repo).await?;
             if &latest != commit { return Ok(true) }
         }
 
@@ -58,10 +59,10 @@ impl Source for DevelGitSource {
         // pull pkg repo
         debug!("upgrading {}", &self.repository);
         git::pull(folder).await?;
-        self.last_commit = git::latest_commit(&self.repository).await?;
+        self.last_commit = git::find_commit(&self.repository).await?;
 
         // refresh sources
-        self.last_source_commits = aur::source_latest_commits(&self.get_srcinfo(folder).await?).await?;
+        self.last_source_commits = aur::source_latest_version(&self.get_srcinfo(folder).await?).await?;
 
         Ok(())
     }

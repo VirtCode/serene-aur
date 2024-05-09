@@ -37,7 +37,7 @@ impl Source for NormalSource {
     async fn update_available(&self) -> anyhow::Result<bool> {
         debug!("updating {}", &self.repository);
 
-        let current_commit = git::latest_commit(&self.repository).await?;
+        let current_commit = git::find_commit(&self.repository).await?;
         Ok(current_commit != self.last_commit)
     }
 
@@ -47,7 +47,7 @@ impl Source for NormalSource {
         // pull repo
         git::pull(folder).await?;
         // set commit to newest (could also be done by looking at the local repository...)
-        self.last_commit = git::latest_commit(&self.repository).await?;
+        self.last_commit = git::find_commit(&self.repository).await?;
 
         Ok(())
     }

@@ -49,3 +49,4 @@ adjusted for v0.3.0 on 23.02.24
 - [ ] Handle in-aur dependencies
 - [ ] Allow attachment at build process to view logs real-time
 - [ ] Web frontend to view package status
+- [ ] Support other vcs than git for devel packages

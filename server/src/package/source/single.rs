@@ -46,9 +46,10 @@ impl Source for SingleSource {
 
     async fn update_available(&self) -> anyhow::Result<bool> {
         if self.devel {
+            // FIXME: same here as in devel source
             for (repo, commit) in &self.last_source_commits {
                 debug!("checking source {}", repo);
-                let latest = git::latest_commit(repo).await?;
+                let latest = git::find_commit(repo).await?;
                 if &latest != commit { return Ok(true) }
             }
         }
@@ -58,7 +59,7 @@ impl Source for SingleSource {
 
     async fn update(&mut self, _folder: &Path) -> anyhow::Result<()> {
         if self.devel {
-            self.last_source_commits = aur::source_latest_commits(&self.get_srcinfo(_folder).await?).await?
+            self.last_source_commits = aur::source_latest_version(&self.get_srcinfo(_folder).await?).await?
         }
 
         Ok(())
