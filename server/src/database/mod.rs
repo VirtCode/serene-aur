@@ -1,14 +1,9 @@
 mod package;
 mod build;
 
-use chrono::{DateTime, NaiveDateTime, Utc};
-use serde::{Deserialize, Serialize};
-use sqlx::{Error, FromRow, migrate, query, query_as, Row, SqlitePool};
-use sqlx::types::Json;
-use anyhow::{Context, };
-use serde::de::DeserializeOwned;
-use sqlx::error::DatabaseError;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteRow};
+use sqlx::{migrate, SqlitePool};
+use anyhow::{Context};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
 use anyhow::Result;
 
 const FILE: &str = "serene.db";
@@ -24,6 +19,7 @@ pub async fn connect() -> Result<Database> {
             .filename(FILE)
             .foreign_keys(true)
             .create_if_missing(true)
+            .journal_mode(SqliteJournalMode::Wal)
     ).await.context("failed to connect to database")?;
 
     // running migrations
