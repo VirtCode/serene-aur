@@ -45,7 +45,7 @@ serene info my-package pkgbuild
 # See more information about the latest build. Supply an id for a specific one.
 serene info my-package build
 
-# See the logs of the latest build. Supply an id for a specific one. Add `--subscribe` to get live logs.
+# See the logs of the latest build. Supply an id for a specific one. Add `--subscribe` to get live logs and `--attach` to attach to live logs.
 serene info my-package logs
 ```
 

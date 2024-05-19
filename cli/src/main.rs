@@ -64,9 +64,9 @@ fn main() -> anyhow::Result<()> {
                 None => { requests::info(&config, &name, all); }
                 Some(InfoCommand::Pkgbuild) => { requests::pkgbuild(&config, &name); }
                 Some(InfoCommand::Build { id }) => { requests::build_info(&config, &name, &id); }
-                Some(InfoCommand::Logs { id, subscribe }) => { 
+                Some(InfoCommand::Logs { id, subscribe, attach }) => { 
                     if subscribe.is_some() {
-                        requests::subscribe_build_logs(&config, &name)
+                        requests::subscribe_build_logs(&config, attach.unwrap_or_default(), &name)
                     } else {
                         requests::build_logs(&config, &name, &id); 
                     }

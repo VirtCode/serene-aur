@@ -40,7 +40,6 @@ pub type ContainerId = String;
 pub struct Runner {
     pub docker: Docker,
     broadcast: Arc<Broadcast>
-    // TODO: Add some kind of Broadcast struct here
 }
 
 impl Runner {

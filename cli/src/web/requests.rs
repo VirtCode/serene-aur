@@ -1,3 +1,4 @@
+use std::process::exit;
 use std::str::FromStr;
 use chrono::{Local, Utc};
 use colored::{ColoredString, Colorize};
@@ -228,12 +229,18 @@ pub fn build_logs(c: &Config, package: &str, build: &Option<String>) {
     }
 }
 
-pub fn subscribe_build_logs(c: &Config, package: &str) {
+pub fn subscribe_build_logs(c: &Config, attach: bool, package: &str) {
     let Err(err) = eventsource(c, format!("package/{}/build/logs/subscribe", package).as_str(), |event| {
         if let Event::Message(event) = event {
             match event.event.as_str() {
                 "build_start" => println!("\n{}", "New package build started".italic().dimmed()),
-                "build_end" => println!("\n{}", "Package build finished".italic().dimmed()),
+                "build_end" => {
+                    if !attach {
+                        exit(0);
+                    } else {
+                        println!("\n{}", "Package build finished".italic().dimmed())
+                    }
+                },
                 "log" => print!("{}", event.data),
                 _ => {}
             }
