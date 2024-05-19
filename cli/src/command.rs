@@ -91,7 +91,11 @@ pub enum InfoCommand {
     /// get logs from a build
     Logs {
         /// id of the build, latest if empty
-        id: Option<String>
+        id: Option<String>,
+
+        /// subscribe and attach to live logs
+        #[clap(short, long)]
+        subscribe: Option<bool>
     },
 
     /// get the pkgbuild used to build the current package

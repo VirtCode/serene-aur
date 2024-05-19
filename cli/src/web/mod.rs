@@ -1,9 +1,12 @@
 pub mod requests;
 pub mod data;
 
+use futures::StreamExt;
 use reqwest::blocking::{Client, Response};
+use reqwest_eventsource::Event;
 use serde::{Serialize};
 use serde::de::DeserializeOwned;
+use tokio::runtime::Runtime;
 use crate::config::Config;
 
 type Result<T> = std::result::Result<T, Error>;
@@ -11,6 +14,9 @@ type Result<T> = std::result::Result<T, Error>;
 enum Error {
     Client {
         error: reqwest::Error,
+    },
+    Event {
+        error: reqwest_eventsource::Error,
     },
     Server {
         message: String,
@@ -26,6 +32,9 @@ impl Error {
         match self {
             Error::Client { error } => {
                 error!("failed to connect to server: {:#}", error);
+            }
+            Error::Event { error } => {
+                error!("error in event source: {}", error.to_string())
             }
             Error::Server { message } => {
                 error!("{}", message);
@@ -109,4 +118,26 @@ pub fn get<R: DeserializeOwned>(config: &Config, path: &str) -> Result<R> {
         .send();
 
     process_result(result)
+}
+
+pub fn eventsource<F>(config: &Config, path: &str, cb: F) -> Result<()> where F: Fn(Event) {
+    let full_path = format!("{path}?auth={}", config.secret);
+    let mut con = reqwest_eventsource::EventSource::get(get_url(config, full_path.as_str()));
+
+    let rt = Runtime::new().expect("should be able to create runtime");
+
+    rt.block_on(async {
+        while let Some(event) = con.next().await {
+            match event {
+                Ok(event) => cb(event),
+                Err(err) => {
+                    con.close();
+                    return Err(Error::Event { error: err })
+                },
+            }
+        }
+        Ok(())
+    })?;
+
+    Ok(())
 }

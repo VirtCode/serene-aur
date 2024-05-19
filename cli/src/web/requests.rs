@@ -1,14 +1,14 @@
 use std::str::FromStr;
-use anyhow::Context;
 use chrono::{Local, Utc};
 use colored::{ColoredString, Colorize};
+use reqwest_eventsource::Event;
 use serene_data::build::{BuildInfo, BuildState};
 use serene_data::package::{MakepkgFlag, PackageAddRequest, PackageAddSource, PackageBuildRequest, PackageInfo, PackagePeek, PackageSettingsRequest};
 use crate::command::SettingsSubcommand;
 use crate::complete::save_completions;
 use crate::config::Config;
 use crate::table::{ago, Column, table};
-use crate::web::{delete_empty, get, post, post_empty, post_simple};
+use crate::web::{delete_empty, eventsource, get, post, post_empty, post_simple};
 use crate::web::data::{BuildProgressFormatter, BuildStateFormatter, describe_cron_timezone_hack, get_build_id};
 
 pub fn add_aur(c: &Config, name: &str, replace: bool) {
@@ -226,6 +226,20 @@ pub fn build_logs(c: &Config, package: &str, build: &Option<String>) {
         Ok(logs) => { println!("{logs}") }
         Err(e) => { e.print() }
     }
+}
+
+pub fn subscribe_build_logs(c: &Config, package: &str) {
+    let Err(err) = eventsource(c, format!("package/{}/build/logs/subscribe", package).as_str(), |event| {
+        if let Event::Message(event) = event {
+            match event.event.as_str() {
+                "build_start" => println!("\n{}", "New package build started".italic().dimmed()),
+                "build_end" => println!("\n{}", "Package build finished".italic().dimmed()),
+                "log" => print!("{}", event.data),
+                _ => {}
+            }
+        }
+    }) else { return };
+    err.print();
 }
 
 pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {

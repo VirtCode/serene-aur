@@ -7,7 +7,7 @@ pub mod config;
 mod build;
 mod database;
 
-use std::sync::{Arc};
+use std::sync::Arc;
 use actix_web::{App, HttpMessage, HttpServer};
 use actix_web::web::Data;
 use anyhow::Context;
@@ -19,6 +19,7 @@ use crate::config::CONFIG;
 use crate::package::Package;
 use crate::runner::{Runner};
 use crate::repository::PackageRepository;
+use crate::web::broadcast::Broadcast;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -26,10 +27,13 @@ async fn main() -> anyhow::Result<()> {
 
     // initializing database
     let db = database::connect().await?;
-
+    
+    // initialize broadcast
+    let broadcast = Broadcast::new(db.clone());
+    
     // initializing runner
     let runner = Arc::new(RwLock::new(
-        Runner::new()
+        Runner::new(broadcast.clone())
             .context("failed to connect to docker")?
     ));
 
@@ -82,6 +86,7 @@ async fn main() -> anyhow::Result<()> {
             .app_data(Data::new(db.clone()))
             .app_data(Data::from(schedule.clone()))
             .app_data(Data::from(builder.clone()))
+            .app_data(Data::from(broadcast.clone()))
             .service(repository::webservice())
             .service(web::add)
             .service(web::list)
@@ -91,6 +96,7 @@ async fn main() -> anyhow::Result<()> {
             .service(web::get_all_builds)
             .service(web::get_build)
             .service(web::get_logs)
+            .service(web::subscribe_logs)
             .service(web::settings)
             .service(web::pkgbuild)
     ).bind(("0.0.0.0", CONFIG.port))?.run().await?;

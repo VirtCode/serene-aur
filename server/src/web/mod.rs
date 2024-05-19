@@ -17,9 +17,11 @@ use crate::package::source::normal::NormalSource;
 use crate::package::source::single::SingleSource;
 use crate::package::source::Source;
 use crate::web::auth::{AuthRead, AuthWrite};
+use crate::web::broadcast::Broadcast;
 
 mod auth;
 mod data;
+pub mod broadcast;
 
 type BuildSchedulerData = Data<RwLock<BuildScheduler>>;
 type BuilderData = Data<RwLock<Builder>>;
@@ -166,6 +168,15 @@ pub async fn get_logs(_: AuthRead, path: Path<(String, String)>, db: Data<Databa
             .map(|l| l.logs)
             .ok_or_else(|| ErrorNotFound("package not found, no build at this time or it has no logs"))?
     ))
+}
+
+#[get("/package/{name}/build/logs/subscribe")]
+pub async fn subscribe_logs(_: AuthRead, path: Path<String>, broadcast: Data<Broadcast>, db: Data<Database>) -> actix_web::Result<impl Responder> {
+    let package = path.into_inner();
+    let _ = Package::find(&package, &db).await.internal()?
+        .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
+    
+    broadcast.subscribe(package).await
 }
 
 #[delete("/package/{name}")]
