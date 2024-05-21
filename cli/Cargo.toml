@@ -30,3 +30,6 @@ rand = "0.8.5"
 # web, TODO: for some reason, when this builds with openssl (i.e. not rustls), the server does too, which causes problems with the container. WHYYY?
 reqwest = { version = "0.11.23", default-features = false, features = ["rustls-tls", "blocking", "json"] }
 chrono = { version = "0.4.31", features = ["serde"] }
+reqwest-eventsource = { version = "0.6.0" }
+futures = "0.3.30"
+tokio = "1.37.0"

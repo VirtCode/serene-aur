@@ -212,7 +212,7 @@ impl Builder {
 
         self.runner.read().await.upload_sources(&container, package).await?;
 
-        let status = self.runner.read().await.build(&container).await?;
+        let status = self.runner.read().await.build(&container, package).await?;
 
         Ok((status, container))
     }

@@ -2,6 +2,8 @@ pub mod archive;
 
 use std::error::Error;
 use std::io::Read;
+use std::sync::Arc;
+use std::vec;
 use anyhow::{Context};
 use async_tar::Archive;
 use bollard::container::{Config, CreateContainerOptions, DownloadFromContainerOptions, ListContainersOptions, LogsOptions, StartContainerOptions, UploadToContainerOptions, WaitContainerOptions};
@@ -16,6 +18,7 @@ use tokio_util::io::StreamReader;
 use tokio_util::compat::{TokioAsyncReadCompatExt};
 use crate::config::CONFIG;
 use crate::package::Package;
+use crate::web::broadcast::{Broadcast, Event};
 
 const RUNNER_IMAGE_BUILD_IN: &str = "/app/build";
 const RUNNER_IMAGE_BUILD_OUT: &str = "/app/target";
@@ -35,12 +38,13 @@ pub type ContainerId = String;
 /// this is a wrapper for docker which creates and interacts with runner containers
 pub struct Runner {
     pub docker: Docker,
+    broadcast: Arc<Broadcast>
 }
 
 impl Runner {
 
     /// creates a new runner by taking the docker from the default socket
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new(broadcast: Arc<Broadcast>) -> anyhow::Result<Self> {
         let docker = if let Some(url) = &CONFIG.docker_url {
 
             if url.starts_with("tcp://") || url.starts_with("http://") {
@@ -60,38 +64,59 @@ impl Runner {
         };
 
         Ok(Self {
-            docker: docker.context("failed to initialize docker")?
+            docker: docker.context("failed to initialize docker")?,
+            broadcast
         })
     }
 
     /// builds the package inside a container
-    pub async fn build(&self, container: &ContainerId) -> anyhow::Result<RunStatus> {
+    pub async fn build(&self, container: &ContainerId, package: &Package) -> anyhow::Result<RunStatus> {
         let start = Utc::now();
 
         // start container
         self.docker.start_container(container, None::<StartContainerOptions<String>>).await?;
 
-        // wait for container to exit and collect logs
-        let result =
-            self.docker.wait_container(container,  None::<WaitContainerOptions<String>>).collect::<Vec<_>>().await;
-
-        let end = Utc::now();
+        self.broadcast.notify(&package.base, Event::BuildStart).await;
 
         // retrieve logs
         let log_options = LogsOptions {
             stdout: true, stderr: true,
+            follow: true, // follow is needed since we continuously read from the stream
             since: start.timestamp(),
             ..Default::default()
         };
 
-        let logs: Vec<String> = self.docker.logs::<String>(container, Some(log_options)).filter_map(|r| async {
-            r.ok().map(|c| c.to_string())
-        }).collect::<Vec<_>>().await;
+        let mut stream = self.docker.logs::<String>(container, Some(log_options));
+        let base = package.base.clone();
+        let broadcast = self.broadcast.clone();
+        let log_collector = tokio::spawn(async move {
+            let mut logs = vec![];
+            // collect logs from stream until the container exits (and the log stream closes)
+            while let Some(next) = stream.next().await {
+                if let Ok(log) = next {
+                    let value = log.to_string();
+                    logs.push(value.clone());
+                    broadcast.notify(&base, Event::Log(value)).await;
+                }
+            }
+            logs.join("")
+        });
+
+
+        // wait for container to exit
+        let result =
+            self.docker.wait_container(container,  None::<WaitContainerOptions<String>>).collect::<Vec<_>>().await;
+
+        let end = Utc::now();
+        
+        // get logs from log collector thread
+        let logs = log_collector.await.unwrap_or_default();
+
+        self.broadcast.notify(&package.base, Event::BuildFinish).await;
 
         Ok(RunStatus {
             success: result.first().and_then(|r| r.as_ref().ok()).is_some(),
-            logs: logs.join(""),
-
+            logs,
             started: start,
             ended: end,
         })

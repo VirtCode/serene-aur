@@ -115,3 +115,18 @@ pub struct PackageInfo {
     /// date added
     pub added: DateTime<Utc>,
 }
+
+/// All events which can be emitted by the broadcast for a package
+#[derive(Serialize, Deserialize, EnumString, Display, Clone)]
+#[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum BroadcastEvent {
+    /// A build job for the package was started
+    BuildStart,
+    /// A build job for the package finished
+    BuildEnd,
+    /// Log message for the package build
+    Log,
+    /// Ping to the event subscriber
+    Ping
+}
