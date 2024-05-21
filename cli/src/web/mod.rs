@@ -120,7 +120,7 @@ pub fn get<R: DeserializeOwned>(config: &Config, path: &str) -> Result<R> {
     process_result(result)
 }
 
-pub fn eventsource<F>(config: &Config, path: &str, cb: F) -> Result<()> where F: Fn(Event) {
+pub fn eventsource<F>(config: &Config, path: &str, mut cb: F) -> Result<()> where F: FnMut(Event) {
     let full_path = format!("{path}?auth={}", config.secret);
     let mut con = reqwest_eventsource::EventSource::get(get_url(config, full_path.as_str()));
 

@@ -29,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
     let db = database::connect().await?;
     
     // initialize broadcast
-    let broadcast = Broadcast::new(db.clone());
+    let broadcast = Broadcast::new();
     
     // initializing runner
     let runner = Arc::new(RwLock::new(

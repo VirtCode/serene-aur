@@ -4,7 +4,7 @@ use chrono::{Local, Utc};
 use colored::{ColoredString, Colorize};
 use reqwest_eventsource::Event;
 use serene_data::build::{BuildInfo, BuildState};
-use serene_data::package::{MakepkgFlag, PackageAddRequest, PackageAddSource, PackageBuildRequest, PackageInfo, PackagePeek, PackageSettingsRequest};
+use serene_data::package::{BroadcastEvent, MakepkgFlag, PackageAddRequest, PackageAddSource, PackageBuildRequest, PackageInfo, PackagePeek, PackageSettingsRequest};
 use crate::command::SettingsSubcommand;
 use crate::complete::save_completions;
 use crate::config::Config;
@@ -222,27 +222,52 @@ pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
 
 
 pub fn build_logs(c: &Config, package: &str, build: &Option<String>) {
-    println!("Querying server for package builds...");
     match get::<String>(c, format!("package/{}/build/{}/logs", package, build.as_ref().unwrap_or(&"latest".to_string())).as_str()) {
         Ok(logs) => { println!("{logs}") }
         Err(e) => { e.print() }
     }
 }
 
-pub fn subscribe_build_logs(c: &Config, attach: bool, package: &str) {
+fn latest_build_logs_quiet(c: &Config, package: &str) -> Option<String> {
+    get::<String>(c, format!("package/{}/build/latest/logs", package).as_str()).ok()
+}
+
+pub fn subscribe_build_logs(c: &Config, linger: bool, subscribe: bool, package: &str) {
+    let mut first_build_finished = false;
+    if !subscribe {
+        let latest = latest_build_logs_quiet(c, package);
+        if let Some(latest) = latest {
+            print!("{latest}");
+
+            if !linger {
+                return
+            }
+
+            first_build_finished = true;
+            println!("\n{}", "Package build finished".italic().dimmed());
+        }
+    }
+
     let Err(err) = eventsource(c, format!("package/{}/build/logs/subscribe", package).as_str(), |event| {
         if let Event::Message(event) = event {
-            match event.event.as_str() {
-                "build_start" => println!("\n{}", "New package build started".italic().dimmed()),
-                "build_end" => {
-                    if !attach {
-                        exit(0);
-                    } else {
-                        println!("\n{}", "Package build finished".italic().dimmed())
-                    }
-                },
-                "log" => print!("{}", event.data),
-                _ => {}
+            if let Ok(broadcast_event) = BroadcastEvent::from_str(&event.event) {
+                match broadcast_event {
+                    BroadcastEvent::BuildStart => {
+                        if linger && first_build_finished {
+                            println!("\n{}", "New package build started".italic().dimmed())
+                        }
+                    },
+                    BroadcastEvent::BuildEnd => {
+                        if !linger {
+                            exit(0);
+                        } else {
+                            first_build_finished = true;
+                            println!("\n{}", "Package build finished".italic().dimmed())
+                        }
+                    },
+                    BroadcastEvent::Log => print!("{}", event.data),
+                    _ => {}
+                }
             }
         }
     }) else { return };
