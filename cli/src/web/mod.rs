@@ -1,9 +1,12 @@
 pub mod requests;
 pub mod data;
 
+use anyhow::Context;
 use futures::StreamExt;
 use reqwest::blocking::{Client, Response};
-use reqwest_eventsource::Event;
+
+use reqwest::RequestBuilder;
+use reqwest_eventsource::{Event, EventSource};
 use serde::{Serialize};
 use serde::de::DeserializeOwned;
 use tokio::runtime::Runtime;
@@ -11,7 +14,7 @@ use crate::config::Config;
 
 type Result<T> = std::result::Result<T, Error>;
 
-enum Error {
+pub enum Error {
     Client {
         error: reqwest::Error,
     },
@@ -31,16 +34,16 @@ impl Error {
     pub fn print(&self) {
         match self {
             Error::Client { error } => {
-                error!("failed to connect to server: {:#}", error);
+                error!("failed to connect to server: {error:#}");
             }
             Error::Event { error } => {
-                error!("error in event source: {}", error.to_string())
+                error!("error in event source: {error:#}")
             }
             Error::Server { message } => {
-                error!("{}", message);
+                error!("{message}");
             }
             Error::Input { message, code} => {
-                error!("({code}) {}", message);
+                error!("({code}) {message}");
             }
         }
     }
@@ -121,8 +124,11 @@ pub fn get<R: DeserializeOwned>(config: &Config, path: &str) -> Result<R> {
 }
 
 pub fn eventsource<F>(config: &Config, path: &str, mut cb: F) -> Result<()> where F: FnMut(Event) {
-    let full_path = format!("{path}?auth={}", config.secret);
-    let mut con = reqwest_eventsource::EventSource::get(get_url(config, full_path.as_str()));
+    let mut con = EventSource::new(
+        reqwest::Client::new()
+            .get(get_url(config, path))
+            .header("Authorization", &config.secret)
+    ) .expect("should be cloneable");
 
     let rt = Runtime::new().expect("should be able to create runtime");
 

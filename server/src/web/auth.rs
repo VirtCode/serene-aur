@@ -1,11 +1,9 @@
-use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use actix_web::{FromRequest, HttpRequest};
 use actix_web::dev::Payload;
 use actix_web::error::{ErrorForbidden, ErrorInternalServerError, ErrorUnauthorized};
 use actix_web::http::header::AUTHORIZATION;
-use actix_web::web::Query;
 use serene_data::secret;
 use crate::config::CONFIG;
 
@@ -17,12 +15,11 @@ impl FromRequest for AuthWrite {
     type Error = actix_web::Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        let params = Query::<HashMap<String, String>>::from_query(req.query_string()).expect("Should accept any query params");
-        // either read secret from `Authorization` header or from `auth` url query parameter
+        
         let secret = match req.headers().get(AUTHORIZATION) {
             Some(value) => Ok(value.to_str().unwrap_or("").to_string()),
             None => Err(ErrorUnauthorized("no secret provided"))
-        }.or(params.into_inner().get("auth").ok_or(ErrorUnauthorized("no secret provided")).cloned());
+        };
 
         Box::pin(async move {
             let secret = secret?;
