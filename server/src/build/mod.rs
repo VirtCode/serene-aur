@@ -12,6 +12,7 @@ use crate::package::{Package};
 use crate::repository::PackageRepository;
 use crate::runner::{ContainerId, Runner, RunStatus};
 use crate::runner::archive::{begin_read, read_version};
+use crate::web::broadcast::{Broadcast, Event};
 
 pub mod schedule;
 
@@ -36,14 +37,15 @@ pub struct BuildSummary {
 pub struct Builder {
     db: Database,
     runner: Arc<RwLock<Runner>>,
+    broadcast: Arc<Broadcast>,
     repository: Arc<RwLock<PackageRepository>>,
 }
 
 impl Builder {
 
     /// creates a new builder
-    pub fn new(db: Database, runner: Arc<RwLock<Runner>>, repository: Arc<RwLock<PackageRepository>>) -> Self {
-        Self { db, runner, repository }
+    pub fn new(db: Database, runner: Arc<RwLock<Runner>>, repository: Arc<RwLock<PackageRepository>>, broadcast: Arc<Broadcast>) -> Self {
+        Self { db, runner, repository, broadcast }
     }
 
     /// starts a build for a package, if there is no update, the build will be skipped (except when forced)
@@ -105,6 +107,8 @@ impl Builder {
             logs: None, version: None, ended: None,
         };
         summary.save(&self.db).await?;
+
+        self.broadcast.notify(&package.base, Event::BuildStart).await;
 
         'run: {
             // UPDATE
@@ -197,6 +201,8 @@ impl Builder {
 
         summary.ended = Some(Utc::now());
         summary.change(&self.db).await?;
+
+        self.broadcast.notify(&package.base, Event::BuildFinish).await;
 
         Ok(())
     }

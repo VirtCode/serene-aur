@@ -45,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
 
     // initializing builder
     let builder = Arc::new(RwLock::new(
-        Builder::new(db.clone(), runner.clone(), repository.clone())
+        Builder::new(db.clone(), runner.clone(), repository.clone(), broadcast.clone())
     ));
 
     // creating scheduler

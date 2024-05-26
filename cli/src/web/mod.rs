@@ -1,18 +1,16 @@
 pub mod requests;
 pub mod data;
 
-use anyhow::Context;
 use futures::StreamExt;
 use reqwest::blocking::{Client, Response};
 
-use reqwest::RequestBuilder;
 use reqwest_eventsource::{Event, EventSource};
 use serde::{Serialize};
 use serde::de::DeserializeOwned;
 use tokio::runtime::Runtime;
 use crate::config::Config;
 
-type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 pub enum Error {
     Client {

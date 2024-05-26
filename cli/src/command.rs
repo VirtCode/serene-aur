@@ -22,21 +22,29 @@ pub enum Action {
         /// what to add, by default aur package name
         what: String,
 
-        /// name is custom repository
-        #[clap(short, long)]
+        /// <WHAT> is a custom repository
+        #[clap(short, long, group = "nonaur", help_heading = "Custom Sources")]
+        custom: bool,
+        
+        /// <WHAT> is a custom pkgbuild 
+        #[clap(short, long, group = "nonaur", help_heading = "Custom Sources")]
         pkgbuild: bool,
 
-        /// name is custom repository
-        #[clap(short, long)]
-        custom: bool,
-
-        /// is development package, ignored for aur
-        #[clap(short, long)]
+        /// add as a development package 
+        #[clap(short, long, requires = "nonaur", help_heading = "Custom Sources")]
         devel: bool,
 
-        /// replace source with new
+        /// replace existing package with same base
         #[clap(short, long)]
         replace: bool,
+
+        /// install package with `pacman` after build
+        #[clap(short, long, help_heading = "Installing")]
+        install: bool,
+
+        /// do not print logs when installing
+        #[clap(short, long, requires = "install", help_heading = "Installing")]
+        quiet: bool,
     },
 
     /// removes a package
@@ -52,7 +60,15 @@ pub enum Action {
 
         /// force clean before the next build
         #[clap(short, long)]
-        clean: bool
+        clean: bool,
+
+        /// install package with `pacman` after build
+        #[clap(short, long, help_heading = "Installing")]
+        install: bool,
+
+        /// do not print logs when installing
+        #[clap(short, long, requires = "install", help_heading = "Installing")]
+        quiet: bool,
     },
 
     /// get and set info about a package
@@ -93,11 +109,11 @@ pub enum InfoCommand {
         /// id of the build, latest if empty
         id: Option<String>,
 
-        /// subscribe to live logs until next build is finished
+        /// explicitly subscribe to live logs
         #[clap(short, long)]
         subscribe: bool,
 
-        /// indefinitely stay attached to live logs
+        /// stay attached indefinitely
         #[clap(short, long)]
         linger: bool
     },
@@ -143,7 +159,7 @@ pub enum SettingsSubcommand {
 
     /// set additional makepkg flags
     Flags {
-        /// flags to add, space separated, full without dashes
-        flags: String
+        /// flags to add, without the dashes
+        flags: Vec<String> 
     },
 }

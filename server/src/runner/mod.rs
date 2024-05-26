@@ -76,8 +76,6 @@ impl Runner {
         // start container
         self.docker.start_container(container, None::<StartContainerOptions<String>>).await?;
 
-        self.broadcast.notify(&package.base, Event::BuildStart).await;
-
         // retrieve logs
         let log_options = LogsOptions {
             stdout: true, stderr: true,
@@ -111,8 +109,6 @@ impl Runner {
         
         // get logs from log collector thread
         let logs = log_collector.await.unwrap_or_default();
-
-        self.broadcast.notify(&package.base, Event::BuildFinish).await;
 
         Ok(RunStatus {
             success: result.first().and_then(|r| r.as_ref().ok()).is_some(),

@@ -2,7 +2,9 @@
 The CLI is the main way to interact with a serene server. It uses the [API](../server/README.md#api) of the server to add and manipulate the packages that are managed by the server. It is not required to [just use the built packages](../README.md#installing-only-the-repository) from the server though, as this is purely done through pacman.
 
 ## Usage
-This section will cover all the ways one can use the cli to interact with the server. Note that a help page is available for every (sub-)command via the `--help` flag.
+This section will cover some of the ways one can use the cli to interact with the server. 
+
+To get exhaustive options and information about a (sub-) command, you should still refer to the `--help` page of that item, as only some options are shown here.
 
 **Listing all packages:** To list all packages built by the server, their version and build status, use:
 ```shell
@@ -20,6 +22,9 @@ serene add --custom --devel https://github.com/my-user/my-package
 
 # Adding a custom pkgbuild for a git package from the filesystem, replacing the previous version. We load the pkgbuild from the filesystem.
 serene add --pkgbuild --devel --replace "$(cat PKGBUILD)"
+
+# Adding and automatically installing `my-package` from the AUR without showing build logs.
+serene add --install --quiet my-pacakge
 ```
 
 **Removing packages:** To remove a package, just call the remove subcommand with the package base:
@@ -32,6 +37,9 @@ serene remove my-package
 ```shell
 # Builds `my-package` now.
 serene build my-package
+
+# Builds `my-package` in a clean container and install it now. 
+serene build --clean --install my-package
 ```
 
 **See package information:** To see all information for a package, you can use the info command and its various subcommands:
@@ -61,10 +69,10 @@ serene info my-package set enable false
 serene info my-package set schedule "0 * * * *"
 
 # Set commands to run before the package is built. This is mainly used to add e.g. required keys, or change something else about the container. It will be executed with bash.
-serene info my-package set prepare "echo 'i am run before the package'"
+serene info my-package set prepare "echo 'i am run before the makepkg'"
 
 # Set additional flags which are passed to makepkg when building. See `makepkg --help` for more information. Note that only some options are supported.
-serene info my-package set flags "nocheck holdver"
+serene info my-package set flags "nocheck" "holdver"
 ```
 
 **Print the local secret of the CLI:** To print the local secret again, run the following:

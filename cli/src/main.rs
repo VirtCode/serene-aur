@@ -8,16 +8,16 @@ mod config;
 mod command;
 mod table;
 mod complete;
+pub mod pacman;
 
-use std::io;
-use std::process::exit;
-use clap::{CommandFactory, Parser, Subcommand};
-use clap_complete::{generate, Shell};
+use clap::{Parser};
+use clap_complete::{Shell};
 use colored::Colorize;
 use crate::command::{Args, Action, InfoCommand};
 use crate::complete::generate_completions;
 use crate::config::Config;
 use crate::web::requests;
+use crate::web::requests::add;
 
 fn main() -> anyhow::Result<()> {
     let mut config = Config::create()?;
@@ -35,26 +35,14 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
-        Action::Add { what, pkgbuild, custom, devel, replace } => {
-            if pkgbuild && custom {
-                error!("can either be a pkgbuild or a custom repository, not both");
-                return Ok(());
-            }
-
-            if custom {
-                requests::add_git(&config, &what, devel, replace);
-            } else if pkgbuild {
-                requests::add_pkgbuild(&config, &what, devel, replace);
-            } else {
-                if devel { info!("{} devel flag is ignored for aur packages", "warn:".bright_yellow().bold())}
-                requests::add_aur(&config, &what, replace);
-            }
+        Action::Add { what, pkgbuild, custom, devel, replace, install, quiet } => {
+            add(&config, &what, replace, custom, pkgbuild, devel, install, quiet);
         }
         Action::Remove { name } => {
             requests::delete(&config, &name);
         }
-        Action::Build { name, clean } => {
-            requests::build(&config, &name, clean);
+        Action::Build { name, clean, install, quiet } => {
+            requests::build(&config, &name, clean, install, quiet);
         }
         Action::List => {
             requests::list(&config);

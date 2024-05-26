@@ -22,13 +22,17 @@ fn generate_secret() -> String {
     Alphanumeric.sample_string(&mut rand::thread_rng(), 64)
 }
 
-/// hashes the secret the way the server expects it
-
+/// get default root elevator
+fn default_elevator() -> String {
+    "sudo".to_string()
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub secret: String,
-    pub url: String
+    pub url: String,
+    #[serde(default = "default_elevator")]
+    pub elevator: String
 }
 
 impl Config {
@@ -72,7 +76,7 @@ impl Config {
         println!("2. Great, now add the following line to its {} file:", "authorized_secrets".italic());
 
         let secret = generate_secret();
-        let config = Self { url, secret };
+        let config = Self::new(secret, url);
         config.print_secret(true);
 
         println!();
@@ -85,6 +89,14 @@ impl Config {
         println!("After that, you're all set and ready to go!");
 
         Ok(config)
+    }
+    
+    /// creates a new config with default values
+    fn new(secret: String, url: String) -> Self {
+        Self {
+            secret, url,
+            elevator: default_elevator()
+        }
     }
 
     /// prints the hashed secret to stdout together with host and username
