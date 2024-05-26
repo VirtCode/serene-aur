@@ -9,6 +9,7 @@ clap_complete = "*"
 
 [dependencies]
 serene-data = { path = "../server/data" }
+anyhow = "1.0.77"
 
 # serialization
 serde = { version = "1.0.193", features = ["derive"]}
@@ -17,21 +18,24 @@ serde_yaml = "0.9.29"
 
 # cli
 clap = { version = "4.4.11", features = ["derive"] }
+clap_complete = "4.5.2"
 colored = "2.1.0"
-whoami = "1.4.1"
-anyhow = "1.0.77"
+# - format
 cron-descriptor = "0.1.1"
 terminal_size = "0.3.0"
-clap_complete = "4.5.2"
+# - spinner
+spinoff = "0.8.0"
+atty = "0.2.14"
 
 # secret
 rand = "0.8.5"
+whoami = "1.4.1"
 
-# web, TODO: for some reason, when this builds with openssl (i.e. not rustls), the server does too, which causes problems with the container. WHYYY?
+# web
+# - TODO: for some reason, when this builds with openssl (i.e. not rustls), the server does too, which causes problems with the container. WHYYY?
 reqwest = { version = "0.12.4", default-features = false, features = ["rustls-tls", "blocking", "json"] }
 chrono = { version = "0.4.31", features = ["serde"] }
-
-# event source stuff
+# - event source stuff
 reqwest-eventsource = { version = "0.6.0" }
 futures = "0.3.30"
 tokio = "1.37.0"

@@ -31,19 +31,19 @@ pub enum Error {
 }
 
 impl Error {
-    pub fn print(&self) {
+    pub fn msg(&self) -> String {
         match self {
             Error::Client { error } => {
-                error!("failed to connect to server: {error:#}");
+                format!("failed to connect to server: {error:#}")
             }
             Error::Event { error } => {
-                error!("error in event source: {error:#}")
+                format!("error in event source: {error:#}")
             }
             Error::Server { message } => {
-                error!("{message}");
+                format!("{message}")
             }
             Error::Input { message, code} => {
-                error!("({code}) {message}");
+                format!("({code}) {message}")
             }
         }
     }
@@ -123,7 +123,7 @@ pub fn get<R: DeserializeOwned>(config: &Config, path: &str) -> Result<R> {
     process_result(result)
 }
 
-pub fn eventsource<F>(config: &Config, path: &str, mut cb: F) -> Result<()> where F: FnMut(Event) {
+pub fn eventsource<F>(config: &Config, path: &str, mut cb: F) -> Result<()> where F: FnMut(Event) -> bool {
     let mut con = EventSource::new(
         reqwest::Client::new()
             .get(get_url(config, path))
@@ -135,15 +135,19 @@ pub fn eventsource<F>(config: &Config, path: &str, mut cb: F) -> Result<()> wher
     rt.block_on(async {
         while let Some(event) = con.next().await {
             match event {
-                Ok(event) => cb(event),
+                Ok(event) => {
+                    if cb(event) {
+                        con.close();
+                        return Ok(());
+                    }
+                },
                 Err(err) => {
                     con.close();
                     return Err(Error::Event { error: err })
                 },
             }
         }
+        
         Ok(())
-    })?;
-
-    Ok(())
+    })
 }

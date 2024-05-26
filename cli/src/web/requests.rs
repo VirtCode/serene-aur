@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::process::exit;
+use std::rc::Rc;
 use std::str::FromStr;
 use chrono::{Local, Utc};
 use colored::{ColoredString, Colorize};
@@ -8,78 +10,73 @@ use serene_data::package::{BroadcastEvent, MakepkgFlag, PackageAddRequest, Packa
 use crate::command::SettingsSubcommand;
 use crate::complete::save_completions;
 use crate::config::Config;
+use crate::log::Loading;
 use crate::table::{ago, Column, table};
 use crate::web::{delete_empty, eventsource, get, post, post_empty, post_simple};
 use crate::web::data::{BuildProgressFormatter, BuildStateFormatter, describe_cron_timezone_hack, get_build_id};
 
 pub fn add_aur(c: &Config, name: &str, replace: bool) {
-    info!("Adding package {} from the AUR...", name.italic());
+    let log = Loading::start(&format!("adding package {} from the AUR", name.italic()));
 
     match post::<PackageAddRequest, PackagePeek>(c, "package/add", PackageAddRequest {
         replace,
         source: PackageAddSource::Aur { name: name.to_owned() }
     }) {
-        Ok(info) => {
-            info!("Successfully added package {}", info.base.bold());
-        }
-        Err(e) => { e.print() }
+        Ok(info) => { log.succeed(&format!("successfully added package {}", info.base.bold())) }
+        Err(e) => { log.fail(&e.msg()) }
     }
 }
 
 pub fn add_git(c: &Config, url: &str, devel: bool, replace: bool) {
-    info!("Adding custom package at {}...", url.italic());
+    let log = Loading::start(&format!("adding package from repository at {}", url.italic()));
 
     match post::<PackageAddRequest, PackagePeek>(c, "package/add", PackageAddRequest {
         replace,
         source: PackageAddSource::Custom { url: url.to_owned(), devel }
     }) {
-        Ok(info) => {
-            info!("Successfully added package {}", info.base.bold());
-        }
-        Err(e) => { e.print() }
+        Ok(info) => { log.succeed(&format!("successfully added package {}", info.base.bold())) }
+        Err(e) => { log.fail(&e.msg()) }
     }
 }
 
 pub fn add_pkgbuild(c: &Config, pkgbuild: &str, devel: bool, replace: bool) {
-    info!("Adding custom pkgbuild package...");
+    let log = Loading::start("adding package from custom pkgbuild");
 
     match post::<PackageAddRequest, PackagePeek>(c, "package/add", PackageAddRequest {
         replace,
         source: PackageAddSource::Single { pkgbuild: pkgbuild.to_owned(), devel }
     }) {
-        Ok(info) => {
-            info!("Successfully added package {}", info.base.bold());
-        }
-        Err(e) => { e.print() }
+        Ok(info) => { log.succeed(&format!("successfully added package {}", info.base.bold())) }
+        Err(e) => { log.fail(&e.msg()) }
     }
 }
 
 pub fn delete(c: &Config, package: &str) {
-    info!("Requesting deletion of package {}...", package.italic());
+    let log = Loading::start(&format!("removing package {} from the repository", package.italic()));
 
-    match delete_empty(c, format!("package/{}", package).as_str()) {
-        Ok(()) => { info!("Successfully deleted package") }
-        Err(e) => { e.print() }
+    match delete_empty(c, format!("package/{package}").as_str()) {
+        Ok(()) => { log.succeed("successfully deleted package") }
+        Err(e) => { log.fail(&e.msg()) }
     }
 }
 
 pub fn build(c: &Config, package: &str, clean: bool) {
-    info!("Requesting build for package {}...", package.italic());
+    let log = Loading::start(&format!("requesting immediate build for package {}", package.italic()));
 
-    match post_simple(c, format!("package/{}/build", package).as_str(), PackageBuildRequest {
+    match post_simple(c, format!("package/{package}/build").as_str(), PackageBuildRequest {
         clean
     }) {
-        Ok(()) => { info!("Successfully dispatched build") }
-        Err(e) => { e.print() }
+        Ok(()) => { log.succeed("successfully queued build") }
+        Err(e) => { log.fail(&e.msg()) }
     }
 }
 
 pub fn list(c: &Config) {
-    info!("Querying server...");
+    let log = Loading::start("querying all packages");
 
     match get::<Vec<PackagePeek>>(c, "package/list") {
         Ok(mut list) => {
-            save_completions(&list);
+            log.succeed("retrieved package info successfully");
             
             println!();
             list.sort_by_key(|p| p.base.clone());
@@ -112,12 +109,12 @@ pub fn list(c: &Config) {
             
             table(columns, rows, "  ");
         }
-        Err(e) => { e.print() }
+        Err(e) => { log.fail(&e.msg()) }
     }
 }
 
 pub fn info(c: &Config, package: &str, all: bool) {
-    info!("Querying server...");
+    let log = Loading::start("loading package information and builds");
 
     let query = if all { "" } else { "?count=8" };
 
@@ -126,6 +123,8 @@ pub fn info(c: &Config, package: &str, all: bool) {
         get::<Vec<BuildInfo>>(c, format!("package/{}/build{}", package, query).as_str())
     ) {
         (Ok(mut info), Ok(mut builds)) => {
+            log.succeed("successfully loaded all information");
+            
             println!();
             println!("{}", info.base.bold());
             println!("{:<9} {}", "members:", info.members.join(" "));
@@ -180,15 +179,17 @@ pub fn info(c: &Config, package: &str, all: bool) {
             
             table(columns, rows, "  ");
         }
-        (Err(e), _) => { e.print() }
-        (_, Err(e)) => { e.print() }
+        (Err(e), _) => { log.fail(&e.msg()) }
+        (_, Err(e)) => { log.fail(&e.msg()) }
     }
 }
 
 pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
-    println!("Querying server for package builds...\n");
+    let log = Loading::start("querying server for the build");
+    
     match get::<BuildInfo>(c, format!("package/{}/build/{}", package, build.as_ref().unwrap_or(&"latest".to_string())).as_str()) {
         Ok(b) => {
+            log.succeed("found build successfully");
 
             println!("{} {}", "build".bold(), get_build_id(&b).bold());
             println!("{:<8} {}", "started:",
@@ -216,15 +217,20 @@ pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
                 _ => {}
             }
         }
-        Err(e) => { e.print() }
+        Err(e) => { log.fail(&e.msg()) }
     }
 }
 
 
 pub fn build_logs(c: &Config, package: &str, build: &Option<String>) {
+    let log = Loading::start("fetching last complete build logs");
+    
     match get::<String>(c, format!("package/{}/build/{}/logs", package, build.as_ref().unwrap_or(&"latest".to_string())).as_str()) {
-        Ok(logs) => { println!("{logs}") }
-        Err(e) => { e.print() }
+        Ok(logs) => { 
+            log.succeed("fetched build logs successfully");
+            println!("{logs}") 
+        }
+        Err(e) => { log.fail(&e.msg()) }
     }
 }
 
@@ -233,68 +239,93 @@ fn latest_build_logs_quiet(c: &Config, package: &str) -> Option<String> {
 }
 
 pub fn subscribe_build_logs(c: &Config, linger: bool, subscribe: bool, package: &str) {
+    // we have to use a rc ref cell here because of the closure later down
+    let log = Rc::new(RefCell::new(Some(Loading::start("looking for existing builds"))));
+    
     let mut first_build_finished = false;
+    
+    // skip if explicit subscription
     if !subscribe {
-        let latest = latest_build_logs_quiet(c, package);
-        if let Some(latest) = latest {
-            print!("{latest}");
+        if let Some(latest) = latest_build_logs_quiet(c, package) {
 
-            if !linger {
-                return
+            if let Some(s) = log.replace(None) { s.succeed("found existing build successfully") }
+            
+            if linger {
+                println!("{}\n\n{latest}\n{}", "### package build started".italic().dimmed(), "### package build finished".italic().dimmed());
+                first_build_finished = true;
+                
+            } else {
+                print!("{latest}"); // already has newline at end
+                
+                return;
             }
-
-            first_build_finished = true;
-            println!("\n{}", "Package build finished".italic().dimmed());
         }
     }
+    
+    if let Some(s) = log.borrow_mut().as_mut() { s.next("subscribing to live logs and waiting for ping") }
 
-    let Err(err) = eventsource(c, format!("package/{}/build/logs/subscribe", package).as_str(), |event| {
+    let copy = log.clone();
+    if let Err(err) = eventsource(c, format!("package/{}/build/logs/subscribe", package).as_str(), |event| {
+        
         if let Event::Message(event) = event {
+            if let Some(s) = copy.replace(None) { s.succeed("subscription was successful") }
+            
+            // ignore unknown events
             if let Ok(broadcast_event) = BroadcastEvent::from_str(&event.event) {
                 match broadcast_event {
+                    BroadcastEvent::Ping => {}
                     BroadcastEvent::BuildStart => {
                         if linger && first_build_finished {
-                            println!("\n{}", "New package build started".italic().dimmed())
+                            println!("{}\n", "### package build started".italic().dimmed())
                         }
                     },
                     BroadcastEvent::BuildEnd => {
-                        if !linger {
-                            exit(0);
+                        first_build_finished = true;
+                        
+                        if linger {
+                            println!("\n{}", "### package build finished".italic().dimmed())
                         } else {
-                            first_build_finished = true;
-                            println!("\n{}", "Package build finished".italic().dimmed())
+                            return true // exit
                         }
                     },
                     BroadcastEvent::Log => print!("{}", event.data),
-                    _ => {}
                 }
             }
         }
-    }) else { return };
-    err.print();
+        
+        false // stay attached
+    }) {
+        if let Some(s) = log.replace(None) { 
+            s.fail(&err.msg()) 
+        } else {
+            Loading::failure(&err.msg());
+        }
+    }
 }
 
 pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
+    let mut log = Loading::start("changing package settings");
+    
     let request = match setting {
         SettingsSubcommand::Clean { enabled } => {
-            info!("{} clean build for package {}...", if enabled { "Enabling" } else { "Disabling" }, package);
+            log.next(&format!("{} clean build for package {package}", if enabled { "enabling" } else { "disabling" }));
             PackageSettingsRequest::Clean(enabled)
         }
         SettingsSubcommand::Enable { enabled } => {
-            info!("{} building for package {}...", if enabled { "Enabling" } else { "Disabling" }, package);
+            log.next(&format!("{} automatic building for package {package}", if enabled { "enabling" } else { "disabling" }));
             PackageSettingsRequest::Enabled(enabled)
         }
         SettingsSubcommand::Schedule { cron } => {
             let Ok(description) = describe_cron_timezone_hack(&cron) else {
-                error!("invalid cron string provided");
+                log.fail("invalid cron string provided");
                 return;
             };
 
-            info!("Setting custom schedule '{}' for package {}...", description, package);
+            log.next(&format!("setting custom schedule '{}' for package {package}", description));
             PackageSettingsRequest::Schedule(cron)
         }
         SettingsSubcommand::Prepare { command } => {
-            info!("Setting prepare command for package {}...", package);
+            log.next(&format!("setting prepare command for package {package}"));
             PackageSettingsRequest::Prepare(command)
         }
         SettingsSubcommand::Flags { flags } => {
@@ -303,28 +334,32 @@ pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
                 .collect::<Result<Vec<MakepkgFlag>, String>>();
 
             match flags {
-                Ok(f) => { PackageSettingsRequest::Flags(f) }
+                Ok(f) => {
+                    log.next(&format!("changing makepkg flags package {package}"));
+                    PackageSettingsRequest::Flags(f) 
+                }
                 Err(e) => {
-                    error!("{e}");
+                    log.fail(&e);
                     return;
                 }
             }
         }
     };
 
-    match post_simple(c, &format!("package/{}/set", package), request) {
-        Ok(()) => {
-            info!("Successfully changed property")
-        }
-        Err(e) => { e.print() }
+    match post_simple(c, &format!("package/{package}/set"), request) {
+        Ok(()) => { log.succeed(&format!("updated property for package {package} successfully")) }
+        Err(e) => { log.fail(&e.msg()) }
     }
 }
 
 pub fn pkgbuild(c: &Config, package: &str) {
-    // we do print nothing, as this may be used to store in file
+    let log = Loading::start("fetching last used pkgbuild");
 
-    match get::<String>(c, format!("package/{}/pkgbuild", package).as_str()) {
-        Ok(l) => { println!("{l}") }
-        Err(e) => { e.print() }
+    match get::<String>(c, format!("package/{package}/pkgbuild").as_str()) {
+        Ok(pkgbuild) => { 
+            log.succeed("successfully fetched last used pkgbuild");
+            println!("{pkgbuild}"); 
+        }
+        Err(e) => { log.fail(&e.msg()) }
     }
 }
