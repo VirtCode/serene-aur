@@ -1,27 +1,11 @@
-use std::io;
 use colored::Colorize;
 use spinoff::{Color, Spinner, spinners};
-use spinoff::spinners::Dots;
-macro_rules! info {
-    ($($t:tt)*) => {{
-        println!($($t)*);
-    }};
-}
 
-macro_rules! error {
-    ($($t:tt)*) => {{
-        use colored::Colorize;
-
-        let formatted = format!($($t)*);
-        println!("{}{}", "error: ".red().bold(), formatted);
-    }};
-}
-
-pub struct Loading {
+pub struct Log {
     spinner: Option<Spinner>
 }
 
-impl Loading {
+impl Log {
     pub fn start(what: &str) -> Self {
         if atty::is(atty::Stream::Stdout) {
             
@@ -69,6 +53,14 @@ impl Loading {
             println!("{} {}", "✗".red().bold(), what);
         } else {
             eprintln!("error: {}", what)
+        }
+    }
+    
+    pub fn warning(what: &str) {
+        if atty::is(atty::Stream::Stdout) {
+            println!("{} {}", "~".yellow().bold(), what);
+        } else {
+            eprintln!("warn: {}", what)
         }
     }
 }

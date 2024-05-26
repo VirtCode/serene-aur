@@ -38,10 +38,10 @@ impl Error {
                 format!("error in event source: {error:#}")
             }
             Error::Server { message } => {
-                format!("{message}")
+                message.to_string()
             }
             Error::Input { message, code} => {
-                format!("({code}) {message}")
+                format!("{message} ({code})")
             }
         }
     }
