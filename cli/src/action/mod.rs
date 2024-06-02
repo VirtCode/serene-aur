@@ -20,8 +20,8 @@ pub fn run(config: &Config, action: Action) {
             }
         }
 
-        Action::Add { what, pkgbuild, custom, devel, replace, install, quiet } => {
-            add(config, &what, replace, custom, pkgbuild, devel, install, quiet);
+        Action::Add { what, pkgbuild, custom, devel, replace, install, quiet, file } => {
+            add(config, &what, replace, file, custom, pkgbuild, devel, install, quiet);
         }
         Action::Remove { name } => {
             remove(config, &name);

@@ -1,4 +1,6 @@
 use std::cell::RefCell;
+use std::fs::File;
+use std::io::Read;
 use std::str::FromStr;
 use chrono::{Local, Utc};
 use colored::{ColoredString, Colorize};
@@ -101,20 +103,39 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
 }
 
 /// add a package to the repository
-pub fn add(c: &Config, what: &str, replace: bool, custom: bool, pkgbuild: bool, devel: bool, install: bool, quiet: bool) {
+pub fn add(c: &Config, what: &str, replace: bool, file: bool, custom: bool, pkgbuild: bool, devel: bool, install: bool, quiet: bool) {
     let mut log = Log::start("initializing package adding");
+    
+    // read file if requested 
+    let what = if file {
+        log.next("loading content from file");
+        
+        let mut file = match File::open(what) {
+            Ok(f) => { f }
+            Err(e) => { log.fail(&format!("failed to open file: {e:#}")); return }
+        };
+        
+        let mut buf = String::new();
+        if let Err(e) = file.read_to_string(&mut buf) {
+            log.fail(&format!("failed to read file: {e:#}")); return
+        }
+        
+        buf
+    } else { what.to_owned() };
 
+    // parse source
     let source = if pkgbuild {
-        log.next(&format!("adding package {} from the AUR", what.italic()));
+        log.next("adding package from custom pkgbuild");
         PackageAddSource::Single { pkgbuild: what.to_owned(), devel }
     } else if custom {
         log.next(&format!("adding package from repository at {}", what.italic()));
         PackageAddSource::Custom { url: what.to_owned(), devel }
     } else {
-        log.next("adding package from custom pkgbuild");
+        log.next(&format!("adding package {} from the AUR", what.italic()));
         PackageAddSource::Aur { name: what.to_owned() }
     };
 
+    // add package on server
     let info = match add_package(c, PackageAddRequest { replace, source }) {
         Ok(info) => { info }
         Err(e) => { log.fail(&e.msg()); return }

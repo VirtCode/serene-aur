@@ -41,8 +41,9 @@ Many more commands are found on the documentation for the CLI:
 ## State
 This project is still in its early stages, but already usable on a daily basis. There are also a couple of features and improvements that still need to be implemented. 
 Notable missing features include:
-- [ ] Package Signing
 - [X] Entirely custom PKGBUILDs without a git repository
+- [ ] Package signing
+- [ ] Automatic AUR dependency resolving ([#4](https://github.com/VirtCode/serene-aur/issues/4))
 
 Refer to the [TODO File](TODO.md) for more features, tasks and enhancements and don't hesitate to contribute if interested.
 
@@ -53,7 +54,6 @@ Installing serene involves two things, deploying the server, and installing a lo
 Here is a quick overview of hosting a serene server, based on the main branch. The server is just a single docker container, making it straightforward: 
 1. First, **create an empty file** called `authorized_secrets` in your directory. 
 2. Set up a reverse proxy for docker (e.g. traefik) to use SSL/TLS.
-3. Pull the runner image: `docker pull ghcr.io/virtcode/serene-aur-runner:main`
 4. Add the following service to your docker compose in the same directory:
 ```yaml
 # docker-compose.yml > services

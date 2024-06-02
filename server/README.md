@@ -89,6 +89,9 @@ RUST_LOG=none
 # note that these images should behave the same way the normal one does
 RUNNER_IMAGE=ghcr.io/virtcode/serene-aur-runner:main
 
+# schedule for pulling the latest runner image
+SCHEDULE_IMAGE=0 0 0 * * *
+
 # name prefix for runner containers (names will be [prefix][package-name])
 RUNNER_PREFIX=serene-aur-runner-
 

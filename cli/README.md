@@ -21,7 +21,7 @@ serene add my-package
 serene add --custom --devel https://github.com/my-user/my-package
 
 # Adding a custom pkgbuild for a git package from the filesystem, replacing the previous version. We load the pkgbuild from the filesystem.
-serene add --pkgbuild --devel --replace "$(cat PKGBUILD)"
+serene add --pkgbuild --devel --replace --file ./PKGBUILD
 
 # Adding and automatically installing `my-package` from the AUR without showing build logs.
 serene add --install --quiet my-pacakge

@@ -38,6 +38,10 @@ pub enum Action {
         #[clap(short, long)]
         replace: bool,
 
+        /// read the contents for <WHAT> from a file
+        #[clap(short, long)]
+        file: bool,
+
         /// install package with `pacman` after build
         #[clap(short, long, help_heading = "Installing")]
         install: bool,
