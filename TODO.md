@@ -31,10 +31,11 @@ adjusted for v0.3.0 on 23.02.24
 - [X] Pull runner image automatically on startup and periodically
 - [ ] Rebuild cleaned when non-clean containers fail
 - [X] Add itself as a source to build container, so we have rudimentary aur dependency support
+- [ ] Import server public key through cli
 
 #### Must haves
 - [X] Store state in a database and not a json file
-- [ ] Signing packages
+- [x] Signing packages
 - [X] Local / Custom source, where a user can upload a custom pkgbuild
 
 #### Features

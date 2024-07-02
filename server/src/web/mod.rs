@@ -4,6 +4,7 @@ use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound}
 use actix_web::web::{Data, Json, Path, Query};
 use chrono::{DateTime};
 use hyper::StatusCode;
+use sequoia_openpgp::parse::Parse;
 use serde::Deserialize;
 use tokio::sync::RwLock;
 use serene_data::package::{PackageAddRequest, PackageAddSource, PackageBuildRequest, PackageSettingsRequest};
@@ -11,11 +12,12 @@ use crate::build::{Builder, BuildSummary};
 use crate::build::schedule::BuildScheduler;
 use crate::database::Database;
 use crate::package;
-use crate::package::{add_source, aur, Package};
+use crate::package::{aur, Package};
 use crate::package::source::devel::DevelGitSource;
 use crate::package::source::normal::NormalSource;
 use crate::package::source::single::SingleSource;
 use crate::package::source::Source;
+use crate::repository::crypto::{get_public_key_bytes, should_sign_packages};
 use crate::web::auth::{AuthRead, AuthWrite};
 use crate::web::broadcast::Broadcast;
 
@@ -233,5 +235,17 @@ pub async fn settings(_: AuthWrite, package: Path<String>, body: Json<PackageSet
     package.change_settings(&db).await.internal()?;
 
     Ok(empty_response())
+}
+
+#[get("/key")]
+pub async fn get_signature_public_key(_: AuthRead) -> actix_web::Result<impl Responder> {
+    if !should_sign_packages() {
+        Err(ErrorNotFound("the server has no private key to sign packages"))?
+    }
+
+    let mut body = vec![];
+    get_public_key_bytes(&mut body).map_err(|err| ErrorInternalServerError(err.to_string()))?;
+
+    Ok(body)
 }
 

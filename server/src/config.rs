@@ -18,6 +18,8 @@ pub struct Config {
     pub architecture: String,
     /// the name of the exposed repository
     pub repository_name: String,
+    /// password for private key used for signatures
+    pub sign_key_password: Option<String>,
     /// default scheduling of packages
     pub schedule_default: String,
     /// scheduling of development packages
@@ -45,6 +47,7 @@ impl Default for Config {
 
             architecture: env::consts::ARCH.to_string(),
             repository_name: "serene".to_string(),
+            sign_key_password: None,
 
             schedule_default: "0 0 0 * * *".to_string(), // 00:00 UTC every day
             schedule_devel: "0 0 0 * * *".to_string(),
@@ -73,6 +76,7 @@ impl Config {
 
             architecture: env::var("ARCH").unwrap_or(default.architecture),
             repository_name: env::var("NAME").unwrap_or(default.repository_name),
+            sign_key_password: env::var("SIGN_KEY_PASSWORD").ok(),
             own_repository_url: env::var("OWN_REPOSITORY_URL").ok().or(default.own_repository_url),
 
             schedule_image: env::var("SCHEUDLE_IMAGE").unwrap_or(default.schedule_image),
