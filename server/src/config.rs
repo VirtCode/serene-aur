@@ -76,7 +76,7 @@ impl Config {
 
             architecture: env::var("ARCH").unwrap_or(default.architecture),
             repository_name: env::var("NAME").unwrap_or(default.repository_name),
-            sign_key_password: env::var("SIGN_KEY_PASSWORD").ok(),
+            sign_key_password: env::var("SIGN_KEY_PASSWORD").ok().or(default.sign_key_password),
             own_repository_url: env::var("OWN_REPOSITORY_URL").ok().or(default.own_repository_url),
 
             schedule_image: env::var("SCHEUDLE_IMAGE").unwrap_or(default.schedule_image),

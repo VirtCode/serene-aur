@@ -17,7 +17,7 @@ pub mod crypto;
 
 const REPO_DIR: &str = "repository";
 const REPO_SERENE: &str = "bases.json";
-const PRIV_KEY_FILE: &str = "sign-private-key.sec.asc";
+const PRIV_KEY_FILE: &str = "sign_key.asc";
 
 /// returns the webservice which exposes the repository
 pub fn webservice() -> Files {

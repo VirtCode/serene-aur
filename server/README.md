@@ -12,11 +12,16 @@ The repository follows the format of an ordinary Arch Linux repository, just the
 For security reasons the packages built by the build server can be signed. Whilst the signature is no guarantee the built package does not contain any malware it still verifies the package was built on your build server.
 This is useful when you host your repository without a ssl certificate (which is generally discouraged) or when there are mirrors which redistribute packages from your build server. 
 
-To enable package signing you'll have to mount a gpg private key into the server container. The gpg private key can be exported like this:
+To enable package signing you'll have to mount a gpg private key into the server container. While testing the package signing we found **RSA keys** have to have a minimum length of **2048 bits** to work with the library used for signing.
+
+The gpg private key can be exported like this:
 ```shell
-# export private key into `private-key.sec.asc` in armored ascii format
-gpg --armored --export-secret-key <key-id> --output private-key.sec.asc
+# export private key into `private-key.asc` in armored ascii format
+gpg --armor --output private-key.asc --export-secret-key <key-id>
 ```
+
+>[!IMPORTANT]
+> It's highly recommended to use a new gpg key for the package signing which isn't used anywhere else. Putting a private key and it's password onto a publicly accessible server poses a risk for identity theft!
 
 Now, when [deploying](#deployment) you'll have to add an additional volume bind to the `docker-compose.yml`: 
 ```yml
@@ -26,14 +31,19 @@ services:
   serene:
     # ... remaining service definition
     volumes:
-      - /path/to/private-key.sec.asc:/app/sign-private-key.sec.asc
+      - /path/to/private-key.asc:/app/sign_key.asc
       # ... other volumes
       
 ```
+If the signing is enabled after the initial setup of the server only new package builds will be signed. Old packages need to be rebuilt in order to get signed.
 
 Should your private key be protected by a password you'll have to additionally [configure the password](#configuration).
 
 To enable package verification using pacman you'll need to download the public key from the `/key` api endpoint and [import it into your pacman keys](https://wiki.archlinux.org/title/Pacman/Package_signing#Adding_unofficial_keys).
+
+Since the packages are now signed you can remove the `SigLevel = Optional TrustAll` from the [repository definition](../README.md#installing-only-the-repository) in the `pacman.conf`. 
+By removing this configuration pacman will fall back to the `SigLevel` defined at the `[options]` level which by default only allows signed packages to be downloaded from a repository.
+More about the `SigLevel` configuration can be read in the [arch wiki](https://wiki.archlinux.org/title/Pacman/Package_signing#Configuring_pacman).
 
 >[!NOTE]
 > The downloading and importing of the public key should in the future be possible through the cli
@@ -62,7 +72,7 @@ It also stores many things on the filesystem, which may or may not be of interes
 - `/app/serene.db`: This is the *sqlite* database where all the builds, logs, etc. are stored about the different packages.
 - `/app/sources`: This is a directory structure that stores the `PKGBUILD`s which are copied to containers for building.
 - `/app/repository`: This is the repository containing the build packages. It is served as is for pacman to access.
-- `/app/sign-private-key.sec.asc`: This **file** contains the private key used for package signing if provided 
+- `/app/sign_key.asc`: This **file** contains the private key used for package signing if provided 
 
 ### Deployment
 It is recommended to deploy the container via docker compose. Here is an example for a basic deployment:

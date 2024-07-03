@@ -19,7 +19,7 @@ fn get_keypair() -> anyhow::Result<KeyPair> {
     let policy = StandardPolicy::new();
 
     let key = cert.keys()
-        .unencrypted_secret()
+        .secret()
         .with_policy(&policy, None)
         .supported()
         .alive()
@@ -30,7 +30,7 @@ fn get_keypair() -> anyhow::Result<KeyPair> {
 
     let mut key = key.key().clone();
     if key.secret().is_encrypted() {
-        let password = Password::from(CONFIG.sign_key_password.clone().unwrap_or_default());
+        let password = Password::from(CONFIG.sign_key_password.clone().context("private key is encrypted but no password was provided")?);
         let algo = key.pk_algo();
         key.secret_mut()
             .decrypt_in_place(algo, &password)
