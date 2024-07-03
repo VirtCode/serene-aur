@@ -9,10 +9,6 @@ fn db_file(name: &str) -> String {
 
 pub async fn add(name: &str, packages: &Vec<String>, dir: &Path) -> anyhow::Result<()> {
     let mut command = Command::new("repo-add");
-    
-    if crypto::should_sign_packages() {
-        command.args(["--verify", "--sign"]);
-    }
 
     command.arg(db_file(name));
     for package in packages {
@@ -21,7 +17,14 @@ pub async fn add(name: &str, packages: &Vec<String>, dir: &Path) -> anyhow::Resu
 
     let output = command.current_dir(dir).output().await?;
 
-    if output.status.success() { Ok(()) }
+    if output.status.success() { 
+        if crypto::should_sign_packages() {
+            let signed_db_path = dir.join(format!("{}.sig", db_file(name)));
+            let db_path = dir.join(db_file(name));
+            crypto::sign(&signed_db_path, &db_path).context("failed to sign repository database")?;
+        }
+        Ok(())
+    }
     else { Err(anyhow!("failed to use repo-add: {}", String::from_utf8_lossy(&output.stderr))) }
 }
 
