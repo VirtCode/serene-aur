@@ -64,7 +64,7 @@ pub fn get_public_key_bytes<W: io::Write + Send + Sync>(output: &mut W) -> anyho
     let mut writer = sequoia_openpgp::armor::Writer::new(output, sequoia_openpgp::armor::Kind::PublicKey)
         .context("failed to build public key armorer")?;
 
-    cert.as_tsk().serialize(&mut writer).context("failed to export public key")?;
+    cert.serialize(&mut writer).context("failed to export public key")?;
     writer.finalize()?;
     Ok(())
 }

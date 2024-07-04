@@ -8,10 +8,6 @@ fn db_file(name: &str) -> String {
     format!("{name}.db.tar.gz")
 }
 
-fn old_path(path: &Path) -> PathBuf {
-    path.with_file_name(format!("{}.old", path.file_name().unwrap_or_default().to_str().unwrap_or_default()))
-}
-
 fn sig_path(path: &Path) -> PathBuf {
     path.with_file_name(format!("{}.sig", path.file_name().unwrap_or_default().to_str().unwrap_or_default()))
 }
@@ -22,20 +18,13 @@ fn sign_repository(name: &str, dir: &Path) -> anyhow::Result<()> {
     let files_path = &dir.join(format!("{name}.files"));
     let files_archive_path = &dir.join(format!("{name}.files.tar.gz"));
 
-    if old_path(db_archive_path).exists() {
-        crypto::sign(&sig_path(&old_path(db_archive_path)), &old_path(db_archive_path)).context("failed to sign old repository database")?;
-    }
-    if old_path(files_archive_path).exists() {
-        crypto::sign(&sig_path(&old_path(files_archive_path)), &old_path(files_archive_path)).context("failed to sign old repository files")?;
-    }
-
     crypto::sign(&sig_path(db_archive_path), db_archive_path).context("failed to sign repository database")?;
     if !sig_path(db_path).exists() {
-        unix::fs::symlink(&sig_path(db_archive_path), &sig_path(db_path)).context("failed to link repository database signature")?;
+        unix::fs::symlink(sig_path(db_archive_path), sig_path(db_path)).context("failed to link repository database signature")?;
     }
     crypto::sign(&sig_path(files_archive_path), files_archive_path).context("failed to sign repository files")?;
     if !sig_path(files_path).exists() {
-        unix::fs::symlink(&sig_path(files_archive_path), &sig_path(files_path)).context("failed to link repository database signature")?;
+        unix::fs::symlink(sig_path(files_archive_path), sig_path(files_path)).context("failed to link repository database signature")?;
     }
 
     Ok(())
