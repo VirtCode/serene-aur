@@ -6,7 +6,7 @@ use sequoia_openpgp::crypto::{KeyPair, Password};
 use sequoia_openpgp::parse::Parse;
 use sequoia_openpgp::policy::StandardPolicy;
 use sequoia_openpgp::serialize::{Serialize};
-use sequoia_openpgp::serialize::stream::{Armorer, Message, Signer};
+use sequoia_openpgp::serialize::stream::{Message, Signer};
 use crate::config::CONFIG;
 use crate::repository::PRIV_KEY_FILE;
 
@@ -44,10 +44,6 @@ pub fn sign(output: &Path, file: &Path) -> anyhow::Result<()> {
     let keypair = get_keypair()?;
     let mut sink = fs::File::create(output).context("failed to create signature sink")?;
     let message = Message::new(&mut sink);
-    let message = Armorer::new(message)
-        .kind(sequoia_openpgp::armor::Kind::Signature)
-        .build()
-        .context("failed to build signature armorer")?;
 
     let mut message = Signer::new(message, keypair).detached().build().context("failed to create signer")?;
     let mut source = fs::File::open(file).context("failed to open source file")?;
