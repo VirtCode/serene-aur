@@ -13,9 +13,11 @@ use crate::config::CONFIG;
 use crate::package::Package;
 
 mod manage;
+pub mod crypto;
 
 const REPO_DIR: &str = "repository";
 const REPO_SERENE: &str = "bases.json";
+const PRIV_KEY_FILE: &str = "sign_key.asc";
 
 /// returns the webservice which exposes the repository
 pub fn webservice() -> Files {
@@ -103,6 +105,12 @@ impl PackageRepository {
         archive::extract_files(&mut output, &files, Path::new(REPO_DIR)).await
             .context("failed to extract all packages from build container")?;
 
+        // sign packages if enabled
+        if crypto::should_sign_packages() {
+            manage::sign(&files, Path::new(REPO_DIR)).await
+                .context("failed to sign packages")?;
+        }
+
         // add package files
         manage::add(&self.name, &files, Path::new(REPO_DIR)).await
             .context("failed to add files to repository")?;
@@ -126,10 +134,16 @@ impl PackageRepository {
             manage::remove(&self.name, &entries.iter().map(|e| e.name.clone()).collect(), Path::new(REPO_DIR)).await
                 .context("failed to remove files from repository")?;
 
-            // delete package files
+            // delete package (and signature) files
             for entry in entries {
                 fs::remove_file(Path::new(REPO_DIR).join(&entry.file)).await
-                    .context(format!("failed to delete file from repository: {}", entry.file))?
+                    .context(format!("failed to delete file from repository: {}", entry.file))?;
+
+                let sign_path = Path::new(REPO_DIR).join(format!("{}.sig", entry.file));
+                if sign_path.exists() {
+                    fs::remove_file(sign_path).await
+                        .context(format!("failed to delete signature file from repository: {}.sig", entry.file))?;
+                }
             }
         } else {
             return Err(anyhow!("could not find package {} in repository", &package.base))

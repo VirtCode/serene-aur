@@ -8,6 +8,46 @@ The server will expose a package repository over http. It is located at `/[arch]
 
 The repository follows the format of an ordinary Arch Linux repository, just the way pacman expects it. The name of the actual repository (determined by the .db file) can be [configured](#configuration) on the container, and is `serene` by default. The package archive format is `.tar.zst`.
 
+### Package Signing
+For security reasons the packages built by the build server can be signed. Whilst the signature is no guarantee the built package does not contain any malware it still verifies the package was built on your build server.
+This is useful when you host your repository without a ssl certificate (which is generally discouraged) or when there are mirrors which redistribute packages from your build server. 
+
+To enable package signing you'll have to mount a gpg private key into the server container. While testing the package signing we found **RSA keys** have to have a minimum length of **2048 bits** to work with the library used for signing.
+
+The gpg private key can be exported like this:
+```shell
+# export private key into `private-key.asc` in armored ascii format
+gpg --armor --output private-key.asc --export-secret-key <key-id>
+```
+
+>[!IMPORTANT]
+> It's highly recommended to use a new gpg key for the package signing which isn't used anywhere else. Putting a private key and it's password onto a publicly accessible server poses a risk for identity theft!
+
+Now, when [deploying](#deployment) you'll have to add an additional volume bind to the `docker-compose.yml`: 
+```yml
+# docker-compose.yml
+
+services:
+  serene:
+    # ... remaining service definition
+    volumes:
+      - /path/to/private-key.asc:/app/sign_key.asc
+      # ... other volumes
+      
+```
+If the signing is enabled after the initial setup of the server only new package builds will be signed. Old packages need to be rebuilt in order to get signed.
+
+Should your private key be protected by a password you'll have to additionally [configure the password](#configuration).
+
+To enable package verification using pacman you'll need to download the public key from the `/key` api endpoint and [import it into your pacman keys](https://wiki.archlinux.org/title/Pacman/Package_signing#Adding_unofficial_keys).
+
+Since the packages are now signed you can remove the `SigLevel = Optional TrustAll` from the [repository definition](../README.md#installing-only-the-repository) in the `pacman.conf`. 
+By removing this configuration pacman will fall back to the `SigLevel` defined at the `[options]` level which by default only allows signed packages to be downloaded from a repository.
+More about the `SigLevel` configuration can be read in the [arch wiki](https://wiki.archlinux.org/title/Pacman/Package_signing#Configuring_pacman).
+
+>[!NOTE]
+> The downloading and importing of the public key should in the future be possible through the cli
+
 ## API
 Additionally, the server exposes a REST API under`/packages`. This api is used by the CLI to interact with the server to query, add, etc. packages. By default, the whole API is secured behind authentication via a secret. Read-only endpoints can be [configured](#configuration) to be open for everyone.
 
@@ -32,6 +72,7 @@ It also stores many things on the filesystem, which may or may not be of interes
 - `/app/serene.db`: This is the *sqlite* database where all the builds, logs, etc. are stored about the different packages.
 - `/app/sources`: This is a directory structure that stores the `PKGBUILD`s which are copied to containers for building.
 - `/app/repository`: This is the repository containing the build packages. It is served as is for pacman to access.
+- `/app/sign_key.asc`: This **file** contains the private key used for package signing if provided 
 
 ### Deployment
 It is recommended to deploy the container via docker compose. Here is an example for a basic deployment:
@@ -76,6 +117,9 @@ BUILD_CLI=true
 # http url to use to reference own package store from the outside
 # if this url is provided, packages can use dependencies of others inside the container
 OWN_REPOSITORY_URL=none
+
+# optional password to unlock the private key used for package signing
+SIGN_KEY_PASSWORD=none
 
 # default schedules for checking and building the packages
 # for devel packages (i.e. -git) a separate option exists, it is the normal one if unset

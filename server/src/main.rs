@@ -79,7 +79,7 @@ async fn main() -> anyhow::Result<()> {
 
     let schedule = Arc::new(RwLock::new(schedule));
 
-    info!("serene started successfully!");
+    info!("serene started successfully on port {}!", CONFIG.port);
     // web app
     HttpServer::new(move ||
         App::new()
@@ -99,6 +99,7 @@ async fn main() -> anyhow::Result<()> {
             .service(web::subscribe_logs)
             .service(web::settings)
             .service(web::pkgbuild)
+            .service(web::get_signature_public_key)
     ).bind(("0.0.0.0", CONFIG.port))?.run().await?;
 
     Ok(())
