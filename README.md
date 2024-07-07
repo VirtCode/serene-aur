@@ -42,7 +42,7 @@ Many more commands are found on the documentation for the CLI:
 This project is still in its early stages, but already usable on a daily basis. There are also a couple of features and improvements that still need to be implemented. 
 Notable missing features include:
 - [X] Entirely custom PKGBUILDs without a git repository
-- [ ] Package signing
+- [X] Package signing
 - [ ] Automatic AUR dependency resolving ([#4](https://github.com/VirtCode/serene-aur/issues/4))
 
 Refer to the [TODO File](TODO.md) for more features, tasks and enhancements and don't hesitate to contribute if interested.
