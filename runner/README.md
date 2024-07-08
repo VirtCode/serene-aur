@@ -12,5 +12,5 @@ Containers of this image will be created automatically by the server, so you don
 To build the runner container by yourself, you can clone this repository, and build from inside the `runner/` (this) directory. You could run this from the root.
 ```shell
 cd runner
-docker build -t serene-aur-runner
+docker build . -t serene-aur-runner
 ```

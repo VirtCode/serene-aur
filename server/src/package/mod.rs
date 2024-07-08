@@ -131,11 +131,11 @@ pub struct Package {
     /// source of the package
     pub source: Box<dyn Source + Sync + Send>,
 
-    /// srcinfo of the current build
-    pub srcinfo: Option<SrcinfoWrapper>,
-    /// pkgbuild string of the current build for user pleasure
+    /// pkgbuild string used for the currently passing build for user pleasure
     pub pkgbuild: Option<String>,
-    /// version of the current build of the package, may be different from srcinfo
+    /// srcinfo of the current build, reported from the package for devel packages
+    pub srcinfo: Option<SrcinfoWrapper>,
+    /// DEPRECATED: version of the current build of the package
     pub version: Option<String>,
 
     /// whether package is enabled, meaning it is built automatically
@@ -176,17 +176,21 @@ impl Package {
 
     /// upgrades the version of the package
     /// returns an error if a version mismatch is detected with the source files
-    pub async fn upgrade(&mut self, reported: &str) -> anyhow::Result<()> {
+    pub async fn upgrade(&mut self, reported: SrcinfoWrapper) -> anyhow::Result<()> {
 
-        let srcinfo = self.source.get_srcinfo(&self.get_folder()).await?;
+        let mut srcinfo = self.source.get_srcinfo(&self.get_folder()).await?;
         let pkgbuild = self.source.get_pkgbuild(&self.get_folder()).await?;
 
-        // check for version mismatch for non-devel packages
-        if !self.source.is_devel() && srcinfo.base.pkgver.as_str() != reported.trim() {
-            return Err(anyhow!("version mismatch on package {}, expected {} but built {reported}", &self.base, &srcinfo.base.pkgver))
+        if self.source.is_devel() {
+            // upgrade devel package srcinfo to reflect version and rel
+            srcinfo = reported;
+            
+        } else if srcinfo.base.pkgver != reported.base.pkgver {
+            // check for version mismatch for non-devel packages
+            return Err(anyhow!("version mismatch on package {}, expected {} but built {}", &self.base, &srcinfo.base.pkgver, &reported.base.pkgver))
         }
 
-        self.version = Some(reported.trim().to_owned());
+        self.version = Some(srcinfo.base.pkgver.clone());
         self.srcinfo = Some(srcinfo);
         self.pkgbuild = Some(pkgbuild);
 
@@ -196,10 +200,10 @@ impl Package {
     /// returns the expected built files
     /// requires the version to be upgraded
     pub async fn expected_files(&self) -> anyhow::Result<Vec<String>> {
-        let srcinfo = self.srcinfo.as_ref().ok_or(anyhow!("no srcinfo loaded, upgrade version first. this is an internal error"))?;
-        let version = self.version.as_ref().ok_or(anyhow!("no version loaded, upgrade version first. this is an internal error"))?;
+        let srcinfo = self.srcinfo.as_ref().ok_or(anyhow!("no srcinfo loaded, upgrade version first. this is an internal error, please report"))?;
 
         let rel = &srcinfo.base.pkgrel;
+        let version = &srcinfo.base.pkgver;
         let epoch = srcinfo.base.epoch.as_ref().map(|s| format!("{}:", s)).unwrap_or_else(|| "".to_string());
         let arch = select_arch(&srcinfo.pkg.arch);
 

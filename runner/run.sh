@@ -29,5 +29,11 @@ FLAGS=$(cat makepkg-flags)
 echo "running with custom flags: $FLAGS"
 # run makepkg
 makepkg --syncdeps --force --noconfirm $FLAGS
+
 # also add built version, primarily for devel packages
-makepkg --printsrcinfo | grep -oP 'pkgver = \K[^ ]+' > ../target/VERSION
+printf "\n\n:: SERENE :: Collecting package information\n"
+makepkg --printsrcinfo > ../target/.SRCINFO
+# for backwards compatibility, I don't know how this could work without the . in VERSION
+cat ../target/.SRCINFO | grep -oP 'pkgver = \K[^ ]+' > ../target/VERSION
+
+echo "build script finished";

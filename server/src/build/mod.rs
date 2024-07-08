@@ -11,7 +11,7 @@ use crate::database::Database;
 use crate::package::{Package};
 use crate::repository::PackageRepository;
 use crate::runner::{ContainerId, Runner, RunStatus};
-use crate::runner::archive::{begin_read, read_version};
+use crate::runner::archive::{begin_read, read_srcinfo};
 use crate::web::broadcast::{Broadcast, Event};
 
 pub mod schedule;
@@ -228,8 +228,8 @@ impl Builder {
         let stream = self.runner.read().await.download_packages(&container).await?;
         let mut archive = begin_read(stream)?;
 
-        let version = read_version(&mut archive).await?;
-        package.upgrade(&version).await?;
+        let version = read_srcinfo(&mut archive).await?;
+        package.upgrade(version).await?;
 
         self.repository.write().await.publish(package, archive).await
     }

@@ -1,37 +1,39 @@
-use std::fs::Metadata;
 use std::path::Path;
+use std::str::FromStr;
 use anyhow::{anyhow, Context};
 use async_std::path::PathBuf;
 use async_tar::{Archive, Builder, Entries, Header};
 use futures_util::{AsyncRead, AsyncReadExt, StreamExt};
 use hyper::Body;
+use crate::package::source::SrcinfoWrapper;
 
 // TODO: Refactor this into some kind of ArchiveWrapper struct which may easily be passed around.
 //       However, I cannot store an Archive<impl AsyncRead + Unpin> in a struct.
 //       For now we will have to deal with passing that archive into and out of functions.
 //       If you know how to do this properly, please let me know!
 
-const RUNNER_IMAGE_BUILD_ARCHIVE_VERSION: &str = "target/VERSION";
+const RUNNER_IMAGE_BUILD_ARCHIVE_SRCINFO: &str = "target/.SRCINFO";
 const RUNNER_IMAGE_BUILD_ARCHIVE_PACKAGE_DIR: &str = "target/";
 
 pub fn begin_read(archive: Archive<impl AsyncRead + Unpin>) -> anyhow::Result<Entries<impl AsyncRead + Unpin + Sized>> {
     archive.entries().context("failed starting to read archive with build packages")
 }
 
-pub async fn read_version(entries: &mut Entries<impl AsyncRead + Unpin + Sized>) -> anyhow::Result<String> {
+pub async fn read_srcinfo(entries: &mut Entries<impl AsyncRead + Unpin + Sized>) -> anyhow::Result<SrcinfoWrapper> {
 
-    // we assume here that due to the filename of .VERSION, we will read this file first
+    // we assume here that due to the filename of .SRCINFO, we will read this file first
+    // however, we have read it just from VERSION for a long time, and it did still work - WTF?
     while let Some(Ok(mut entry)) = entries.next().await {
-        if entry.path()?.to_string_lossy() == RUNNER_IMAGE_BUILD_ARCHIVE_VERSION {
-            let mut version = String::new();
-            entry.read_to_string(&mut version).await
-                .context("could not read .VERSION file from archive from container")?;
+        if entry.path()?.to_string_lossy() == RUNNER_IMAGE_BUILD_ARCHIVE_SRCINFO {
+            let mut srcinfo = String::new();
+            entry.read_to_string(&mut srcinfo).await
+                .context("could not read .SRCINFO file from archive from container")?;
 
-            return Ok(version.trim().to_string());
+            return SrcinfoWrapper::from_str(&srcinfo).context("failed to parse srcinfo returned from build container");
         }
     }
 
-    Err(anyhow!("could not find .VERSION file in archive from container"))
+    Err(anyhow!("could not find .SRCINFO file in archive from container"))
 }
 
 pub async fn extract_files(entries: &mut Entries<impl AsyncRead + Unpin + Sized>, which: &Vec<String>, to: &Path) -> anyhow::Result<()> {
