@@ -49,7 +49,7 @@ More about the `SigLevel` configuration can be read in the [arch wiki](https://w
 > The downloading and importing of the public key should in the future be possible through the cli
 
 ## API
-Additionally, the server exposes a REST API under`/packages`. This api is used by the CLI to interact with the server to query, add, etc. packages. By default, the whole API is secured behind authentication via a secret. Read-only endpoints can be [configured](#configuration) to be open for everyone.
+Additionally, the server exposes a REST API under`/package`. This api is used by the CLI to interact with the server to query, add, etc. packages. By default, the whole API is secured behind authentication via a secret. Read-only endpoints can be [configured](#configuration) to be open for everyone.
 
 The secrets for the API are read from the `authorized_secrets` file that is [mounted into the container](#deployment). It is very similar in structure to the authorized keys file of SSH. An example file would look like this:
 ```
@@ -60,6 +60,17 @@ The secrets for the API are read from the `authorized_secrets` file that is [mou
 The first word per line contains the `BASE64` encoded `SHA256` hash of the trusted secret. The rest of the line (after the space) is not relevant. By default it will contain the user- and hostname the secret belongs to. To now authenticate with the API, the client must provide the secret in the `Authorization`-header without anything else, in plain text. The server will match against the hashes and allow requests if it is included.
 
 The endpoints of the API will be documented in the future. In the meantime, have a look at the [endpoints](src/web/mod.rs) and the used [data structs](data/src) in the source code of the server. For a reference implementation, you may have a look at the [CLI's code](../cli/src/web/requests.rs).
+
+### Webhooks
+
+The server allows for webhook functionality to trigger builds for packages using a http request. Webhooks require authentication using a special secret. Those secrets are bound to the
+authorized secret of a user and a package name. This allows a single webhook secret to only trigger webhooks for one single package. Webhooks are disabled by default, to enable them you need to set the `WEBHOOK_SECRET` [config option](#configuration). 
+
+For every user with an authorized secret it's possible to request a webhook token for a specific package using the [CLI](../cli/README.md#usage) or the `/webhook/package/{name}/secret` endpoint where the authorized secret is passed through the `Authorization` header.
+The returned secret can be used in the `/webhook/package/{name}/build?secret=<webhook-secret>` HTTP-POST request to trigger a build for the specified package. 
+
+The webhook secrets are stateless and bound to an authorized secret of a user. This means every webhook secret is valid as long as the secret of the user is still part of the `authorized_secrets` file. As soon as the user secret is removed from
+the server the webhook secret is invalidated as well. 
 
 ## Container
 The container is as lightweight as possible and thus alpine-based. Any configuration is done through environment variables on the container.
@@ -141,6 +152,10 @@ RUNNER_PREFIX=serene-aur-runner-
 
 # do not require authentication for the read-only parts of the api
 ALLOW_READS=false
+
+# string used for signing webhook secrets
+# when left empty, webhooks are disabled
+WEBHOOK_SECRET=none
 
 # DEBUG the unix or tcp url to docker with a prefix (e.g. tcp://127.0.0.1:2375)
 #       the runner containers will be spun up on this docker instance

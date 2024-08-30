@@ -95,6 +95,12 @@ pub enum Action {
         #[clap(short, long)]
         machine: bool
     },
+
+    /// manage things related to the server
+    Manage {
+        #[clap(subcommand)]
+        manage: ManageSubcommand
+    },
     
     #[command(hide = true)]
     Completions
@@ -130,6 +136,15 @@ pub enum InfoCommand {
         /// property to set
         #[clap(subcommand)]
         property: SettingsSubcommand
+    }
+}
+
+#[derive(Subcommand)]
+pub enum ManageSubcommand {
+    /// get a personalized webhook secret for a package
+    Webhook {
+        /// name of the package
+        name: String
     }
 }
 

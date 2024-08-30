@@ -3,8 +3,8 @@ pub mod pacman;
 
 use clap_complete::Shell;
 use colored::Colorize;
-use crate::action::procedures::{add, build, build_info, build_logs, info, list, pkgbuild, remove, set_setting, subscribe_build_logs};
-use crate::command::{Action, InfoCommand};
+use crate::action::procedures::{add, build, build_info, build_logs, info, list, pkgbuild, remove, set_setting, subscribe_build_logs, webhook_secret};
+use crate::command::{Action, InfoCommand, ManageSubcommand};
 use crate::complete::generate_completions;
 use crate::config::Config;
 use crate::log::Log;
@@ -52,6 +52,13 @@ pub fn run(config: &Config, action: Action) {
                 }
                 Some(InfoCommand::Set { property }) => { 
                     set_setting(config, &name, property) 
+                }
+            }
+        }
+        Action::Manage { manage } => {
+            match manage {
+                ManageSubcommand::Webhook { name } => {
+                    webhook_secret(config, &name);
                 }
             }
         }

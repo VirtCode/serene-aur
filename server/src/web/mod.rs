@@ -2,6 +2,7 @@ use std::str::FromStr;
 use actix_web::{delete, get, post, Responder};
 use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound};
 use actix_web::web::{Data, Json, Path, Query};
+use auth::{create_webhook_secret, AuthWebhook};
 use chrono::{DateTime};
 use hyper::StatusCode;
 use sequoia_openpgp::parse::Parse;
@@ -177,7 +178,7 @@ pub async fn subscribe_logs(_: AuthRead, path: Path<String>, broadcast: Data<Bro
     let package = path.into_inner();
     let _ = Package::find(&package, &db).await.internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
-    
+
     broadcast.subscribe(package).await
 }
 
@@ -249,3 +250,17 @@ pub async fn get_signature_public_key(_: AuthRead) -> actix_web::Result<impl Res
     Ok(body)
 }
 
+#[get("/webhook/package/{name}/secret")]
+pub async fn get_webhook_secret(auth: AuthWrite, package: Path<String>) -> actix_web::Result<impl Responder> {
+    create_webhook_secret(&package, &serene_data::secret::hash(auth.get_secret())).map(Json)
+}
+
+#[post("/webhook/package/{name}/build")]
+pub async fn build_webhook(_: AuthWebhook, package: Path<String>, db: Data<Database>, scheduler: BuildSchedulerData) -> actix_web::Result<impl Responder> {
+    let package = Package::find(&package, &db).await.internal()?
+        .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
+
+    scheduler.write().await.run(&package, false).await.internal()?;
+
+    Ok(empty_response())
+}

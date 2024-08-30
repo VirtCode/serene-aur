@@ -42,6 +42,11 @@ pub fn get_build_logs(c: &Config, package: &str, id: &str) -> Result<String> {
     get::<String>(c, &format!("package/{package}/build/{id}/logs"))
 }
 
+/// get the secret for the webhook of a given package
+pub fn get_webhook_secret(c: &Config, package: &str) -> Result<String> {
+    get::<String>(c, &format!("webhook/package/{package}/secret"))
+}
+
 /// get info about a specific package
 pub fn get_package(c: &Config, package: &str) -> Result<PackageInfo> {
     get::<PackageInfo>(c, &format!("package/{package}"))

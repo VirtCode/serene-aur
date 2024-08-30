@@ -13,7 +13,7 @@ use crate::config::Config;
 use crate::log::Log;
 use crate::table::{ago, Column, table};
 use crate::web::data::{BuildProgressFormatter, BuildStateFormatter, describe_cron_timezone_hack, get_build_id};
-use crate::web::requests::{add_package, build_package, get_build, get_build_logs, get_builds, get_package, get_package_pkgbuild, get_packages, remove_package, set_package_setting, subscribe_events};
+use crate::web::requests::{add_package, build_package, get_build, get_build_logs, get_builds, get_package, get_package_pkgbuild, get_packages, get_webhook_secret, remove_package, set_package_setting, subscribe_events};
 
 /// waits for a package to build and then installs it
 fn wait_and_install(c: &Config, base: &str, quiet: bool) {
@@ -350,6 +350,21 @@ pub fn build_logs(c: &Config, package: &str, build: &Option<String>) {
         Ok(logs) => {
             log.succeed("fetched build logs successfully");
             println!("{logs}")
+        }
+        Err(e) => { log.fail(&e.msg()) }
+    }
+}
+
+/// print the personalized webhook secret for a package
+pub fn webhook_secret(c: &Config, package: &str) {
+    let log = Log::start("requesting webhook secret");
+
+    match get_webhook_secret(c, package) {
+        Ok(secret) => {
+            log.succeed("received webhook secret successfully");
+            println!("Your personalized webhook secret for the package {} is:\n{secret}\n", package.italic());
+            println!("To trigger the webhook you have to send a HTTP-{} request to:", "POST".bold());
+            println!("{}/webhook/package/{package}/build?secret={secret}", c.url)
         }
         Err(e) => { log.fail(&e.msg()) }
     }
