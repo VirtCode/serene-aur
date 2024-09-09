@@ -27,10 +27,10 @@ async fn main() -> anyhow::Result<()> {
 
     // initializing database
     let db = database::connect().await?;
-    
+
     // initialize broadcast
     let broadcast = Broadcast::new();
-    
+
     // initializing runner
     let runner = Arc::new(RwLock::new(
         Runner::new(broadcast.clone())
@@ -51,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
     // creating scheduler
     let mut schedule = BuildScheduler::new(builder.clone()).await
         .context("failed to start package scheduler")?;
-    
+
     // creating image scheduler
     let image_scheduler = ImageScheduler::new(runner.clone()).await
         .context("failed to start image scheduler")?;
@@ -99,6 +99,8 @@ async fn main() -> anyhow::Result<()> {
             .service(web::subscribe_logs)
             .service(web::settings)
             .service(web::pkgbuild)
+            .service(web::get_webhook_secret)
+            .service(web::build_webhook)
             .service(web::get_signature_public_key)
     ).bind(("0.0.0.0", CONFIG.port))?.run().await?;
 

@@ -75,6 +75,13 @@ serene info my-package set prepare "echo 'i am run before the makepkg'"
 serene info my-package set flags "nocheck" "holdver"
 ```
 
+**Manage the server**: To manage some server properties, you can use the manage subcommand:
+
+```shell
+# Request and print the webhook secret for the package `my-package`
+serene manage webhook my-package
+```
+
 **Print the local secret of the CLI:** To print the local secret again, run the following:
 ```shell
 # Prints the secret to add to the `authorized_secrets` file.

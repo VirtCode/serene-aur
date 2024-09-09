@@ -13,7 +13,7 @@ use crate::config::Config;
 use crate::log::Log;
 use crate::table::{ago, Column, table};
 use crate::web::data::{BuildProgressFormatter, BuildStateFormatter, describe_cron_timezone_hack, get_build_id};
-use crate::web::requests::{add_package, build_package, get_build, get_build_logs, get_builds, get_package, get_package_pkgbuild, get_packages, remove_package, set_package_setting, subscribe_events};
+use crate::web::requests::{add_package, build_package, get_build, get_build_logs, get_builds, get_package, get_package_pkgbuild, get_packages, get_webhook_secret, remove_package, set_package_setting, subscribe_events};
 
 /// waits for a package to build and then installs it
 fn wait_and_install(c: &Config, base: &str, quiet: bool) {
@@ -105,21 +105,21 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
 /// add a package to the repository
 pub fn add(c: &Config, what: &str, replace: bool, file: bool, custom: bool, pkgbuild: bool, devel: bool, install: bool, quiet: bool) {
     let mut log = Log::start("initializing package adding");
-    
-    // read file if requested 
+
+    // read file if requested
     let what = if file {
         log.next("loading content from file");
-        
+
         let mut file = match File::open(what) {
             Ok(f) => { f }
             Err(e) => { log.fail(&format!("failed to open file: {e:#}")); return }
         };
-        
+
         let mut buf = String::new();
         if let Err(e) = file.read_to_string(&mut buf) {
             log.fail(&format!("failed to read file: {e:#}")); return
         }
-        
+
         buf
     } else { what.to_owned() };
 
@@ -350,6 +350,25 @@ pub fn build_logs(c: &Config, package: &str, build: &Option<String>) {
         Ok(logs) => {
             log.succeed("fetched build logs successfully");
             println!("{logs}")
+        }
+        Err(e) => { log.fail(&e.msg()) }
+    }
+}
+
+/// print the personalized webhook secret for a package
+pub fn webhook_secret(c: &Config, package: &str, machine: bool) {
+    let log = Log::start("requesting webhook secret");
+
+    match get_webhook_secret(c, package) {
+        Ok(secret) => {
+            log.succeed("received webhook secret successfully");
+            if machine {
+                println!("{secret}")
+            } else {
+                println!("Your personalized webhook secret for the package {} is:\n{secret}\n", package.italic());
+                println!("To trigger the webhook you have to send a HTTP-{} request to:", "POST".bold());
+                println!("{}/webhook/package/{package}/build?secret={secret}", c.url)
+            }
         }
         Err(e) => { log.fail(&e.msg()) }
     }

@@ -38,6 +38,8 @@ pub struct Config {
     pub build_cli: bool,
     /// url for runners to reach the server to pull dependencies from its repo
     pub own_repository_url: Option<String>,
+    /// secret used to sign webhook tokens
+    pub webhook_secret: Option<String>,
 }
 
 impl Default for Config {
@@ -55,12 +57,14 @@ impl Default for Config {
 
             container_prefix: "serene-aur-runner-".to_string(),
             runner_image: "ghcr.io/virtcode/serene-aur-runner:main".to_string(),
-            
+
             docker_url: None,
 
             port: 80,
             build_cli: true,
-            own_repository_url: None
+            own_repository_url: None,
+
+            webhook_secret: None
         }
     }
 }
@@ -85,7 +89,7 @@ impl Config {
 
             container_prefix: env::var("RUNNER_PREFIX").unwrap_or(default.container_prefix),
             runner_image: env::var("RUNNER_IMAGE").unwrap_or(default.runner_image),
-            
+
             docker_url: env::var("DOCKER_URL").ok().or(default.docker_url),
 
             port: env::var("PORT").ok()
@@ -93,7 +97,9 @@ impl Config {
                 .unwrap_or(default.port),
             build_cli: env::var("BUILD_CLI").ok()
                 .and_then(|s| bool::from_str(&s).map_err(|_| warn!("failed to parse BUILD_CLI, using default")).ok())
-                .unwrap_or(default.build_cli)
+                .unwrap_or(default.build_cli),
+
+            webhook_secret: env::var("WEBHOOK_SECRET").ok().or(default.webhook_secret)
         }
     }
 }

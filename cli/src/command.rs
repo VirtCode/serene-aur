@@ -25,12 +25,12 @@ pub enum Action {
         /// <WHAT> is a custom repository
         #[clap(short, long, group = "nonaur", help_heading = "Custom Sources")]
         custom: bool,
-        
-        /// <WHAT> is a custom pkgbuild 
+
+        /// <WHAT> is a custom pkgbuild
         #[clap(short, long, group = "nonaur", help_heading = "Custom Sources")]
         pkgbuild: bool,
 
-        /// add as a development package 
+        /// add as a development package
         #[clap(short, long, requires = "nonaur", help_heading = "Custom Sources")]
         devel: bool,
 
@@ -95,7 +95,13 @@ pub enum Action {
         #[clap(short, long)]
         machine: bool
     },
-    
+
+    /// manage things related to the server
+    Manage {
+        #[clap(subcommand)]
+        manage: ManageSubcommand
+    },
+
     #[command(hide = true)]
     Completions
 }
@@ -134,6 +140,19 @@ pub enum InfoCommand {
 }
 
 #[derive(Subcommand)]
+pub enum ManageSubcommand {
+    /// get a personalized webhook secret for a package
+    Webhook {
+        /// name of the package
+        name: String,
+
+        /// print the secret in a machine readable way
+        #[clap(short, long)]
+        machine: bool
+    }
+}
+
+#[derive(Subcommand)]
 pub enum SettingsSubcommand {
     /// enable or disable clean build
     Clean {
@@ -164,6 +183,6 @@ pub enum SettingsSubcommand {
     /// set additional makepkg flags
     Flags {
         /// flags to add, without the dashes
-        flags: Vec<String> 
+        flags: Vec<String>
     },
 }
