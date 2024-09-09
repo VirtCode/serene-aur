@@ -85,7 +85,7 @@ impl FromRequest for AuthWebhook {
                 }
             }
 
-            return Err(ErrorForbidden("no signing secret found"))
+            Err(ErrorForbidden("no signing secret found"))
         })
     }
 }

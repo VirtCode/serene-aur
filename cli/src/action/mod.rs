@@ -34,14 +34,14 @@ pub fn run(config: &Config, action: Action) {
         }
         Action::Info { name, what, all } => {
             match what {
-                None => { 
-                    info(config, &name, all); 
+                None => {
+                    info(config, &name, all);
                 }
-                Some(InfoCommand::Pkgbuild) => { 
-                    pkgbuild(config, &name); 
+                Some(InfoCommand::Pkgbuild) => {
+                    pkgbuild(config, &name);
                 }
-                Some(InfoCommand::Build { id }) => { 
-                    build_info(config, &name, &id); 
+                Some(InfoCommand::Build { id }) => {
+                    build_info(config, &name, &id);
                 }
                 Some(InfoCommand::Logs { id, subscribe, linger }) => {
                     if id.is_some() {
@@ -50,15 +50,15 @@ pub fn run(config: &Config, action: Action) {
                         subscribe_build_logs(config, &name, linger, subscribe);
                     }
                 }
-                Some(InfoCommand::Set { property }) => { 
-                    set_setting(config, &name, property) 
+                Some(InfoCommand::Set { property }) => {
+                    set_setting(config, &name, property)
                 }
             }
         }
         Action::Manage { manage } => {
             match manage {
-                ManageSubcommand::Webhook { name } => {
-                    webhook_secret(config, &name);
+                ManageSubcommand::Webhook { name, machine } => {
+                    webhook_secret(config, &name, machine);
                 }
             }
         }
