@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand, ArgAction};
 
 #[derive(Parser)]
-#[clap(version, about)]
+#[clap(version = option_env!("TAG").unwrap_or("unknown"), about)]
 #[command(disable_help_subcommand = true)]
 pub struct Args {
     #[clap(subcommand)]
@@ -141,6 +141,9 @@ pub enum InfoCommand {
 
 #[derive(Subcommand)]
 pub enum ManageSubcommand {
+    /// get info about the given server
+    Info,
+
     /// get a personalized webhook secret for a package
     Webhook {
         /// name of the package

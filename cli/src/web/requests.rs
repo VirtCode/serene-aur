@@ -2,8 +2,13 @@ use std::str::FromStr;
 use reqwest_eventsource::Event;
 use serene_data::build::{BuildInfo};
 use serene_data::package::{BroadcastEvent, PackageAddRequest, PackageBuildRequest, PackageInfo, PackagePeek, PackageSettingsRequest};
+use serene_data::SereneInfo;
 use crate::config::Config;
 use crate::web::{delete_empty, eventsource, get, post, post_simple, Result};
+
+pub fn get_info(c: &Config) -> Result<SereneInfo> {
+    get::<SereneInfo>(c, "")
+}
 
 /// add a package
 pub fn add_package(c: &Config, request: PackageAddRequest) -> Result<PackagePeek> {

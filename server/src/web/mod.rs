@@ -7,6 +7,7 @@ use chrono::{DateTime};
 use hyper::StatusCode;
 use sequoia_openpgp::parse::Parse;
 use serde::Deserialize;
+use serene_data::SereneInfo;
 use tokio::sync::RwLock;
 use serene_data::package::{PackageAddRequest, PackageAddSource, PackageBuildRequest, PackageSettingsRequest};
 use crate::build::{Builder, BuildSummary};
@@ -21,6 +22,7 @@ use crate::package::source::Source;
 use crate::repository::crypto::{get_public_key_bytes, should_sign_packages};
 use crate::web::auth::{AuthRead, AuthWrite};
 use crate::web::broadcast::Broadcast;
+use crate::config::{CONFIG, INFO};
 
 mod auth;
 mod data;
@@ -41,6 +43,19 @@ impl<T> InternalError<T> for anyhow::Result<T> {
 
 fn empty_response() -> impl Responder {
     (None::<Option<String>>, StatusCode::OK)
+}
+
+
+#[get("/")]
+pub async fn info() -> actix_web::Result<impl Responder> {
+    Ok(Json(SereneInfo {
+        version: INFO.version.clone(),
+        started: INFO.start_time.clone(),
+        name: CONFIG.repository_name.clone(),
+        architecture: CONFIG.architecture.clone(),
+        readable: CONFIG.allow_reads,
+        signed: should_sign_packages()
+    }))
 }
 
 #[post("/package/add")]

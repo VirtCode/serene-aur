@@ -1,10 +1,12 @@
-FROM rust:alpine3.18 as builder
+FROM rust:alpine3.20 as builder
 
 WORKDIR /app
 
 RUN apk add --no-cache musl-dev
 # install nettle for signing
-RUN apk add --no-cache nettle-dev clang pkgconfig
+RUN apk add --no-cache nettle-dev clang clang-libclang pkgconfig
+# install git for dynamic version
+RUN apk add --no-cache git
 
 # install sqlx cli
 RUN cargo install sqlx-cli --no-default-features --features rustls,sqlite
@@ -19,7 +21,7 @@ ENV RUSTFLAGS -Ctarget-feature=-crt-static
 RUN cargo sqlx database setup --source server/migrations
 RUN cargo build --release --bin serene
 
-FROM alpine:3.18 as runner
+FROM alpine:3.20 as runner
 
 WORKDIR /app
 

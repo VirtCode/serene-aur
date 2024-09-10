@@ -1,11 +1,30 @@
+use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use std::env;
 use std::str::FromStr;
-use anyhow::Context;
 use log::warn;
 
 pub const SOURCE_REPOSITORY: &str = "https://github.com/VirtCode/serene-aur";
+pub const RUNNER_CONTAINER_NAME: &str = "ghcr.io/virtcode/serene-aur-runner:main";
 pub const CLI_PACKAGE_NAME: &str = "serene-cli";
+
+lazy_static! {
+    pub static ref INFO: Info = Info::start();
+}
+
+pub struct Info {
+    pub start_time: DateTime<Utc>,
+    pub version: String
+}
+
+impl Info {
+    fn start() -> Self {
+        Self {
+            start_time: Utc::now(),
+            version: env!("TAG").to_string()
+        }
+    }
+}
 
 lazy_static! {
     pub static ref CONFIG: Config = Config::env();
@@ -56,7 +75,7 @@ impl Default for Config {
             schedule_image: "0 0 0 * * *".to_string(),
 
             container_prefix: "serene-aur-runner-".to_string(),
-            runner_image: "ghcr.io/virtcode/serene-aur-runner:main".to_string(),
+            runner_image: RUNNER_CONTAINER_NAME.to_string(),
 
             docker_url: None,
 

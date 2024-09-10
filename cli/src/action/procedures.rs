@@ -1,9 +1,11 @@
 use std::cell::RefCell;
+use std::env::consts::ARCH;
 use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
 use chrono::{Local, Utc};
 use colored::{ColoredString, Colorize};
+use semver::Version;
 use serene_data::build::{BuildState};
 use serene_data::package::{BroadcastEvent, MakepkgFlag, PackageAddRequest, PackageAddSource, PackageBuildRequest, PackageSettingsRequest};
 use crate::action::pacman;
@@ -13,7 +15,7 @@ use crate::config::Config;
 use crate::log::Log;
 use crate::table::{ago, Column, table};
 use crate::web::data::{BuildProgressFormatter, BuildStateFormatter, describe_cron_timezone_hack, get_build_id};
-use crate::web::requests::{add_package, build_package, get_build, get_build_logs, get_builds, get_package, get_package_pkgbuild, get_packages, get_webhook_secret, remove_package, set_package_setting, subscribe_events};
+use crate::web::requests::{add_package, build_package, get_build, get_build_logs, get_builds, get_info, get_package, get_package_pkgbuild, get_packages, get_webhook_secret, remove_package, set_package_setting, subscribe_events};
 
 /// waits for a package to build and then installs it
 fn wait_and_install(c: &Config, base: &str, quiet: bool) {
@@ -174,6 +176,8 @@ pub fn build(c: &Config, package: &str, clean: bool, install: bool, quiet: bool)
 
 /// list all packages in a table
 pub fn list(c: &Config) {
+    check_version_mismatch(c);
+
     let log = Log::start("querying all packages");
 
     match get_packages(c) {
@@ -221,6 +225,8 @@ pub fn list(c: &Config) {
 
 /// get information about package and its builds
 pub fn info(c: &Config, package: &str, all: bool) {
+    check_version_mismatch(c);
+
     let mut log = Log::start("loading package information and builds");
 
     // fetch information
@@ -497,4 +503,123 @@ pub fn pkgbuild(c: &Config, package: &str) {
         }
         Err(e) => { log.fail(&e.msg()) }
     }
+}
+
+/// checks for the server version and prints a warning if a mismatch is found
+pub fn check_version_mismatch(c: &Config) {
+    if let Ok(info) = get_info(c) {
+
+        // strip v- prefix from tags
+        let server = info.version.strip_prefix("v").unwrap_or(&info.version);
+        let client = env!("TAG").strip_prefix("v").unwrap_or(env!("TAG"));
+
+        if let (Ok(server), Ok(client)) = (Version::parse(server), Version::parse(client)) {
+            match server.cmp(&client) {
+                std::cmp::Ordering::Less =>
+                    Log::warning(&format!("server ({server}) is behind your cli ({client}), please update your server")),
+                std::cmp::Ordering::Greater =>
+                    Log::warning(&format!("cli ({client}) is behind your server ({server}), please update your cli")),
+
+                std::cmp::Ordering::Equal => {}, // everything is good
+            }
+
+        } else {
+            Log::warning("invalid cli or server version, please check for updates")
+        }
+    } else {
+        Log::warning("server version check failed, please check for updates")
+    }
+}
+
+pub fn server_info(c: &Config) {
+    let mut log = Log::start("fetching server information");
+
+    let info = match get_info(c) {
+        Ok(info) => info,
+        Err(e) => {
+            log.fail(&e.msg());
+            return
+        }
+    };
+
+    log.next("fetching package information");
+
+    let packages = match get_packages(c) {
+        Ok(packages) => packages,
+        Err(e) => {
+            log.fail(&e.msg());
+            return
+        }
+    };
+
+    let mut total = packages.len();
+    let mut members = 0;
+    let mut devel = 0;
+    let mut enabled = 0;
+    let mut passing = 0;
+    let mut working = 0;
+    let mut failing = 0;
+    let mut fatal = 0;
+
+    for package in packages {
+        if package.devel { devel += 1; }
+        if package.enabled { enabled += 1; }
+
+        if let Some(b) = package.build {
+            match b.state {
+                BuildState::Running(_) => working += 1,
+                BuildState::Success => passing += 1,
+                BuildState::Failure => failing += 1,
+                BuildState::Fatal(_, _) => fatal += 1,
+            }
+        }
+
+        members += package.members.len();
+    }
+
+    log.succeed("successfully fetched server information");
+
+    println!();
+    println!("{} {}", "serene".bold(), info.version);
+    println!("{:<10} {}/{}", "location:", c.url.italic(), info.architecture);
+
+    // this might have a prefixed space for the tables
+    let uptime = ago::difference(Utc::now() - info.started);
+    println!("{:<10} {}", "uptime:", uptime.strip_prefix(" ").unwrap_or(&uptime));
+
+    println!("{:<10} {}", "repo name:", info.name.bold());
+
+    let mut tags = vec![];
+    if info.readable { tags.push("readable".yellow()) } else { tags.push("unreadable".dimmed()) }
+    if info.signed { tags.push("signed".green()) }
+
+    println!("{:<10} {}", "features:",
+                tags.iter().map(|s| s.to_string()).intersperse(" ".to_string()).collect::<String>()
+    );
+
+    println!();
+    println!("package overview:");
+
+    println!("  {:<8} {total} ({members} members available)", "amount:");
+    println!("  {:<8} {}/{}/{}/{}", "status:", passing.to_string().green(), working.to_string().blue(), failing.to_string().red(), fatal.to_string().bright_red());
+    println!("  {:<8} {} of {total}", "enabled:", enabled.to_string().yellow());
+    println!("  {:<8} {} of {total}", "devel:", devel.to_string().dimmed());
+
+    println!();
+    println!("this host:");
+
+    // strip v- prefix from tags
+    let server = info.version.strip_prefix("v").unwrap_or(&info.version);
+    let client = env!("TAG").strip_prefix("v").unwrap_or(env!("TAG"));
+
+    let message = if let (Ok(server), Ok(client)) = (Version::parse(server), Version::parse(client)) {
+        match server.cmp(&client) {
+            std::cmp::Ordering::Less => Some("update your server"),
+            std::cmp::Ordering::Greater => Some("update your cli"),
+            std::cmp::Ordering::Equal => None,
+        }
+    } else { Some("something went wrong") };
+
+    println!("  {:<12} {} ({})", "cli version:", if message.is_some() { env!("TAG").red() } else { env!("TAG").normal() }, message.unwrap_or("up-to-date"));
+    println!("  {:<12} {}", "achitecture:", if ARCH == info.architecture { "compatible".normal() } else { "incompatible".red() })
 }

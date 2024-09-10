@@ -3,6 +3,7 @@ pub mod pacman;
 
 use clap_complete::Shell;
 use colored::Colorize;
+use procedures::server_info;
 use crate::action::procedures::{add, build, build_info, build_logs, info, list, pkgbuild, remove, set_setting, subscribe_build_logs, webhook_secret};
 use crate::command::{Action, InfoCommand, ManageSubcommand};
 use crate::complete::generate_completions;
@@ -59,7 +60,8 @@ pub fn run(config: &Config, action: Action) {
             match manage {
                 ManageSubcommand::Webhook { name, machine } => {
                     webhook_secret(config, &name, machine);
-                }
+                },
+                ManageSubcommand::Info => server_info(config)
             }
         }
         Action::Completions => {

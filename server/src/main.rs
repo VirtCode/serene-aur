@@ -11,6 +11,7 @@ use std::sync::Arc;
 use actix_web::{App, HttpMessage, HttpServer};
 use actix_web::web::Data;
 use anyhow::Context;
+use config::INFO;
 use log::{error, info, warn};
 use tokio::sync::{RwLock};
 use crate::build::schedule::{BuildScheduler, ImageScheduler};
@@ -24,6 +25,9 @@ use crate::web::broadcast::Broadcast;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
+
+    // this is mainly here to initialize the lazy INFO struct
+    info!("starting serene version {}", INFO.version);
 
     // initializing database
     let db = database::connect().await?;
@@ -88,6 +92,7 @@ async fn main() -> anyhow::Result<()> {
             .app_data(Data::from(builder.clone()))
             .app_data(Data::from(broadcast.clone()))
             .service(repository::webservice())
+            .service(web::info)
             .service(web::add)
             .service(web::list)
             .service(web::status)
@@ -106,6 +111,3 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-
-
