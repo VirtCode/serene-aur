@@ -5,7 +5,7 @@ use std::str::FromStr;
 use log::warn;
 
 pub const SOURCE_REPOSITORY: &str = "https://github.com/VirtCode/serene-aur";
-pub const RUNNER_CONTAINER_NAME: &str = "ghcr.io/virtcode/serene-aur-runner:main";
+pub const RUNNER_CONTAINER_NAME: &str = "ghcr.io/virtcode/serene-aur-runner:edge-{version}";
 pub const CLI_PACKAGE_NAME: &str = "serene-cli";
 
 lazy_static! {
@@ -49,6 +49,8 @@ pub struct Config {
     pub container_prefix: String,
     /// runner docker image
     pub runner_image: String,
+    /// prune old images on server
+    pub prune_images: bool,
     /// custom url for docker instance to use
     pub docker_url: Option<String>,
     /// port to bind to
@@ -76,6 +78,7 @@ impl Default for Config {
 
             container_prefix: "serene-aur-runner-".to_string(),
             runner_image: RUNNER_CONTAINER_NAME.to_string(),
+            prune_images: true,
 
             docker_url: None,
 
@@ -108,6 +111,9 @@ impl Config {
 
             container_prefix: env::var("RUNNER_PREFIX").unwrap_or(default.container_prefix),
             runner_image: env::var("RUNNER_IMAGE").unwrap_or(default.runner_image),
+            prune_images: env::var("PRUNE_IMAGES").ok()
+                            .and_then(|s| bool::from_str(&s).map_err(|_| warn!("failed to parse PRUNE_IMAGES, using default")).ok())
+                            .unwrap_or(default.prune_images),
 
             docker_url: env::var("DOCKER_URL").ok().or(default.docker_url),
 

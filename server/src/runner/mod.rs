@@ -8,7 +8,7 @@ use anyhow::{Context};
 use async_tar::Archive;
 use bollard::container::{Config, CreateContainerOptions, DownloadFromContainerOptions, ListContainersOptions, LogsOptions, StartContainerOptions, UploadToContainerOptions, WaitContainerOptions};
 use bollard::{API_DEFAULT_VERSION, Docker};
-use bollard::image::CreateImageOptions;
+use bollard::image::{CreateImageOptions, PruneImagesOptions};
 use chrono::{DateTime, Utc};
 use futures_util::{AsyncRead, StreamExt, TryStreamExt};
 use hyper::body::HttpBody;
@@ -16,7 +16,7 @@ use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use tokio_util::io::StreamReader;
 use tokio_util::compat::{TokioAsyncReadCompatExt};
-use crate::config::CONFIG;
+use crate::config::{CONFIG, INFO};
 use crate::package::Package;
 use crate::web::broadcast::{Broadcast, Event};
 
@@ -106,7 +106,7 @@ impl Runner {
             self.docker.wait_container(container,  None::<WaitContainerOptions<String>>).collect::<Vec<_>>().await;
 
         let end = Utc::now();
-        
+
         // get logs from log collector thread
         let logs = log_collector.await.unwrap_or_default();
 
@@ -155,11 +155,27 @@ impl Runner {
     /// prepares a container for the build process
     /// either creates a new one or takes an old one which was already created
     pub async fn prepare(&self, package: &Package) -> anyhow::Result<ContainerId> {
-        Ok(if let Some(id) = self.find_container(package).await? {
-            id
-        } else {
-            self.create_container(package).await?
-        })
+
+        // try recycle old container
+        if let Some(id) = self.find_container(package).await? {
+
+            let infos = self.docker.inspect_container(&id, None).await?;
+
+            if let Some(image) = infos.config.and_then(|c| c.image) {
+
+                if image == target_docker_image() {
+                    return Ok(id);
+                } else {
+                    info!("updating container for {}, image was {}", &package.base, &image);
+                }
+
+            } else { warn!("updating container for {}, because image is unknown", &package.base) }
+
+            self.clean(&id).await
+                .context("could not remove container whilst update")?;
+        }
+
+        Ok(self.create_container(package).await?)
     }
 
     /// finds an already created container for a package
@@ -181,7 +197,7 @@ impl Runner {
     /// creates a new build container for a package
     async fn create_container(&self, package: &Package) -> anyhow::Result<String> {
         let config = Config {
-            image: Some(CONFIG.runner_image.clone()),
+            image: Some(target_docker_image()),
             ..Default::default()
         };
 
@@ -194,8 +210,10 @@ impl Runner {
     }
 
     pub async fn update_image(&self) -> anyhow::Result<()> {
+        info!("updating runner image");
+
         let results = self.docker.create_image(Some(CreateImageOptions {
-            from_image: CONFIG.runner_image.clone(),
+            from_image: target_docker_image(),
             ..Default::default()
         }), None, None)
             .collect::<Vec<Result<_, _>>>().await;
@@ -203,9 +221,20 @@ impl Runner {
         // can this be directly collected into a result? probably... but streams suck
         let _statuses = results.into_iter().collect::<Result<Vec<_>, _>>()
             .context("failed to pull new docker image")?;
-        
+
         // we just make sure the stream is finished, and don't process the results (yet?)
-        
+
+        // prune images if enabled
+        if CONFIG.prune_images {
+            info!("pruning unused images on server to free space");
+            let result = self.docker.prune_images(None::<PruneImagesOptions<String>>).await
+                .context("failed to prune unused images")?;
+
+            if let Some(amount) = result.space_reclaimed {
+                info!("reclaimed about {:.3} GB by pruning old images", amount as f32 / 10e9)
+            }
+        }
+
         Ok(())
     }
 
@@ -219,6 +248,11 @@ impl Runner {
 /// constructs the container name from package and configuration
 fn container_name(package: &Package) -> String{
     format!("{}{}", CONFIG.container_prefix, &package.base)
+}
+
+/// get the docker image name that should be used
+fn target_docker_image() -> String {
+    CONFIG.runner_image.replace("{version}", &INFO.version)
 }
 
 /// creates the repository string which adds itself as a repository

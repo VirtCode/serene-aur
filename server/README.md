@@ -142,7 +142,13 @@ RUST_LOG=none
 
 # sets the docker image that is used for creating build containers
 # note that these images should behave the same way the normal one does
-RUNNER_IMAGE=ghcr.io/virtcode/serene-aur-runner:main
+# automatic versioning will only be done if the image tag contains {version}
+# the server will try to pull docker images with its tag as that version
+RUNNER_IMAGE=ghcr.io/virtcode/serene-aur-runner:edge-{version}
+
+# prune all old images when updating the runner image
+# warning: prunes all unused images known to the used docker instance
+PRUNE_IMAGES=true
 
 # schedule for pulling the latest runner image
 SCHEDULE_IMAGE=0 0 0 * * *
