@@ -7,6 +7,9 @@ edition = "2021"
 serene-data = { path = "data" }
 
 # interact with the aur
+alpm = "3.0.5"
+alpm-utils = "3.0.2"
+aur-depends = { git = "https://github.com/Morganamilo/aur-depends" } # what the fuck's up with the version on crates.io?
 raur = { version = "7.0.0", default-features = false, features = ["async", "rustls-tls"] }
 srcinfo = "1.1.0"
 
