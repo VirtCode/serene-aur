@@ -11,8 +11,8 @@ pub fn get_info(c: &Config) -> Result<SereneInfo> {
 }
 
 /// add a package
-pub fn add_package(c: &Config, request: PackageAddRequest) -> Result<PackagePeek> {
-    post::<PackageAddRequest, PackagePeek>(c, "package/add", request)
+pub fn add_package(c: &Config, request: PackageAddRequest) -> Result<Vec<PackageInfo>> {
+    post::<PackageAddRequest, Vec<PackageInfo>>(c, "package/add", request)
 }
 
 /// remove a package

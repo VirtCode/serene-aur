@@ -143,10 +143,10 @@ pub fn add(c: &Config, what: &str, replace: bool, file: bool, custom: bool, pkgb
         Err(e) => { log.fail(&e.msg()); return }
     };
 
-    log.succeed(&format!("successfully added package {}", info.base.bold()));
+    log.succeed(&format!("successfully added packages {}", info.iter().map(|i| i.base.as_str()).collect::<Vec<_>>().join(", ")));
 
     // install if requested
-    if install { wait_and_install(c, &info.base, quiet); }
+    if install { wait_and_install(c, &info.first().expect("added no package?").base, quiet); }
 }
 
 /// removes a package from the repository

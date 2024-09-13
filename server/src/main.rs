@@ -7,12 +7,18 @@ pub mod config;
 mod build;
 mod database;
 
+use std::collections::HashSet;
+use std::ops::Deref;
+use std::process::exit;
 use std::sync::Arc;
 use actix_web::{App, HttpMessage, HttpServer};
 use actix_web::web::Data;
+use alpm::{Alpm, SigLevel};
 use anyhow::Context;
+use aur_depends::{Flags, PkgbuildRepo, Resolver};
 use config::INFO;
 use log::{error, info, warn};
+use package::resolve::sync::{initialize_alpm, synchronize_alpm};
 use tokio::sync::{RwLock};
 use crate::build::schedule::{BuildScheduler, ImageScheduler};
 use crate::build::Builder;

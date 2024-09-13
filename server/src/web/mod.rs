@@ -86,16 +86,19 @@ pub async fn add(_: AuthWrite, body: Json<PackageAddRequest>, db: Data<Database>
     };
 
     // create package
-    let package = package::add_source(&db, source, body.0.replace).await.internal()?
+    let packages = package::add_source(&db, source, body.0.replace).await.internal()?
         .ok_or_else(|| ErrorBadRequest("package with the same base is already added"))?;
 
     { // scheduling package
         let mut scheduler = scheduler.write().await;
-        scheduler.schedule(&package).await.internal()?;
-        scheduler.run(&package, true).await.internal()?;
+
+        for p in &packages {
+            scheduler.schedule(p).await.internal()?;
+            scheduler.run(p, true).await.internal()?;
+        }
     }
 
-    Ok(Json(package.to_info()))
+    Ok(Json(packages.iter().map(|p| p.to_info()).collect::<Vec<_>>()))
 }
 
 #[get("/package/list")]
