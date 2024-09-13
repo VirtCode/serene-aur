@@ -58,6 +58,8 @@ pub struct Config {
     pub own_repository_url: Option<String>,
     /// secret used to sign webhook tokens
     pub webhook_secret: Option<String>,
+    /// mirror used to sychronize package dbs
+    pub sync_mirror: String,
 }
 
 impl Default for Config {
@@ -84,6 +86,8 @@ impl Default for Config {
             own_repository_url: None,
 
             webhook_secret: None,
+
+            sync_mirror: "https://mirror.init7.net/archlinux/{repo}/os/{arch}".to_string()
         }
     }
 }
@@ -142,6 +146,8 @@ impl Config {
                 .unwrap_or(default.build_cli),
 
             webhook_secret: env::var("WEBHOOK_SECRET").ok().or(default.webhook_secret),
+
+            sync_mirror: env::var("SYNC_MIRROR").ok().unwrap_or(default.sync_mirror)
         }
     }
 }
