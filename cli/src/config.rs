@@ -53,6 +53,14 @@ impl Config {
             let string = serde_yaml::to_string(&config)
                 .context("failed to serialize configuration file")?;
 
+            // create .config if doesn't exist
+            if let Some(parent) = file.parent() {
+                if !parent.exists() {
+                    fs::create_dir_all(parent)
+                        .context("failed to create config directory")?;
+                }
+            }
+
             fs::write(&file, string)
                 .context("failed to save new configuration file")?;
 
@@ -90,7 +98,7 @@ impl Config {
 
         Ok(config)
     }
-    
+
     /// creates a new config with default values
     fn new(secret: String, url: String) -> Self {
         Self {

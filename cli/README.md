@@ -2,7 +2,7 @@
 The CLI is the main way to interact with a serene server. It uses the [API](../server/README.md#api) of the server to add and manipulate the packages that are managed by the server. It is not required to [just use the built packages](../README.md#installing-only-the-repository) from the server though, as this is purely done through pacman.
 
 ## Usage
-This section will cover some of the ways one can use the cli to interact with the server. 
+This section will cover some of the ways one can use the cli to interact with the server.
 
 To get exhaustive options and information about a (sub-) command, you should still refer to the `--help` page of that item, as only some options are shown here.
 
@@ -38,7 +38,7 @@ serene remove my-package
 # Builds `my-package` now.
 serene build my-package
 
-# Builds `my-package` in a clean container and install it now. 
+# Builds `my-package` in a clean container and install it now.
 serene build --clean --install my-package
 ```
 
@@ -78,6 +78,9 @@ serene info my-package set flags "nocheck" "holdver"
 **Manage the server**: To manage some server properties, you can use the manage subcommand:
 
 ```shell
+# See general server information
+serene manage info
+
 # Request and print the webhook secret for the package `my-package`
 serene manage webhook my-package
 ```
@@ -128,6 +131,6 @@ url: [my-server-url]
 ## Shell Completions
 As seen in the [Building Manually](#building-manually) section, the cli includes shell completions. These will be installed automatically for most shells (unless you're [building directly](#building-directly)). Make sure to enable them in your preferred shell.
 
-Some shells (currently only Bash) also feature dynamic completions. This means you can complete package names for commands like `serene info` or `serene build`. The names that can be completed are sourced from a cache file, which is updated every time `serene list` is invoked. This avoids unintended network usage when just completing your command, but might not be totally accurate. 
+Some shells (currently only Bash) also feature dynamic completions. This means you can complete package names for commands like `serene info` or `serene build`. The names that can be completed are sourced from a cache file, which is updated every time `serene list` is invoked. This avoids unintended network usage when just completing your command, but might not be totally accurate.
 
 So if your package completions are not up-to-date, make sure your shell supports them and run `serene list` to update the completions in the background. Contributions for support for other shells are welcomed.
