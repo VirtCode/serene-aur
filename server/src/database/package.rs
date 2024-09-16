@@ -1,10 +1,10 @@
-use std::str::FromStr;
-use chrono::NaiveDateTime;
-use sqlx::{query, query_as};
-use crate::database::{Database, DatabaseConversion };
+use crate::database::{Database, DatabaseConversion};
+use crate::package::source::SrcinfoWrapper;
 use crate::package::Package;
 use anyhow::{Context, Result};
-use crate::package::source::SrcinfoWrapper;
+use chrono::NaiveDateTime;
+use sqlx::{query, query_as};
+use std::str::FromStr;
 
 /// See migrations:
 /// server/migrations/20240210163236_package.sql,
@@ -23,7 +23,7 @@ struct PackageRecord {
     clean: bool,
     schedule: Option<String>,
     prepare: Option<String>,
-    flags: Option<String>
+    flags: Option<String>,
 }
 
 impl DatabaseConversion<PackageRecord> for Package {
@@ -39,11 +39,18 @@ impl DatabaseConversion<PackageRecord> for Package {
             clean: self.clean,
             schedule: self.schedule.clone(),
             prepare: self.prepare.clone(),
-            flags: if !self.flags.is_empty() { Some(serde_json::to_string(&self.flags).context("failed to serialize flags")?) } else { None }
+            flags: if !self.flags.is_empty() {
+                Some(serde_json::to_string(&self.flags).context("failed to serialize flags")?)
+            } else {
+                None
+            },
         })
     }
 
-    fn from_record(value: PackageRecord) -> Result<Package> where Self: Sized {
+    fn from_record(value: PackageRecord) -> Result<Package>
+    where
+        Self: Sized,
+    {
         Ok(Self {
             base: value.base,
             added: value.added.and_utc(),
@@ -55,43 +62,55 @@ impl DatabaseConversion<PackageRecord> for Package {
             clean: value.clean,
             schedule: value.schedule,
             prepare: value.prepare,
-            flags: value.flags.map(|s| serde_json::from_str(&s).context("failed to deserialize source")).unwrap_or_else(|| Ok(vec![]))?
+            flags: value
+                .flags
+                .map(|s| serde_json::from_str(&s).context("failed to deserialize source"))
+                .unwrap_or_else(|| Ok(vec![]))?,
         })
     }
 }
 
 impl Package {
-
     /// Returns whether the database contains a specific package
     pub async fn has(base: &str, db: &Database) -> Result<bool> {
-        let amount = query!(r#"
+        let amount = query!(
+            r#"
             SELECT COUNT(base) as count FROM package WHERE base == $1
         "#,
             base
         )
-            .fetch_one(db).await?.count;
+        .fetch_one(db)
+        .await?
+        .count;
 
         Ok(amount > 0)
     }
 
     /// Find a specific package from the database
     pub async fn find(base: &str, db: &Database) -> Result<Option<Self>> {
-        let record = query_as!(PackageRecord, r#"
+        let record = query_as!(
+            PackageRecord,
+            r#"
             SELECT * FROM package WHERE base = $1
         "#,
             base
         )
-            .fetch_optional(db).await?;
+        .fetch_optional(db)
+        .await?;
 
         record.map(Package::from_record).transpose()
     }
 
     /// Find all packages from the database
     pub async fn find_all(db: &Database) -> Result<Vec<Self>> {
-        let records = query_as!(PackageRecord, r#"
+        let records = query_as!(
+            PackageRecord,
+            r#"
             SELECT * FROM package
-        "#)
-            .fetch_all(db).await?;
+        "#
+        )
+        .fetch_all(db)
+        .await?;
 
         records.into_iter().map(Package::from_record).collect()
     }
@@ -115,14 +134,21 @@ impl Package {
     pub async fn change_settings(&self, db: &Database) -> Result<()> {
         let record = self.create_record()?;
 
-        query!(r#"
+        query!(
+            r#"
             UPDATE package
             SET enabled = $2, clean = $3, schedule = $4, prepare = $5, flags = $6
             WHERE base = $1
         "#,
-            record.base, record.enabled, record.clean, record.schedule, record.prepare, record.flags
+            record.base,
+            record.enabled,
+            record.clean,
+            record.schedule,
+            record.prepare,
+            record.flags
         )
-            .execute(db).await?;
+        .execute(db)
+        .await?;
 
         Ok(())
     }
@@ -131,14 +157,20 @@ impl Package {
     pub async fn change_sources(&self, db: &Database) -> Result<()> {
         let record = self.create_record()?;
 
-        query!(r#"
+        query!(
+            r#"
             UPDATE package
             SET source = $2, srcinfo = $3, pkgbuild = $4, version = $5
             WHERE base = $1
         "#,
-            record.base, record.source, record.srcinfo, record.pkgbuild, record.version
+            record.base,
+            record.source,
+            record.srcinfo,
+            record.pkgbuild,
+            record.version
         )
-            .execute(db).await?;
+        .execute(db)
+        .await?;
 
         Ok(())
     }
@@ -147,12 +179,14 @@ impl Package {
     pub async fn delete(&self, db: &Database) -> Result<()> {
         let base = &self.base;
 
-        query!(r#"
+        query!(
+            r#"
             DELETE FROM package WHERE base = $1
         "#,
             base
         )
-            .execute(db).await?;
+        .execute(db)
+        .await?;
 
         Ok(())
     }

@@ -1,10 +1,10 @@
-use std::str::FromStr;
-use anyhow::{anyhow};
+use anyhow::anyhow;
 use chrono::{Local, Offset};
 use colored::{ColoredString, Colorize};
-use cron_descriptor::cronparser::cron_expression_descriptor::{get_description_cron_options};
+use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron_options;
 use cron_descriptor::cronparser::Options;
 use serene_data::build::{BuildInfo, BuildProgress, BuildState};
+use std::str::FromStr;
 
 pub trait BuildStateFormatter {
     fn colored_passive(&self) -> ColoredString;
@@ -14,19 +14,19 @@ pub trait BuildStateFormatter {
 impl BuildStateFormatter for BuildState {
     fn colored_passive(&self) -> ColoredString {
         match self {
-            BuildState::Running(_) => { "working".blue() }
-            BuildState::Success => { "passing".green() }
-            BuildState::Failure => { "failing".red() }
-            BuildState::Fatal(_, _) => { "fatal".bright_red() }
+            BuildState::Running(_) => "working".blue(),
+            BuildState::Success => "passing".green(),
+            BuildState::Failure => "failing".red(),
+            BuildState::Fatal(_, _) => "fatal".bright_red(),
         }
     }
 
     fn colored_substantive(&self) -> ColoredString {
         match self {
-            BuildState::Running(_) => { "working".blue() }
-            BuildState::Success => { "success".green() }
-            BuildState::Failure => { "failure".red() }
-            BuildState::Fatal(_, _) => { "fatal".bright_red() }
+            BuildState::Running(_) => "working".blue(),
+            BuildState::Success => "success".green(),
+            BuildState::Failure => "failure".red(),
+            BuildState::Fatal(_, _) => "fatal".bright_red(),
         }
     }
 }
@@ -38,11 +38,12 @@ pub trait BuildProgressFormatter {
 impl BuildProgressFormatter for BuildProgress {
     fn printable_string(&self) -> String {
         match self {
-            BuildProgress::Update => { "updating sources" }
-            BuildProgress::Build => { "building package" }
-            BuildProgress::Publish => { "publishing repository" }
-            BuildProgress::Clean => { "cleaning up" }
-        }.to_string()
+            BuildProgress::Update => "updating sources",
+            BuildProgress::Build => "building package",
+            BuildProgress::Publish => "publishing repository",
+            BuildProgress::Clean => "cleaning up",
+        }
+        .to_string()
     }
 }
 
@@ -55,32 +56,33 @@ pub fn get_build_id(summary: &BuildInfo) -> String {
 /// note that this is a very hacky implementation and does not work in all cases
 pub fn describe_cron_timezone_hack(schedule: &str) -> anyhow::Result<String> {
     let mut parts = schedule.split(' ').map(|s| s.to_owned()).collect::<Vec<_>>();
-    
-    if parts.len() < 5 { return Err(anyhow!("invalid cron string provided")) }
+
+    if parts.len() < 5 {
+        return Err(anyhow!("invalid cron string provided"));
+    }
     let index = parts.len() - 4; // fourth entry from the left
 
     // hack is only possible if it is comma separated or a single number
-    let possible = parts[index].chars().all(|c| {
-        "0123456789,".contains(c)
-    });
+    let possible = parts[index].chars().all(|c| "0123456789,".contains(c));
 
     if possible {
         let offset = Local::now().offset().fix().local_minus_utc() / (60 * 60);
 
         parts[index] = parts[index]
             .split(',')
-            .map(|s|
+            .map(|s| {
                 i32::from_str(s)
-                .map(|i| (i + offset % 24).to_string())
-                .unwrap_or_else(|_| s.to_string())
-            )
-            .intersperse(",".to_string()).collect();
+                    .map(|i| (i + offset % 24).to_string())
+                    .unwrap_or_else(|_| s.to_string())
+            })
+            .intersperse(",".to_string())
+            .collect();
     }
 
     get_description_cron_options(
         &parts.into_iter().intersperse(" ".to_string()).collect::<String>(),
-        &Options::twenty_four_hour()
+        &Options::twenty_four_hour(),
     )
-        .map(|s| format!("{}{}", s, if possible { "" } else { " (UTC)" }))
-        .map_err(|_| anyhow!("failed to parse cron string"))
+    .map(|s| format!("{}{}", s, if possible { "" } else { " (UTC)" }))
+    .map_err(|_| anyhow!("failed to parse cron string"))
 }

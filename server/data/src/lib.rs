@@ -18,5 +18,5 @@ pub struct SereneInfo {
     /// is the server readable without auth
     pub readable: bool,
     /// are the packages signed
-    pub signed: bool
+    pub signed: bool,
 }

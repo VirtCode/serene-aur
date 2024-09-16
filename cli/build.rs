@@ -1,14 +1,13 @@
-use std::{env, fs, process};
+use clap::{CommandFactory, ValueEnum};
+use clap_complete::Generator;
 use std::io::Error;
 use std::path::PathBuf;
-use clap::{CommandFactory, ValueEnum};
-use clap_complete::{Generator};
+use std::{env, fs, process};
 
 include!("src/command.rs");
 include!("src/complete/script.rs");
 
 fn main() -> Result<(), Error> {
-
     shell_completions()?;
     git_version()?;
 
@@ -16,11 +15,7 @@ fn main() -> Result<(), Error> {
 }
 
 fn git_version() -> Result<(), Error> {
-    let git = process::Command::new("git")
-            .arg("describe")
-            .arg("--tags")
-            .arg("--abbrev=0")
-            .output();
+    let git = process::Command::new("git").arg("describe").arg("--tags").arg("--abbrev=0").output();
 
     let tag = match git {
         Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
@@ -37,7 +32,9 @@ fn git_version() -> Result<(), Error> {
 
 /// generate shell version
 fn shell_completions() -> Result<(), Error> {
-    let Some(out) = env::var_os("COMPLETIONS_DIR").or_else(|| env::var_os("OUT_DIR")).map(PathBuf::from) else {
+    let Some(out) =
+        env::var_os("COMPLETIONS_DIR").or_else(|| env::var_os("OUT_DIR")).map(PathBuf::from)
+    else {
         return Ok(());
     };
 

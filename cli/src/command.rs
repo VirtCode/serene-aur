@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, ArgAction};
+use clap::{ArgAction, Parser, Subcommand};
 
 #[derive(Parser)]
 #[clap(version = option_env!("TAG").unwrap_or("unknown"), about)]
@@ -54,7 +54,7 @@ pub enum Action {
     /// removes a package
     Remove {
         /// base name of the package
-        name: String
+        name: String,
     },
 
     /// schedules an immediate build for a package
@@ -86,24 +86,24 @@ pub enum Action {
 
         /// what type of info to get
         #[clap(subcommand)]
-        what: Option<InfoCommand>
+        what: Option<InfoCommand>,
     },
 
     /// prints the current secret
     Secret {
         /// print the secret in a machine readable way
         #[clap(short, long)]
-        machine: bool
+        machine: bool,
     },
 
     /// manage things related to the server
     Manage {
         #[clap(subcommand)]
-        manage: ManageSubcommand
+        manage: ManageSubcommand,
     },
 
     #[command(hide = true)]
-    Completions
+    Completions,
 }
 
 #[derive(Subcommand)]
@@ -111,7 +111,7 @@ pub enum InfoCommand {
     /// get information about a build
     Build {
         /// id of the build, latest if empty
-        id: Option<String>
+        id: Option<String>,
     },
 
     /// get logs from a build
@@ -125,7 +125,7 @@ pub enum InfoCommand {
 
         /// stay attached indefinitely
         #[clap(short, long)]
-        linger: bool
+        linger: bool,
     },
 
     /// get the pkgbuild used to build the current package
@@ -135,8 +135,8 @@ pub enum InfoCommand {
     Set {
         /// property to set
         #[clap(subcommand)]
-        property: SettingsSubcommand
-    }
+        property: SettingsSubcommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -151,8 +151,8 @@ pub enum ManageSubcommand {
 
         /// print the secret in a machine readable way
         #[clap(short, long)]
-        machine: bool
-    }
+        machine: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -161,31 +161,31 @@ pub enum SettingsSubcommand {
     Clean {
         /// remove container after build
         #[arg(action = ArgAction::Set)]
-        enabled: bool
+        enabled: bool,
     },
 
     /// enable or disable automatic package building
     Enable {
         /// enable automatic building
         #[arg(action = ArgAction::Set)]
-        enabled: bool
+        enabled: bool,
     },
 
     /// set custom schedule
     Schedule {
         /// cron string of schedule
-        cron: String
+        cron: String,
     },
 
     /// set prepare command
     Prepare {
         /// commands to be run before build
-        command: String
+        command: String,
     },
 
     /// set additional makepkg flags
     Flags {
         /// flags to add, without the dashes
-        flags: Vec<String>
+        flags: Vec<String>,
     },
 }

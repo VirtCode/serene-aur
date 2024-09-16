@@ -1,7 +1,7 @@
-use serene_data::build::BuildInfo;
-use serene_data::package::{PackageInfo, PackagePeek};
 use crate::build::BuildSummary;
 use crate::package::Package;
+use serene_data::build::BuildInfo;
+use serene_data::package::{PackageInfo, PackagePeek};
 
 impl Package {
     pub fn to_peek(&self, build: Option<BuildSummary>) -> PackagePeek {
@@ -12,7 +12,7 @@ impl Package {
             version: self.version.clone(),
             added: self.added,
             members: self.get_packages(),
-            build: build.map(|b| b.as_info())
+            build: build.map(|b| b.as_info()),
         }
     }
 
@@ -27,7 +27,7 @@ impl Package {
             schedule: self.get_schedule(),
             added: self.added,
             prepare_commands: self.prepare.clone(),
-            makepkg_flags: self.flags.clone()
+            makepkg_flags: self.flags.clone(),
         }
     }
 }
@@ -38,8 +38,7 @@ impl BuildSummary {
             version: self.version.clone(),
             state: self.state.clone(),
             started: self.started,
-            ended: self.ended
+            ended: self.ended,
         }
     }
 }
-

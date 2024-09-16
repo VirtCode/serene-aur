@@ -1,16 +1,15 @@
-use std::collections::HashMap;
-use std::sync::{Arc};
-use std::time::Duration;
-use anyhow::{anyhow, Context};
-use hyper::body::HttpBody;
-use log::{debug, error, info, warn};
-use tokio::sync::RwLock;
-use tokio_cron_scheduler::{Job, JobScheduler};
-use uuid::Uuid;
 use crate::build::Builder;
 use crate::config::CONFIG;
 use crate::package::Package;
 use crate::runner::Runner;
+use anyhow::{anyhow, Context};
+use log::{debug, error, info, warn};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::RwLock;
+use tokio_cron_scheduler::{Job, JobScheduler};
+use uuid::Uuid;
 
 /// this struct schedules builds for all packages
 pub struct BuildScheduler {
@@ -19,31 +18,29 @@ pub struct BuildScheduler {
     sched: JobScheduler,
     jobs: HashMap<String, Uuid>,
     /// stores whether a package is currently being built
-    locks: HashMap<String, Arc<RwLock<bool>>>
+    locks: HashMap<String, Arc<RwLock<bool>>>,
 }
 
 impl BuildScheduler {
-
     /// creates a new scheduler
     pub async fn new(builder: Arc<RwLock<Builder>>) -> anyhow::Result<Self> {
         Ok(Self {
             builder,
-            sched: JobScheduler::new().await
-                .context("failed to initialize job scheduler")?,
+            sched: JobScheduler::new().await.context("failed to initialize job scheduler")?,
             jobs: HashMap::new(),
-            locks: HashMap::new()
+            locks: HashMap::new(),
         })
     }
 
     /// starts the scheduler
     pub async fn start(&self) -> anyhow::Result<()> {
-        self.sched.start().await
-            .context("failed to start scheduler")
+        self.sched.start().await.context("failed to start scheduler")
     }
 
     /// get the build lock of a package
     fn get_lock(&mut self, package: &Package) -> Arc<RwLock<bool>> {
-        self.locks.entry(package.base.clone())
+        self.locks
+            .entry(package.base.clone())
             .or_insert_with(|| Arc::new(RwLock::new(false)))
             .clone()
     }
@@ -57,7 +54,9 @@ impl BuildScheduler {
         let builder = self.builder.clone();
 
         if *lock.read().await {
-            return Err(anyhow!("cannot run build for package {base} now because lock for build is set"))
+            return Err(anyhow!(
+                "cannot run build for package {base} now because lock for build is set"
+            ));
         }
 
         let job = Job::new_one_shot_async(Duration::from_secs(0), move |_, _| {
@@ -66,9 +65,12 @@ impl BuildScheduler {
             let builder = builder.clone();
 
             Box::pin(async move { run(lock, builder, true, base, clean).await })
-        }).context(format!("failed to create job for package {}", package.base))?;
+        })
+        .context(format!("failed to create job for package {}", package.base))?;
 
-        self.sched.add(job).await
+        self.sched
+            .add(job)
+            .await
             .context(format!("failed to schedule oneshot for package {}", &package.base))?;
 
         Ok(())
@@ -78,7 +80,9 @@ impl BuildScheduler {
     pub async fn unschedule(&mut self, package: &Package) -> anyhow::Result<()> {
         if let Some(id) = self.jobs.remove(&package.base) {
             debug!("unscheduling job for {}", package.base);
-            self.sched.remove(&id).await
+            self.sched
+                .remove(&id)
+                .await
                 .context(format!("failed to unschedule job for package {}", package.base))?;
         }
 
@@ -86,7 +90,7 @@ impl BuildScheduler {
     }
 
     /// schedules the builds for a package
-    pub async fn schedule(&mut self, package: &Package) -> anyhow::Result<()>{
+    pub async fn schedule(&mut self, package: &Package) -> anyhow::Result<()> {
         info!("scheduling recurring build for package {}", &package.base);
         self.unschedule(package).await?;
 
@@ -100,11 +104,14 @@ impl BuildScheduler {
             let builder = builder.clone();
 
             Box::pin(async move { run(lock, builder, false, base, false).await })
-        }).context(format!("failed to create job for package {}", package.base))?;
+        })
+        .context(format!("failed to create job for package {}", package.base))?;
 
         self.jobs.insert(package.base.clone(), job.guid());
 
-        self.sched.add(job).await
+        self.sched
+            .add(job)
+            .await
             .context(format!("failed to schedule job for package {}", package.base))?;
 
         Ok(())
@@ -112,11 +119,17 @@ impl BuildScheduler {
 }
 
 /// runs a build for a package
-async fn run(lock: Arc<RwLock<bool>>, builder: Arc<RwLock<Builder>>, force: bool, base: String, clean: bool) {
+async fn run(
+    lock: Arc<RwLock<bool>>,
+    builder: Arc<RwLock<Builder>>,
+    force: bool,
+    base: String,
+    clean: bool,
+) {
     // makes sure a package is not built twice at the same time
     if *lock.read().await {
         warn!("cancelling schedule for package {base} because the lock is set");
-        return
+        return;
     }
 
     *lock.write().await = true;
@@ -124,11 +137,11 @@ async fn run(lock: Arc<RwLock<bool>>, builder: Arc<RwLock<Builder>>, force: bool
     *lock.write().await = false;
 }
 
-/// Schedules the pulling of the runner image 
+/// Schedules the pulling of the runner image
 pub struct ImageScheduler {
     runner: Arc<RwLock<Runner>>,
     sched: JobScheduler,
-    job: Uuid
+    job: Uuid,
 }
 
 impl ImageScheduler {
@@ -136,45 +149,43 @@ impl ImageScheduler {
     pub async fn new(runner: Arc<RwLock<Runner>>) -> anyhow::Result<Self> {
         let mut s = Self {
             runner,
-            sched: JobScheduler::new().await
-                .context("failed to initialize job scheduler")?,
-            job: Uuid::from_u128(0u128)
+            sched: JobScheduler::new().await.context("failed to initialize job scheduler")?,
+            job: Uuid::from_u128(0u128),
         };
-        
+
         s.schedule().await?;
         Ok(s)
     }
 
     /// starts the scheduler
     pub async fn start(&self) -> anyhow::Result<()> {
-        self.sched.start().await
-            .context("failed to start image scheduler")
+        self.sched.start().await.context("failed to start image scheduler")
     }
-    
+
     // schedules an image update
     async fn schedule(&mut self) -> anyhow::Result<()> {
         let runner = self.runner.clone();
 
         info!("scheduling image update");
-        
+
         let job = Job::new_async(CONFIG.schedule_image.as_str(), move |_, _| {
             let runner = runner.clone();
 
-            Box::pin(async move { 
+            Box::pin(async move {
                 info!("updating runner image");
-                
+
                 if let Err(e) = runner.read().await.update_image().await {
                     error!("failed to update runner image: {e:#}");
                 } else {
                     info!("successfully updated runner image");
                 }
             })
-        }).context("failed to schedule job image updating")?;
-        
+        })
+        .context("failed to schedule job image updating")?;
+
         self.job = job.guid();
-        self.sched.add(job).await
-            .context("failed to schedule image update")?;
-        
+        self.sched.add(job).await.context("failed to schedule image update")?;
+
         Ok(())
     }
 }

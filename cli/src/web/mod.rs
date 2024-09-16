@@ -1,31 +1,22 @@
-pub mod requests;
 pub mod data;
+pub mod requests;
 
 use futures::StreamExt;
 use reqwest::blocking::{Client, Response};
 
-use reqwest_eventsource::{Event, EventSource};
-use serde::{Serialize};
-use serde::de::DeserializeOwned;
-use tokio::runtime::Runtime;
 use crate::config::Config;
+use reqwest_eventsource::{Event, EventSource};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use tokio::runtime::Runtime;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub enum Error {
-    Client {
-        error: reqwest::Error,
-    },
-    Event {
-        error: reqwest_eventsource::Error,
-    },
-    Server {
-        message: String,
-    },
-    Input {
-        code: u16,
-        message: String
-    }
+    Client { error: reqwest::Error },
+    Event { error: reqwest_eventsource::Error },
+    Server { message: String },
+    Input { code: u16, message: String },
 }
 
 impl Error {
@@ -37,10 +28,8 @@ impl Error {
             Error::Event { error } => {
                 format!("error in event source: {error:#}")
             }
-            Error::Server { message } => {
-                message.to_string()
-            }
-            Error::Input { message, code} => {
+            Error::Server { message } => message.to_string(),
+            Error::Input { message, code } => {
                 format!("{message} ({code})")
             }
         }
@@ -57,24 +46,22 @@ fn process_errors(result: reqwest::Result<Response>) -> Result<Response> {
     if result.status().is_success() {
         Ok(result)
     } else if result.status().is_server_error() {
-        Err(Error::Server {
-            message: result.text().map_err(|e| Error::Client { error: e })?
-        })
+        Err(Error::Server { message: result.text().map_err(|e| Error::Client { error: e })? })
     } else {
         Err(Error::Input {
             code: result.status().as_u16(),
-            message: result.text().map_err(|e| Error::Client { error: e })?
+            message: result.text().map_err(|e| Error::Client { error: e })?,
         })
     }
 }
 
 fn process_result<R: DeserializeOwned>(result: reqwest::Result<Response>) -> Result<R> {
-    process_errors(result)?.json()
-        .map_err(|e| Error::Client { error: e })
+    process_errors(result)?.json().map_err(|e| Error::Client { error: e })
 }
 
 pub fn post<B: Serialize, R: DeserializeOwned>(config: &Config, path: &str, body: B) -> Result<R> {
-    let result = Client::new().post(get_url(config, path))
+    let result = Client::new()
+        .post(get_url(config, path))
         .header("Authorization", &config.secret)
         .json(&body)
         .send();
@@ -83,9 +70,8 @@ pub fn post<B: Serialize, R: DeserializeOwned>(config: &Config, path: &str, body
 }
 
 pub fn post_empty(config: &Config, path: &str) -> Result<()> {
-    let result = Client::new().post(get_url(config, path))
-        .header("Authorization", &config.secret)
-        .send();
+    let result =
+        Client::new().post(get_url(config, path)).header("Authorization", &config.secret).send();
 
     process_errors(result)?;
 
@@ -93,7 +79,8 @@ pub fn post_empty(config: &Config, path: &str) -> Result<()> {
 }
 
 pub fn post_simple<B: Serialize>(config: &Config, path: &str, body: B) -> Result<()> {
-    let result = Client::new().post(get_url(config, path))
+    let result = Client::new()
+        .post(get_url(config, path))
         .header("Authorization", &config.secret)
         .json(&body)
         .send();
@@ -104,9 +91,8 @@ pub fn post_simple<B: Serialize>(config: &Config, path: &str, body: B) -> Result
 }
 
 pub fn delete_empty(config: &Config, path: &str) -> Result<()> {
-    let result = Client::new().delete(get_url(config, path))
-        .header("Authorization", &config.secret)
-        .send();
+    let result =
+        Client::new().delete(get_url(config, path)).header("Authorization", &config.secret).send();
 
     process_errors(result)?;
 
@@ -114,19 +100,20 @@ pub fn delete_empty(config: &Config, path: &str) -> Result<()> {
 }
 
 pub fn get<R: DeserializeOwned>(config: &Config, path: &str) -> Result<R> {
-    let result = Client::new().get(get_url(config, path))
-        .header("Authorization", &config.secret)
-        .send();
+    let result =
+        Client::new().get(get_url(config, path)).header("Authorization", &config.secret).send();
 
     process_result(result)
 }
 
-pub fn eventsource<F>(config: &Config, path: &str, mut cb: F) -> Result<()> where F: FnMut(Event) -> bool {
+pub fn eventsource<F>(config: &Config, path: &str, mut cb: F) -> Result<()>
+where
+    F: FnMut(Event) -> bool,
+{
     let mut con = EventSource::new(
-        reqwest::Client::new()
-            .get(get_url(config, path))
-            .header("Authorization", &config.secret)
-    ) .expect("should be cloneable");
+        reqwest::Client::new().get(get_url(config, path)).header("Authorization", &config.secret),
+    )
+    .expect("should be cloneable");
 
     let rt = Runtime::new().expect("should be able to create runtime");
 
@@ -138,14 +125,14 @@ pub fn eventsource<F>(config: &Config, path: &str, mut cb: F) -> Result<()> wher
                         con.close();
                         return Ok(());
                     }
-                },
+                }
                 Err(err) => {
                     con.close();
-                    return Err(Error::Event { error: err })
-                },
+                    return Err(Error::Event { error: err });
+                }
             }
         }
-        
+
         Ok(())
     })
 }

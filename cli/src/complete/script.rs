@@ -1,6 +1,6 @@
-use std::io::BufWriter;
 use clap::Command;
 use clap_complete::Shell;
+use std::io::BufWriter;
 
 const PACKAGE_COMPLETION_BASH: &str = r#"
 if [[ ${cur} != -* && ${COMP_CWORD} -eq 2 ]] ; then
@@ -18,18 +18,19 @@ if [[ ${cur} != -* && ${COMP_CWORD} -eq 2 ]] ; then
 fi
 "#;
 
-const PACKAGE_COMPLETION_COMMANDS: [&str; 3] = [
-    "info",
-    "build",
-    "remove"
-];
+const PACKAGE_COMPLETION_COMMANDS: [&str; 3] = ["info", "build", "remove"];
 
-
-pub fn generate_completions(shell: Shell, binary: &str, command: &mut Command, warnings: bool) -> String {
+pub fn generate_completions(
+    shell: Shell,
+    binary: &str,
+    command: &mut Command,
+    warnings: bool,
+) -> String {
     let mut buffer = BufWriter::new(Vec::new());
     clap_complete::generate(shell, command, binary, &mut buffer);
 
-    let mut output = String::from_utf8_lossy(&*buffer.into_inner().unwrap_or(Vec::new())).to_string();
+    let mut output =
+        String::from_utf8_lossy(&*buffer.into_inner().unwrap_or(Vec::new())).to_string();
 
     // yes this currently only supports bash, feel free to contribute other shells!
     if matches!(shell, Shell::Bash) {

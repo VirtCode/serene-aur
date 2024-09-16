@@ -1,19 +1,17 @@
-use std::collections::HashMap;
-use std::path::Path;
-use anyhow::Context;
+use crate::package::source::Source;
+use crate::package::{aur, git};
 use async_trait::async_trait;
 use log::debug;
 use serde::{Deserialize, Serialize};
-use srcinfo::Srcinfo;
-use crate::package::{aur, git};
-use crate::package::source::{read_srcinfo_string, Source};
+use std::collections::HashMap;
+use std::path::Path;
 
 /// this is the source of a -git development package
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DevelGitSource {
     repository: String,
     last_commit: String,
-    last_source_commits: HashMap<String, String>
+    last_source_commits: HashMap<String, String>,
 }
 
 impl DevelGitSource {
@@ -22,7 +20,7 @@ impl DevelGitSource {
         Self {
             repository: repository.to_owned(),
             last_commit: "".to_owned(),
-            last_source_commits: HashMap::new()
+            last_source_commits: HashMap::new(),
         }
     }
 }
@@ -30,7 +28,6 @@ impl DevelGitSource {
 #[async_trait]
 #[typetag::serde]
 impl Source for DevelGitSource {
-
     async fn create(&mut self, folder: &Path) -> anyhow::Result<()> {
         debug!("creating {}", self.repository);
         git::clone(&self.repository, folder).await?;
@@ -42,14 +39,19 @@ impl Source for DevelGitSource {
         // check pkgbuild repository
         debug!("updating {}", &self.repository);
         let current_commit = git::find_commit(&self.repository).await?;
-        if current_commit != self.last_commit { return Ok(true) }
+        if current_commit != self.last_commit {
+            return Ok(true);
+        }
 
         // check sources
-        // FIXME: compare this with aur::source_latest_version, as not everything has to be a git commit
+        // FIXME: compare this with aur::source_latest_version, as not everything has to
+        // be a git commit
         for (repo, commit) in &self.last_source_commits {
             debug!("updating source {}", repo);
             let latest = git::find_commit(repo).await?;
-            if &latest != commit { return Ok(true) }
+            if &latest != commit {
+                return Ok(true);
+            }
         }
 
         Ok(false)
@@ -62,10 +64,13 @@ impl Source for DevelGitSource {
         self.last_commit = git::find_commit(&self.repository).await?;
 
         // refresh sources
-        self.last_source_commits = aur::source_latest_version(&self.get_srcinfo(folder).await?).await?;
+        self.last_source_commits =
+            aur::source_latest_version(&self.get_srcinfo(folder).await?).await?;
 
         Ok(())
     }
 
-    fn is_devel(&self) -> bool { true }
+    fn is_devel(&self) -> bool {
+        true
+    }
 }

@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
+use log::warn;
 use std::env;
 use std::str::FromStr;
-use log::warn;
 
 pub const SOURCE_REPOSITORY: &str = "https://github.com/VirtCode/serene-aur";
 pub const RUNNER_CONTAINER_NAME: &str = "ghcr.io/virtcode/serene-aur-runner:edge-{version}";
@@ -14,15 +14,12 @@ lazy_static! {
 
 pub struct Info {
     pub start_time: DateTime<Utc>,
-    pub version: String
+    pub version: String,
 }
 
 impl Info {
     fn start() -> Self {
-        Self {
-            start_time: Utc::now(),
-            version: env!("TAG").to_string()
-        }
+        Self { start_time: Utc::now(), version: env!("TAG").to_string() }
     }
 }
 
@@ -86,7 +83,7 @@ impl Default for Config {
             build_cli: true,
             own_repository_url: None,
 
-            webhook_secret: None
+            webhook_secret: None,
         }
     }
 }
@@ -96,8 +93,13 @@ impl Config {
         let default = Self::default();
 
         Self {
-            allow_reads: env::var("ALLOW_READS").ok()
-                .and_then(|s| bool::from_str(&s).map_err(|_| warn!("failed to parse ALLOW_READS, using default")).ok())
+            allow_reads: env::var("ALLOW_READS")
+                .ok()
+                .and_then(|s| {
+                    bool::from_str(&s)
+                        .map_err(|_| warn!("failed to parse ALLOW_READS, using default"))
+                        .ok()
+                })
                 .unwrap_or(default.allow_reads),
 
             architecture: env::var("ARCH").unwrap_or(default.architecture),
@@ -106,25 +108,40 @@ impl Config {
             own_repository_url: env::var("OWN_REPOSITORY_URL").ok().or(default.own_repository_url),
 
             schedule_image: env::var("SCHEUDLE_IMAGE").unwrap_or(default.schedule_image),
-            schedule_devel: env::var("SCHEDULE_DEVEL").or(env::var("SCHEUDLE")).unwrap_or(default.schedule_devel.clone()),
+            schedule_devel: env::var("SCHEDULE_DEVEL")
+                .or(env::var("SCHEUDLE"))
+                .unwrap_or(default.schedule_devel.clone()),
             schedule_default: env::var("SCHEUDLE").unwrap_or(default.schedule_default),
 
             container_prefix: env::var("RUNNER_PREFIX").unwrap_or(default.container_prefix),
             runner_image: env::var("RUNNER_IMAGE").unwrap_or(default.runner_image),
-            prune_images: env::var("PRUNE_IMAGES").ok()
-                            .and_then(|s| bool::from_str(&s).map_err(|_| warn!("failed to parse PRUNE_IMAGES, using default")).ok())
-                            .unwrap_or(default.prune_images),
+            prune_images: env::var("PRUNE_IMAGES")
+                .ok()
+                .and_then(|s| {
+                    bool::from_str(&s)
+                        .map_err(|_| warn!("failed to parse PRUNE_IMAGES, using default"))
+                        .ok()
+                })
+                .unwrap_or(default.prune_images),
 
             docker_url: env::var("DOCKER_URL").ok().or(default.docker_url),
 
-            port: env::var("PORT").ok()
-                .and_then(|s| u16::from_str(&s).map_err(|_| warn!("failed to parse PORT, using default")).ok())
+            port: env::var("PORT")
+                .ok()
+                .and_then(|s| {
+                    u16::from_str(&s).map_err(|_| warn!("failed to parse PORT, using default")).ok()
+                })
                 .unwrap_or(default.port),
-            build_cli: env::var("BUILD_CLI").ok()
-                .and_then(|s| bool::from_str(&s).map_err(|_| warn!("failed to parse BUILD_CLI, using default")).ok())
+            build_cli: env::var("BUILD_CLI")
+                .ok()
+                .and_then(|s| {
+                    bool::from_str(&s)
+                        .map_err(|_| warn!("failed to parse BUILD_CLI, using default"))
+                        .ok()
+                })
                 .unwrap_or(default.build_cli),
 
-            webhook_secret: env::var("WEBHOOK_SECRET").ok().or(default.webhook_secret)
+            webhook_secret: env::var("WEBHOOK_SECRET").ok().or(default.webhook_secret),
         }
     }
 }

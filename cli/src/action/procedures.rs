@@ -1,21 +1,30 @@
-use std::cell::RefCell;
-use std::env::consts::ARCH;
-use std::fs::File;
-use std::io::Read;
-use std::str::FromStr;
-use chrono::{Local, Utc};
-use colored::{ColoredString, Colorize};
-use semver::Version;
-use serene_data::build::{BuildState};
-use serene_data::package::{BroadcastEvent, MakepkgFlag, PackageAddRequest, PackageAddSource, PackageBuildRequest, PackageSettingsRequest};
 use crate::action::pacman;
 use crate::command::SettingsSubcommand;
 use crate::complete::save_completions;
 use crate::config::Config;
 use crate::log::Log;
-use crate::table::{ago, Column, table};
-use crate::web::data::{BuildProgressFormatter, BuildStateFormatter, describe_cron_timezone_hack, get_build_id};
-use crate::web::requests::{add_package, build_package, get_build, get_build_logs, get_builds, get_info, get_package, get_package_pkgbuild, get_packages, get_webhook_secret, remove_package, set_package_setting, subscribe_events};
+use crate::table::{ago, table, Column};
+use crate::web::data::{
+    describe_cron_timezone_hack, get_build_id, BuildProgressFormatter, BuildStateFormatter,
+};
+use crate::web::requests::{
+    add_package, build_package, get_build, get_build_logs, get_builds, get_info, get_package,
+    get_package_pkgbuild, get_packages, get_webhook_secret, remove_package, set_package_setting,
+    subscribe_events,
+};
+use chrono::{Local, Utc};
+use colored::{ColoredString, Colorize};
+use semver::Version;
+use serene_data::build::BuildState;
+use serene_data::package::{
+    BroadcastEvent, MakepkgFlag, PackageAddRequest, PackageAddSource, PackageBuildRequest,
+    PackageSettingsRequest,
+};
+use std::cell::RefCell;
+use std::env::consts::ARCH;
+use std::fs::File;
+use std::io::Read;
+use std::str::FromStr;
 
 /// waits for a package to build and then installs it
 fn wait_and_install(c: &Config, base: &str, quiet: bool) {
@@ -24,12 +33,16 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
 
     // waiting for build to finish
     let mut log = match subscribe_events(c, base, |e, data| {
-
         match e {
             BroadcastEvent::BuildStart | BroadcastEvent::Log => {
                 if !started {
-                    if !quiet { if let Some(log) = log.replace(None) { log.succeed("subscribed to logs successfully") }}
-                    else if let Some(log) = log.borrow_mut().as_mut() { log.next("waiting for build to finish") }
+                    if !quiet {
+                        if let Some(log) = log.replace(None) {
+                            log.succeed("subscribed to logs successfully")
+                        }
+                    } else if let Some(log) = log.borrow_mut().as_mut() {
+                        log.next("waiting for build to finish")
+                    }
                 }
 
                 if !quiet {
@@ -38,19 +51,27 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
 
                 started = true;
             }
-            BroadcastEvent::BuildEnd => { return true; }
+            BroadcastEvent::BuildEnd => {
+                return true;
+            }
             BroadcastEvent::Ping => {}
         }
 
         false
     }) {
         Ok(()) => {
-            if let Some(log) = log.replace(None) { log }
-            else { Log::start("finishing up build") }
+            if let Some(log) = log.replace(None) {
+                log
+            } else {
+                Log::start("finishing up build")
+            }
         }
         Err(err) => {
-            if let Some(log) = log.replace(None) { log.fail(&format!("log subscription failed: {}", &err.msg())) }
-            else { Log::failure(&format!("log subscription failed: {}", &err.msg())) }
+            if let Some(log) = log.replace(None) {
+                log.fail(&format!("log subscription failed: {}", &err.msg()))
+            } else {
+                Log::failure(&format!("log subscription failed: {}", &err.msg()))
+            }
 
             return;
         }
@@ -59,7 +80,7 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
     // fetch information
     log.next("fetching package information");
     let package = match get_package(c, base) {
-        Ok(info) => { info }
+        Ok(info) => info,
         Err(e) => {
             log.fail(&format!("failed to fetch package: {}", &e.msg()));
             return;
@@ -68,7 +89,7 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
 
     log.next("fetching build information");
     let build = match get_build(c, base, "latest") {
-        Ok(build) => { build }
+        Ok(build) => build,
         Err(e) => {
             log.fail(&format!("failed to fetch build: {}", &e.msg()));
             return;
@@ -105,7 +126,17 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
 }
 
 /// add a package to the repository
-pub fn add(c: &Config, what: &str, replace: bool, file: bool, custom: bool, pkgbuild: bool, devel: bool, install: bool, quiet: bool) {
+pub fn add(
+    c: &Config,
+    what: &str,
+    replace: bool,
+    file: bool,
+    custom: bool,
+    pkgbuild: bool,
+    devel: bool,
+    install: bool,
+    quiet: bool,
+) {
     let mut log = Log::start("initializing package adding");
 
     // read file if requested
@@ -113,17 +144,23 @@ pub fn add(c: &Config, what: &str, replace: bool, file: bool, custom: bool, pkgb
         log.next("loading content from file");
 
         let mut file = match File::open(what) {
-            Ok(f) => { f }
-            Err(e) => { log.fail(&format!("failed to open file: {e:#}")); return }
+            Ok(f) => f,
+            Err(e) => {
+                log.fail(&format!("failed to open file: {e:#}"));
+                return;
+            }
         };
 
         let mut buf = String::new();
         if let Err(e) = file.read_to_string(&mut buf) {
-            log.fail(&format!("failed to read file: {e:#}")); return
+            log.fail(&format!("failed to read file: {e:#}"));
+            return;
         }
 
         buf
-    } else { what.to_owned() };
+    } else {
+        what.to_owned()
+    };
 
     // parse source
     let source = if pkgbuild {
@@ -139,14 +176,19 @@ pub fn add(c: &Config, what: &str, replace: bool, file: bool, custom: bool, pkgb
 
     // add package on server
     let info = match add_package(c, PackageAddRequest { replace, source }) {
-        Ok(info) => { info }
-        Err(e) => { log.fail(&e.msg()); return }
+        Ok(info) => info,
+        Err(e) => {
+            log.fail(&e.msg());
+            return;
+        }
     };
 
     log.succeed(&format!("successfully added package {}", info.base.bold()));
 
     // install if requested
-    if install { wait_and_install(c, &info.base, quiet); }
+    if install {
+        wait_and_install(c, &info.base, quiet);
+    }
 }
 
 /// removes a package from the repository
@@ -154,8 +196,8 @@ pub fn remove(c: &Config, package: &str) {
     let log = Log::start(&format!("removing package {} from the repository", package.italic()));
 
     match remove_package(c, package) {
-        Ok(()) => { log.succeed("successfully deleted package") }
-        Err(e) => { log.fail(&e.msg()) }
+        Ok(()) => log.succeed("successfully deleted package"),
+        Err(e) => log.fail(&e.msg()),
     }
 }
 
@@ -171,7 +213,9 @@ pub fn build(c: &Config, package: &str, clean: bool, install: bool, quiet: bool)
     log.succeed("queued build successfully");
 
     // install if requested
-    if install { wait_and_install(c, package, quiet); }
+    if install {
+        wait_and_install(c, package, quiet);
+    }
 }
 
 /// list all packages in a table
@@ -195,31 +239,44 @@ pub fn list(c: &Config) {
                 Column::new("devel").force().centered(),
                 Column::new("enabl").force().centered(),
                 Column::new("build").force().centered(),
-                Column::new("time ago").force()
+                Column::new("time ago").force(),
             ];
 
-            let rows = list.iter().map(|peek| {
-                [
-                    peek.base.bold(),
-                    peek.version.as_ref().map(|s| s.normal()).unwrap_or_else(|| "unknown".dimmed()),
-                    if peek.devel { "X".dimmed() } else { "".dimmed() },
-                    if peek.enabled { "X".yellow() } else { "".dimmed() },
-                    peek.build.as_ref().map(|p| p.state.colored_passive()).unwrap_or_else(|| "none".dimmed()),
-                    peek.build.as_ref().map(|p| {
-                        let duration = Utc::now() - p.ended.unwrap_or(p.started);
-                        let string = ago::difference(duration);
+            let rows = list
+                .iter()
+                .map(|peek| {
+                    [
+                        peek.base.bold(),
+                        peek.version
+                            .as_ref()
+                            .map(|s| s.normal())
+                            .unwrap_or_else(|| "unknown".dimmed()),
+                        if peek.devel { "X".dimmed() } else { "".dimmed() },
+                        if peek.enabled { "X".yellow() } else { "".dimmed() },
+                        peek.build
+                            .as_ref()
+                            .map(|p| p.state.colored_passive())
+                            .unwrap_or_else(|| "none".dimmed()),
+                        peek.build
+                            .as_ref()
+                            .map(|p| {
+                                let duration = Utc::now() - p.ended.unwrap_or(p.started);
+                                let string = ago::difference(duration);
 
-                        if duration.num_weeks() > 0 { string.dimmed() }
-                        else { string.normal() }
-                    }).unwrap_or("never".to_string().bold())
-                ]
-            }).collect();
+                                if duration.num_weeks() > 0 {
+                                    string.dimmed()
+                                } else {
+                                    string.normal()
+                                }
+                            })
+                            .unwrap_or("never".to_string().bold()),
+                    ]
+                })
+                .collect();
 
             table(columns, rows, "  ");
         }
-        Err(e) => {
-            log.fail(&e.msg())
-        }
+        Err(e) => log.fail(&e.msg()),
     }
 }
 
@@ -232,7 +289,7 @@ pub fn info(c: &Config, package: &str, all: bool) {
     // fetch information
     log.next("fetching package information");
     let info = match get_package(c, package) {
-        Ok(info) => { info }
+        Ok(info) => info,
         Err(e) => {
             log.fail(&format!("failed to get package info: {}", &e.msg()));
             return;
@@ -241,7 +298,7 @@ pub fn info(c: &Config, package: &str, all: bool) {
 
     log.next("fetching latest package builds");
     let builds = match get_builds(c, package, if all { None } else { Some(8) }) {
-        Ok(build) => { build }
+        Ok(build) => build,
         Err(e) => {
             log.fail(&format!("failed to fetch builds: {}", &e.msg()));
             return;
@@ -257,21 +314,39 @@ pub fn info(c: &Config, package: &str, all: bool) {
     println!("{:<9} {}", "added:", info.added.with_timezone(&Local).format("%x %X"));
 
     let mut tags = vec![];
-    if info.enabled { tags.push("enabled".yellow()) } else { tags.push("disabled".dimmed()) }
-    if info.clean { tags.push("clean".blue()) }
-    if info.devel { tags.push("devel".dimmed()) }
+    if info.enabled {
+        tags.push("enabled".yellow())
+    } else {
+        tags.push("disabled".dimmed())
+    }
+    if info.clean {
+        tags.push("clean".blue())
+    }
+    if info.devel {
+        tags.push("devel".dimmed())
+    }
 
-    println!("{:<9} {}", "status:",
-             tags.iter().map(|s| s.to_string()).intersperse(" ".to_string()).collect::<String>()
+    println!(
+        "{:<9} {}",
+        "status:",
+        tags.iter().map(|s| s.to_string()).intersperse(" ".to_string()).collect::<String>()
     );
 
-    println!("{:<9} {}", "schedule:",
-             describe_cron_timezone_hack(&info.schedule).unwrap_or_else(|_| "could not parse cron".to_owned())
+    println!(
+        "{:<9} {}",
+        "schedule:",
+        describe_cron_timezone_hack(&info.schedule)
+            .unwrap_or_else(|_| "could not parse cron".to_owned())
     );
 
-    println!("{:<9} {}", "flags:",
-             if info.makepkg_flags.is_empty() { "none".italic().dimmed() }
-             else { info.makepkg_flags.iter().map(|f| format!("--{f} ")).collect::<String>().normal() }
+    println!(
+        "{:<9} {}",
+        "flags:",
+        if info.makepkg_flags.is_empty() {
+            "none".italic().dimmed()
+        } else {
+            info.makepkg_flags.iter().map(|f| format!("--{f} ")).collect::<String>().normal()
+        }
     );
 
     if let Some(prepare) = &info.prepare_commands {
@@ -288,20 +363,24 @@ pub fn info(c: &Config, package: &str, all: bool) {
         Column::new("version"),
         Column::new("state").force(),
         Column::new("date").force(),
-        Column::new("time").force()
+        Column::new("time").force(),
     ];
 
-    let rows = builds.iter().map(|peek| {
-        [
-            get_build_id(peek).dimmed(),
-            peek.version.as_ref().map(|s| s.normal()).unwrap_or_else(|| "unknown".dimmed()),
-            peek.state.colored_substantive(),
-            peek.started.with_timezone(&Local).format("%x %X").to_string().normal(),
-            peek.ended.map(|ended| {
-                format!("{}s", (ended - peek.started).num_seconds())
-            }).map(ColoredString::from).unwrap_or_else(|| "??".blue())
-        ]
-    }).collect();
+    let rows = builds
+        .iter()
+        .map(|peek| {
+            [
+                get_build_id(peek).dimmed(),
+                peek.version.as_ref().map(|s| s.normal()).unwrap_or_else(|| "unknown".dimmed()),
+                peek.state.colored_substantive(),
+                peek.started.with_timezone(&Local).format("%x %X").to_string().normal(),
+                peek.ended
+                    .map(|ended| format!("{}s", (ended - peek.started).num_seconds()))
+                    .map(ColoredString::from)
+                    .unwrap_or_else(|| "??".blue()),
+            ]
+        })
+        .collect();
 
     table(columns, rows, "  ");
 }
@@ -317,32 +396,43 @@ pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
             log.succeed("found build successfully");
 
             println!("{} {}", "build".bold(), get_build_id(&b).bold());
-            println!("{:<8} {}", "started:",
-                     b.started.with_timezone(&Local).format("%x %X"));
-            println!("{:<8} {}", "ended:",
-                     b.ended.map(|s| s.with_timezone(&Local).format("%x %X").to_string())
-                         .unwrap_or_else(|| "not yet".to_string()));
-            println!("{:<8} {}", "version:",
-                     b.version.as_ref()
-                         .map(|b| ColoredString::from(b.as_str()))
-                         .unwrap_or_else(|| "unknown".dimmed()));
+            println!("{:<8} {}", "started:", b.started.with_timezone(&Local).format("%x %X"));
+            println!(
+                "{:<8} {}",
+                "ended:",
+                b.ended
+                    .map(|s| s.with_timezone(&Local).format("%x %X").to_string())
+                    .unwrap_or_else(|| "not yet".to_string())
+            );
+            println!(
+                "{:<8} {}",
+                "version:",
+                b.version
+                    .as_ref()
+                    .map(|b| ColoredString::from(b.as_str()))
+                    .unwrap_or_else(|| "unknown".dimmed())
+            );
 
             let additive = match &b.state {
                 BuildState::Running(state) | BuildState::Fatal(_, state) => {
                     format!("on {}", state.printable_string())
                 }
-                _ => "".to_string()
+                _ => "".to_string(),
             };
 
             println!("\n{:<8} {} {}", "status:", b.state.colored_substantive(), additive);
 
             match &b.state {
-                BuildState::Failure => { println!("{:<8} {}", "message:", "see logs for error messages".italic()) }
-                BuildState::Fatal(msg, _) => { println!("{:<8} {}", "message:", msg) }
+                BuildState::Failure => {
+                    println!("{:<8} {}", "message:", "see logs for error messages".italic())
+                }
+                BuildState::Fatal(msg, _) => {
+                    println!("{:<8} {}", "message:", msg)
+                }
                 _ => {}
             }
         }
-        Err(e) => { log.fail(&e.msg()) }
+        Err(e) => log.fail(&e.msg()),
     }
 }
 
@@ -357,7 +447,7 @@ pub fn build_logs(c: &Config, package: &str, build: &Option<String>) {
             log.succeed("fetched build logs successfully");
             println!("{logs}")
         }
-        Err(e) => { log.fail(&e.msg()) }
+        Err(e) => log.fail(&e.msg()),
     }
 }
 
@@ -371,12 +461,18 @@ pub fn webhook_secret(c: &Config, package: &str, machine: bool) {
             if machine {
                 println!("{secret}")
             } else {
-                println!("Your personalized webhook secret for the package {} is:\n{secret}\n", package.italic());
-                println!("To trigger the webhook you have to send a HTTP-{} request to:", "POST".bold());
+                println!(
+                    "Your personalized webhook secret for the package {} is:\n{secret}\n",
+                    package.italic()
+                );
+                println!(
+                    "To trigger the webhook you have to send a HTTP-{} request to:",
+                    "POST".bold()
+                );
                 println!("{}/webhook/package/{package}/build?secret={secret}", c.url)
             }
         }
-        Err(e) => { log.fail(&e.msg()) }
+        Err(e) => log.fail(&e.msg()),
     }
 }
 
@@ -391,13 +487,17 @@ pub fn subscribe_build_logs(c: &Config, package: &str, explicit: bool, linger: b
     if !explicit {
         // we ignore failure here, as we just want to check
         if let Ok(latest) = get_build_logs(c, package, "latest") {
-
-            if let Some(s) = log.replace(None) { s.succeed("found existing build successfully") }
+            if let Some(s) = log.replace(None) {
+                s.succeed("found existing build successfully")
+            }
 
             if linger {
-                println!("{}\n\n{latest}\n{}", "### package build started".italic().dimmed(), "### package build finished".italic().dimmed());
+                println!(
+                    "{}\n\n{latest}\n{}",
+                    "### package build started".italic().dimmed(),
+                    "### package build finished".italic().dimmed()
+                );
                 first_build_finished = true;
-
             } else {
                 print!("{latest}"); // already has newline at end
 
@@ -406,11 +506,14 @@ pub fn subscribe_build_logs(c: &Config, package: &str, explicit: bool, linger: b
         }
     }
 
-    if let Some(s) = log.borrow_mut().as_mut() { s.next("subscribing to live logs and waiting") }
+    if let Some(s) = log.borrow_mut().as_mut() {
+        s.next("subscribing to live logs and waiting")
+    }
 
     if let Err(err) = subscribe_events(c, package, |event, data| {
-
-        if let Some(s) = log.replace(None) { s.succeed("subscription was successful") }
+        if let Some(s) = log.replace(None) {
+            s.succeed("subscription was successful")
+        }
 
         // ignore unknown events
         match event {
@@ -419,16 +522,16 @@ pub fn subscribe_build_logs(c: &Config, package: &str, explicit: bool, linger: b
                 if linger && first_build_finished {
                     println!("{}\n", "### package build started".italic().dimmed())
                 }
-            },
+            }
             BroadcastEvent::BuildEnd => {
                 first_build_finished = true;
 
                 if linger {
                     println!("\n{}", "### package build finished".italic().dimmed())
                 } else {
-                    return true // exit
+                    return true; // exit
                 }
-            },
+            }
             BroadcastEvent::Log => print!("{}", data),
         }
 
@@ -448,11 +551,17 @@ pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
 
     let request = match setting {
         SettingsSubcommand::Clean { enabled } => {
-            log.next(&format!("{} clean build for package {package}", if enabled { "enabling" } else { "disabling" }));
+            log.next(&format!(
+                "{} clean build for package {package}",
+                if enabled { "enabling" } else { "disabling" }
+            ));
             PackageSettingsRequest::Clean(enabled)
         }
         SettingsSubcommand::Enable { enabled } => {
-            log.next(&format!("{} automatic building for package {package}", if enabled { "enabling" } else { "disabling" }));
+            log.next(&format!(
+                "{} automatic building for package {package}",
+                if enabled { "enabling" } else { "disabling" }
+            ));
             PackageSettingsRequest::Enabled(enabled)
         }
         SettingsSubcommand::Schedule { cron } => {
@@ -469,8 +578,12 @@ pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
             PackageSettingsRequest::Prepare(command)
         }
         SettingsSubcommand::Flags { flags } => {
-            let flags = flags.iter()
-                .map(|s| MakepkgFlag::from_str(s).map_err(|_| format!("makepkg flag --{s} not supported")))
+            let flags = flags
+                .iter()
+                .map(|s| {
+                    MakepkgFlag::from_str(s)
+                        .map_err(|_| format!("makepkg flag --{s} not supported"))
+                })
                 .collect::<Result<Vec<MakepkgFlag>, String>>();
 
             match flags {
@@ -487,8 +600,8 @@ pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
     };
 
     match set_package_setting(c, package, request) {
-        Ok(()) => { log.succeed(&format!("updated property for package {package} successfully")) }
-        Err(e) => { log.fail(&e.msg()) }
+        Ok(()) => log.succeed(&format!("updated property for package {package} successfully")),
+        Err(e) => log.fail(&e.msg()),
     }
 }
 
@@ -501,28 +614,28 @@ pub fn pkgbuild(c: &Config, package: &str) {
             log.succeed("successfully fetched last used pkgbuild");
             println!("{pkgbuild}");
         }
-        Err(e) => { log.fail(&e.msg()) }
+        Err(e) => log.fail(&e.msg()),
     }
 }
 
 /// checks for the server version and prints a warning if a mismatch is found
 pub fn check_version_mismatch(c: &Config) {
     if let Ok(info) = get_info(c) {
-
         // strip v- prefix from tags
         let server = info.version.strip_prefix("v").unwrap_or(&info.version);
         let client = env!("TAG").strip_prefix("v").unwrap_or(env!("TAG"));
 
         if let (Ok(server), Ok(client)) = (Version::parse(server), Version::parse(client)) {
             match server.cmp(&client) {
-                std::cmp::Ordering::Less =>
-                    Log::warning(&format!("server ({server}) is behind your cli ({client}), please update your server")),
-                std::cmp::Ordering::Greater =>
-                    Log::warning(&format!("cli ({client}) is behind your server ({server}), please update your cli")),
+                std::cmp::Ordering::Less => Log::warning(&format!(
+                    "server ({server}) is behind your cli ({client}), please update your server"
+                )),
+                std::cmp::Ordering::Greater => Log::warning(&format!(
+                    "cli ({client}) is behind your server ({server}), please update your cli"
+                )),
 
-                std::cmp::Ordering::Equal => {}, // everything is good
+                std::cmp::Ordering::Equal => {} // everything is good
             }
-
         } else {
             Log::warning("invalid cli or server version, please check for updates")
         }
@@ -538,7 +651,7 @@ pub fn server_info(c: &Config) {
         Ok(info) => info,
         Err(e) => {
             log.fail(&e.msg());
-            return
+            return;
         }
     };
 
@@ -548,11 +661,11 @@ pub fn server_info(c: &Config) {
         Ok(packages) => packages,
         Err(e) => {
             log.fail(&e.msg());
-            return
+            return;
         }
     };
 
-    let mut total = packages.len();
+    let total = packages.len();
     let mut members = 0;
     let mut devel = 0;
     let mut enabled = 0;
@@ -562,8 +675,12 @@ pub fn server_info(c: &Config) {
     let mut fatal = 0;
 
     for package in packages {
-        if package.devel { devel += 1; }
-        if package.enabled { enabled += 1; }
+        if package.devel {
+            devel += 1;
+        }
+        if package.enabled {
+            enabled += 1;
+        }
 
         if let Some(b) = package.build {
             match b.state {
@@ -590,18 +707,33 @@ pub fn server_info(c: &Config) {
     println!("{:<10} {}", "repo name:", info.name.bold());
 
     let mut tags = vec![];
-    if info.readable { tags.push("readable".yellow()) } else { tags.push("unreadable".dimmed()) }
-    if info.signed { tags.push("signed".green()) }
+    if info.readable {
+        tags.push("readable".yellow())
+    } else {
+        tags.push("unreadable".dimmed())
+    }
+    if info.signed {
+        tags.push("signed".green())
+    }
 
-    println!("{:<10} {}", "features:",
-                tags.iter().map(|s| s.to_string()).intersperse(" ".to_string()).collect::<String>()
+    println!(
+        "{:<10} {}",
+        "features:",
+        tags.iter().map(|s| s.to_string()).intersperse(" ".to_string()).collect::<String>()
     );
 
     println!();
     println!("package overview:");
 
     println!("  {:<8} {total} ({members} members available)", "amount:");
-    println!("  {:<8} {}/{}/{}/{}", "status:", passing.to_string().green(), working.to_string().blue(), failing.to_string().red(), fatal.to_string().bright_red());
+    println!(
+        "  {:<8} {}/{}/{}/{}",
+        "status:",
+        passing.to_string().green(),
+        working.to_string().blue(),
+        failing.to_string().red(),
+        fatal.to_string().bright_red()
+    );
     println!("  {:<8} {} of {total}", "enabled:", enabled.to_string().yellow());
     println!("  {:<8} {} of {total}", "devel:", devel.to_string().dimmed());
 
@@ -612,14 +744,26 @@ pub fn server_info(c: &Config) {
     let server = info.version.strip_prefix("v").unwrap_or(&info.version);
     let client = env!("TAG").strip_prefix("v").unwrap_or(env!("TAG"));
 
-    let message = if let (Ok(server), Ok(client)) = (Version::parse(server), Version::parse(client)) {
+    let message = if let (Ok(server), Ok(client)) = (Version::parse(server), Version::parse(client))
+    {
         match server.cmp(&client) {
             std::cmp::Ordering::Less => Some("update your server"),
             std::cmp::Ordering::Greater => Some("update your cli"),
             std::cmp::Ordering::Equal => None,
         }
-    } else { Some("something went wrong") };
+    } else {
+        Some("something went wrong")
+    };
 
-    println!("  {:<12} {} ({})", "cli version:", if message.is_some() { env!("TAG").red() } else { env!("TAG").normal() }, message.unwrap_or("up-to-date"));
-    println!("  {:<12} {}", "achitecture:", if ARCH == info.architecture { "compatible".normal() } else { "incompatible".red() })
+    println!(
+        "  {:<12} {} ({})",
+        "cli version:",
+        if message.is_some() { env!("TAG").red() } else { env!("TAG").normal() },
+        message.unwrap_or("up-to-date")
+    );
+    println!(
+        "  {:<12} {}",
+        "achitecture:",
+        if ARCH == info.architecture { "compatible".normal() } else { "incompatible".red() }
+    )
 }

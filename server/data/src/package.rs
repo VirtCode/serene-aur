@@ -1,12 +1,12 @@
+use crate::build::BuildInfo;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
-use crate::build::BuildInfo;
 
 #[derive(Serialize, Deserialize)]
 pub struct PackageAddRequest {
     pub replace: bool,
-    pub source: PackageAddSource
+    pub source: PackageAddSource,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -14,7 +14,7 @@ pub struct PackageAddRequest {
 pub enum PackageAddSource {
     Aur { name: String },
     Custom { url: String, devel: bool },
-    Single { pkgbuild: String, devel: bool }
+    Single { pkgbuild: String, devel: bool },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -29,11 +29,12 @@ pub enum PackageSettingsRequest {
 
 #[derive(Serialize, Deserialize)]
 pub struct PackageBuildRequest {
-    pub clean: bool
+    pub clean: bool,
 }
 
-/// All supported makepkg flags which make sense to supply. Name the enum entries just like the args (caseinsenitive).
-/// See `makepkg --help` for these args
+/// All supported makepkg flags which make sense to supply. Name the enum
+/// entries just like the args (caseinsenitive). See `makepkg --help` for these
+/// args
 #[derive(Serialize, Deserialize, EnumString, Display, Clone)]
 #[strum(serialize_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
@@ -128,5 +129,5 @@ pub enum BroadcastEvent {
     /// Log message for the package build
     Log,
     /// Ping to the event subscriber
-    Ping
+    Ping,
 }

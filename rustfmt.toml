@@ -1,0 +1,4 @@
+max_width = 100
+use_small_heuristics = "Max"
+
+wrap_comments = true

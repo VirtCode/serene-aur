@@ -1,17 +1,16 @@
-pub mod normal;
-pub mod devel;
 pub mod cli;
+pub mod devel;
+pub mod normal;
 pub mod single;
 
-use std::ops::Deref;
-use std::path::Path;
-use std::str::FromStr;
-use actix_web::HttpMessage;
 use anyhow::Context;
 use async_tar::Builder;
 use async_trait::async_trait;
 use dyn_clone::{clone_trait_object, DynClone};
 use srcinfo::Srcinfo;
+use std::ops::Deref;
+use std::path::Path;
+use std::str::FromStr;
 
 const SRCINFO: &str = ".SRCINFO";
 const PKGBUILD: &str = "PKGBUILD";
@@ -22,7 +21,6 @@ clone_trait_object!(Source);
 #[async_trait]
 #[typetag::serde(tag = "type")]
 pub trait Source: Sync + Send + DynClone {
-
     /// pulls the package sources for the first time
     async fn create(&mut self, folder: &Path) -> anyhow::Result<()>;
 
@@ -34,46 +32,46 @@ pub trait Source: Sync + Send + DynClone {
 
     /// returns srcinfo
     async fn get_srcinfo(&self, folder: &Path) -> anyhow::Result<SrcinfoWrapper> {
-        tokio::fs::read_to_string(folder.join(SRCINFO)).await
+        tokio::fs::read_to_string(folder.join(SRCINFO))
+            .await
             .context("failed to read .SRCINFO")
             .and_then(|s| SrcinfoWrapper::from_str(&s).context("failed to parse .SRCINFO"))
     }
 
     /// returns pkgbuild
     async fn get_pkgbuild(&self, folder: &Path) -> anyhow::Result<String> {
-        tokio::fs::read_to_string(folder.join(PKGBUILD)).await
-            .context("failed to read PKGBUILD")
+        tokio::fs::read_to_string(folder.join(PKGBUILD)).await.context("failed to read PKGBUILD")
     }
 
     /// loads files required for build into archive
-    async fn load_build_files(&self, folder: &Path, archive: &mut Builder<Vec<u8>>) -> anyhow::Result<()> {
-        archive.append_dir_all("", folder).await
-            .context("failed to load sources into tar")
+    async fn load_build_files(
+        &self,
+        folder: &Path,
+        archive: &mut Builder<Vec<u8>>,
+    ) -> anyhow::Result<()> {
+        archive.append_dir_all("", folder).await.context("failed to load sources into tar")
     }
 
     fn is_devel(&self) -> bool;
 }
 
 async fn read_srcinfo_string(folder: &Path) -> anyhow::Result<String> {
-    tokio::fs::read_to_string(folder.join(SRCINFO)).await
-        .context("failed to read .SRCINFO")
+    tokio::fs::read_to_string(folder.join(SRCINFO)).await.context("failed to read .SRCINFO")
 }
 
-/// wraps a srcinfo together with its source so we can convert to and from the src
+/// wraps a srcinfo together with its source so we can convert to and from the
+/// src
 #[derive(Clone)]
 pub struct SrcinfoWrapper {
     source: String,
-    inner: Srcinfo
+    inner: Srcinfo,
 }
 
 impl FromStr for SrcinfoWrapper {
     type Err = srcinfo::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self {
-            source: s.to_owned(),
-            inner: s.parse()?
-        })
+        Ok(Self { source: s.to_owned(), inner: s.parse()? })
     }
 }
 

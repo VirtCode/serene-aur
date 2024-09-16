@@ -1,14 +1,14 @@
-use std::collections::HashMap;
-use std::fs::Permissions;
-use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
-use anyhow::anyhow;
-use log::debug;
-use raur::Raur;
 use crate::config::CONFIG;
 use crate::package::git;
 use crate::package::source::SrcinfoWrapper;
+use anyhow::anyhow;
+use log::debug;
+use raur::Raur;
+use std::collections::HashMap;
+use std::fs::Permissions;
+use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // this struct represents information about a package in the aur
 pub struct AurInfo {
@@ -17,7 +17,7 @@ pub struct AurInfo {
     // repository of the package source
     pub repository: String,
     // is development package
-    pub devel: bool
+    pub devel: bool,
 }
 
 /// finds a package in the aur
@@ -29,7 +29,7 @@ pub async fn find(name: &str) -> anyhow::Result<Option<AurInfo>> {
         Ok(Some(AurInfo {
             base: info.package_base.clone(),
             repository: to_aur_git(&info.package_base),
-            devel: info.package_base.ends_with("-git")
+            devel: info.package_base.ends_with("-git"),
         }))
     } else {
         Ok(None)
@@ -41,9 +41,11 @@ fn to_aur_git(base: &str) -> String {
 }
 
 /// Returns the srcinfo string for a pkgbuild located in the given directory
-/// TODO: This method of using makepkg quite dubious, as it switches to another user just for that. Improve this!
+/// TODO: This method of using makepkg quite dubious, as it switches to another
+/// user just for that. Improve this!
 pub async fn generate_srcinfo_string(pkgbuild: &str) -> anyhow::Result<String> {
-    let dir = PathBuf::from("/tmp").join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string());
+    let dir = PathBuf::from("/tmp")
+        .join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string());
 
     tokio::fs::create_dir(&dir).await?;
     tokio::fs::write(dir.join("PKGBUILD"), pkgbuild).await?;
@@ -62,37 +64,47 @@ pub async fn generate_srcinfo_string(pkgbuild: &str) -> anyhow::Result<String> {
             .arg("-c")
             .arg("makepkg --printsrcinfo")
             .current_dir(&dir)
-            .output().await?
+            .output()
+            .await?
     } else {
-        tokio::process::Command::new("makepkg").arg("--printsrcinfo")
+        tokio::process::Command::new("makepkg")
+            .arg("--printsrcinfo")
             .current_dir(&dir)
-            .output().await?
+            .output()
+            .await?
     };
 
     tokio::fs::remove_dir_all(dir).await?;
 
-    if !status.status.success() { Err(anyhow!("failed generate srcinfo: {}", String::from_utf8_lossy(&status.stderr))) }
-    else {
+    if !status.status.success() {
+        Err(anyhow!("failed generate srcinfo: {}", String::from_utf8_lossy(&status.stderr)))
+    } else {
         Ok(String::from_utf8_lossy(&status.stdout).to_string())
     }
 }
 
-pub async fn source_latest_version(srcinfo: &SrcinfoWrapper) -> anyhow::Result<HashMap<String, String>> {
+pub async fn source_latest_version(
+    srcinfo: &SrcinfoWrapper,
+) -> anyhow::Result<HashMap<String, String>> {
     let mut commits = HashMap::new();
 
-    for src in srcinfo.base.source.iter()
+    for src in srcinfo
+        .base
+        .source
+        .iter()
         .filter(|f| f.arch.as_ref().map(|a| a == &CONFIG.architecture).unwrap_or(true)) // only include relevant archs
-        .flat_map(|s| &s.vec) {
-        
+        .flat_map(|s| &s.vec)
+    {
         let url_start = src.find("::").map(|i| i + 2).unwrap_or(0);
         let url = &src[url_start..];
-        
+
         debug!("considering source url: {url}");
-        
-        // we only support git urls, other urls are either static or not supported (like hg+, etc.)
+
+        // we only support git urls, other urls are either static or not supported (like
+        // hg+, etc.)
         if url.starts_with("git+") {
             debug!("fetching state via git");
-            
+
             let git_url = &url["git+".len()..];
 
             // we insert with the `git_url` for backwards compatibility

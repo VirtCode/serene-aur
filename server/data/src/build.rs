@@ -4,7 +4,7 @@ use strum_macros::{Display, EnumString};
 
 /// reports the progress of a running build
 #[derive(Clone, Serialize, Deserialize, EnumString, Display)]
-#[strum(serialize_all="lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum BuildProgress {
     /// the build is updating the sources
     Update,
@@ -13,7 +13,7 @@ pub enum BuildProgress {
     /// the build is publishing the built packages in the repository
     Publish,
     /// the build is cleaning the environment
-    Clean
+    Clean,
 }
 
 /// reports the state of the current build
@@ -26,7 +26,7 @@ pub enum BuildState {
     /// the build failed when building the package
     Failure,
     /// a fatal error occurred in a given step of the build
-    Fatal(String, BuildProgress)
+    Fatal(String, BuildProgress),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -40,5 +40,5 @@ pub struct BuildInfo {
     /// start time of the build
     pub started: DateTime<Utc>,
     /// end time of the build
-    pub ended: Option<DateTime<Utc>>
+    pub ended: Option<DateTime<Utc>>,
 }

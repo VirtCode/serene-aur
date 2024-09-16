@@ -1,5 +1,5 @@
-use std::process::Command;
 use std::io::Error;
+use std::process::Command;
 
 fn main() -> Result<(), Error> {
     git_version()?;
@@ -8,11 +8,7 @@ fn main() -> Result<(), Error> {
 }
 
 fn git_version() -> Result<(), Error> {
-    let git = Command::new("git")
-            .arg("describe")
-            .arg("--tags")
-            .arg("--abbrev=0")
-            .output();
+    let git = Command::new("git").arg("describe").arg("--tags").arg("--abbrev=0").output();
 
     let tag = match git {
         Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),

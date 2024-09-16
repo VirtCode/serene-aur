@@ -1,26 +1,22 @@
 use colored::Colorize;
-use spinoff::{Color, Spinner, spinners};
+use spinoff::{spinners, Color, Spinner};
 
 pub struct Log {
-    spinner: Option<Spinner>
+    spinner: Option<Spinner>,
 }
 
 impl Log {
     pub fn start(what: &str) -> Self {
         if atty::is(atty::Stream::Stdout) {
-            
             let clone = what.to_string();
-            
+
             // only show spinner when tty
-            Self { spinner: Some(
-                Spinner::new(spinners::Dots, clone, Color::White)
-            )}
-            
+            Self { spinner: Some(Spinner::new(spinners::Dots, clone, Color::White)) }
         } else {
             Self { spinner: None }
         }
     }
-    
+
     pub fn next(&mut self, what: &str) {
         if let Some(spinner) = &mut self.spinner {
             let clone = what.to_string();
@@ -41,7 +37,7 @@ impl Log {
             eprintln!("error: {what}");
         }
     }
-    
+
     pub fn success(what: &str) {
         if atty::is(atty::Stream::Stdout) {
             println!("{} {}", "✓".green().bold(), what);
@@ -55,7 +51,7 @@ impl Log {
             eprintln!("error: {}", what)
         }
     }
-    
+
     pub fn warning(what: &str) {
         if atty::is(atty::Stream::Stdout) {
             println!("{} {}", "~".yellow().bold(), what);

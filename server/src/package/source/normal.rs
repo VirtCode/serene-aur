@@ -1,32 +1,27 @@
-use std::path::Path;
-use anyhow::Context;
+use crate::package::git;
+use crate::package::source::Source;
 use async_trait::async_trait;
 use log::debug;
 use serde::{Deserialize, Serialize};
-use crate::package::git;
-use crate::package::source::{read_srcinfo_string, Source};
+use std::path::Path;
 
 /// this is the source of a normally versioned package
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NormalSource {
     repository: String,
-    last_commit: String
+    last_commit: String,
 }
 
 impl NormalSource {
     /// creates an empty normal source
     pub fn empty(repository: &str) -> Self {
-        Self {
-            repository: repository.to_owned(),
-            last_commit: "".to_owned()
-        }
+        Self { repository: repository.to_owned(), last_commit: "".to_owned() }
     }
 }
 
 #[async_trait]
 #[typetag::serde]
 impl Source for NormalSource {
-
     async fn create(&mut self, folder: &Path) -> anyhow::Result<()> {
         debug!("creating {}", self.repository);
         git::clone(&self.repository, folder).await?;
@@ -46,11 +41,14 @@ impl Source for NormalSource {
 
         // pull repo
         git::pull(folder).await?;
-        // set commit to newest (could also be done by looking at the local repository...)
+        // set commit to newest (could also be done by looking at the local
+        // repository...)
         self.last_commit = git::find_commit(&self.repository).await?;
 
         Ok(())
     }
 
-    fn is_devel(&self) -> bool { false }
+    fn is_devel(&self) -> bool {
+        false
+    }
 }
