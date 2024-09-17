@@ -188,7 +188,12 @@ pub async fn build(
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    scheduler.write().await.run(&package, body.into_inner().clean, BuildReason::Manual).await.internal()?;
+    scheduler
+        .write()
+        .await
+        .run(&package, body.into_inner().clean, BuildReason::Manual)
+        .await
+        .internal()?;
 
     Ok(empty_response())
 }

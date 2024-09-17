@@ -47,7 +47,12 @@ impl BuildScheduler {
     }
 
     /// runs a one-shot build for a package
-    pub async fn run(&mut self, package: &Package, clean: bool, reason: BuildReason) -> anyhow::Result<()> {
+    pub async fn run(
+        &mut self,
+        package: &Package,
+        clean: bool,
+        reason: BuildReason,
+    ) -> anyhow::Result<()> {
         info!("scheduling one-shot build for package {} now", &package.base);
 
         let lock = self.get_lock(package);
@@ -105,7 +110,9 @@ impl BuildScheduler {
             let base = base.clone();
             let builder = builder.clone();
 
-            Box::pin(async move { run(lock, builder, false, base, false, BuildReason::Schedule).await })
+            Box::pin(
+                async move { run(lock, builder, false, base, false, BuildReason::Schedule).await },
+            )
         })
         .context(format!("failed to create job for package {}", package.base))?;
 

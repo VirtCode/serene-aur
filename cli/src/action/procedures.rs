@@ -5,7 +5,8 @@ use crate::config::Config;
 use crate::log::Log;
 use crate::table::{ago, table, Column};
 use crate::web::data::{
-    describe_cron_timezone_hack, get_build_id, BuildProgressFormatter, BuildReasonFormatter, BuildStateFormatter
+    describe_cron_timezone_hack, get_build_id, BuildProgressFormatter, BuildReasonFormatter,
+    BuildStateFormatter,
 };
 use crate::web::requests::{
     add_package, build_package, get_build, get_build_logs, get_builds, get_info, get_package,

@@ -56,7 +56,13 @@ impl Builder {
 
     /// starts a build for a package, if there is no update, the build will be
     /// skipped (except when forced)
-    pub async fn run_scheduled(&self, package: &str, force: bool, clean: bool, reason: BuildReason) {
+    pub async fn run_scheduled(
+        &self,
+        package: &str,
+        force: bool,
+        clean: bool,
+        reason: BuildReason,
+    ) {
         info!("starting build for package {package} now");
 
         let package = match Package::find(package, &self.db).await {

@@ -3,7 +3,7 @@ use crate::database::{Database, DatabaseConversion};
 use crate::runner::RunStatus;
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, NaiveDateTime, Utc};
-use serene_data::build::{BuildReason, BuildProgress, BuildState};
+use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use sqlx::{query, query_as};
 use std::str::FromStr;
 
