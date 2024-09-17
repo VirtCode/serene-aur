@@ -34,6 +34,9 @@ pub struct BuildInfo {
     /// state of the build
     pub state: BuildState,
 
+    /// reason why the build ran
+    pub reason: BuildReason,
+
     /// version that was built
     pub version: Option<String>,
 
@@ -41,4 +44,21 @@ pub struct BuildInfo {
     pub started: DateTime<Utc>,
     /// end time of the build
     pub ended: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize, Deserialize, EnumString, Display, Clone)]
+#[strum(serialize_all = "lowercase")]
+pub enum BuildReason {
+    /// build was triggered by a webhook
+    Webhook,
+    /// build was manually triggered by an user
+    Manual,
+    /// build was triggered in a schedule
+    Schedule,
+    /// initial build of package after addition
+    Initial,
+    /// build reason is not known
+    ///
+    /// only here for compatibility with older versions
+    Unknown,
 }

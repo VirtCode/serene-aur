@@ -9,8 +9,8 @@ use chrono::{DateTime, Utc};
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serene_data::build::BuildProgress::{Build, Clean, Publish, Update};
-use serene_data::build::BuildState;
 use serene_data::build::BuildState::{Failure, Fatal, Running, Success};
+use serene_data::build::{BuildReason, BuildState};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -22,6 +22,8 @@ pub struct BuildSummary {
     pub package: String,
     /// state of the build
     pub state: BuildState,
+    /// reason why the build ran
+    pub reason: BuildReason,
 
     /// logs / status obtained from the build container
     pub logs: Option<RunStatus>,
@@ -54,7 +56,7 @@ impl Builder {
 
     /// starts a build for a package, if there is no update, the build will be
     /// skipped (except when forced)
-    pub async fn run_scheduled(&self, package: &str, force: bool, clean: bool) {
+    pub async fn run_scheduled(&self, package: &str, force: bool, clean: bool, reason: BuildReason) {
         info!("starting build for package {package} now");
 
         let package = match Package::find(package, &self.db).await {
@@ -83,7 +85,7 @@ impl Builder {
 
         if updatable || force {
             match self
-                .run_build(package, updatable, clean)
+                .run_build(package, updatable, clean, reason)
                 .await
                 .context("build run for package failed extremely fatally")
             {
@@ -119,11 +121,13 @@ impl Builder {
         mut package: Package,
         update: bool,
         force_clean: bool,
+        reason: BuildReason,
     ) -> anyhow::Result<()> {
         let start = Utc::now();
 
         let mut summary = BuildSummary {
             package: package.base.clone(),
+            reason,
             state: Running(Build),
             started: start.clone(),
             logs: None,

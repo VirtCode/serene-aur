@@ -9,6 +9,7 @@ use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use hyper::Body;
 use log::info;
+use serene_data::build::BuildReason;
 use serene_data::package::MakepkgFlag;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -124,7 +125,7 @@ pub async fn try_add_cli(db: &Database, scheduler: &mut BuildScheduler) -> anyho
         package.change_settings(db).await?;
 
         scheduler.schedule(&package).await?;
-        scheduler.run(&package, true).await?;
+        scheduler.run(&package, true, BuildReason::Initial).await?;
 
         info!("successfully added serene-cli");
     }
