@@ -423,6 +423,7 @@ pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
                 _ => "".to_string(),
             };
 
+            println!("{:<8} {}", "reason:", b.reason.colored());
             println!("\n{:<8} {} {}", "status:", b.state.colored_substantive(), additive);
 
             match &b.state {
