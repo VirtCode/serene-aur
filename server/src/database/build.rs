@@ -7,7 +7,9 @@ use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use sqlx::{query, query_as};
 use std::str::FromStr;
 
-/// See server/migrations/20240210164401_build.sql
+/// See migrations:
+/// server/migrations/20240210164401_build.sql
+/// server/migrations/20240917122808_build_reason.sql
 #[derive(Debug)]
 struct BuildRecord {
     package: String,
