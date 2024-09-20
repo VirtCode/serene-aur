@@ -1,6 +1,7 @@
 use crate::config::CONFIG;
 use crate::repository::{GPG_AGENT_SOCKET, KEY_FILE};
 use anyhow::Context;
+use log::warn;
 use sequoia_gpg_agent::keyinfo::KeyProtection;
 use sequoia_gpg_agent::sequoia_ipc::Keygrip;
 use sequoia_gpg_agent::{self as gpg_agent, Agent, PinentryMode};
@@ -58,7 +59,10 @@ async fn get_agent_keypair() -> anyhow::Result<gpg_agent::KeyPair> {
         .context("Failed to connect to gpg-agent")?
         .suppress_pinentry();
 
-    agent.card_info().await.context("Failed to update card info")?;
+    if let Err(e) = agent.card_info().await {
+        warn!("Failed to get card info: {e}");
+    }
+
     let keys = agent.list_keys().await.context("Failed to list keys")?;
 
     let (key, agent_key) = cert
