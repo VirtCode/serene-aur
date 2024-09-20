@@ -3,11 +3,13 @@ use crate::database::{Database, DatabaseConversion};
 use crate::runner::RunStatus;
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, NaiveDateTime, Utc};
-use serene_data::build::{BuildProgress, BuildState};
+use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use sqlx::{query, query_as};
 use std::str::FromStr;
 
-/// See server/migrations/20240210164401_build.sql
+/// See migrations:
+/// server/migrations/20240210164401_build.sql
+/// server/migrations/20240917122808_build_reason.sql
 #[derive(Debug)]
 struct BuildRecord {
     package: String,
@@ -16,6 +18,7 @@ struct BuildRecord {
     started: NaiveDateTime,
     ended: Option<NaiveDateTime>,
 
+    reason: String,
     state: String,
     progress: Option<String>,
     fatal: Option<String>,
@@ -45,6 +48,7 @@ impl DatabaseConversion<BuildRecord> for BuildSummary {
             state,
             progress,
             fatal,
+            reason: self.reason.to_string(),
             version: self.version.clone(),
             run_success: self.logs.as_ref().map(|s| s.success),
             run_logs: self.logs.as_ref().map(|s| s.logs.clone()),
@@ -72,6 +76,7 @@ impl DatabaseConversion<BuildRecord> for BuildSummary {
 
         Ok(BuildSummary {
             package: other.package,
+            reason: BuildReason::from_str(&other.reason).unwrap_or(BuildReason::Unknown),
             state,
             version: other.version,
             started: other.started.and_utc(),
@@ -154,10 +159,10 @@ impl BuildSummary {
         let record = self.create_record()?;
 
         query!(r#"
-            INSERT INTO build (package, started, ended, state, progress, fatal, version, run_success, run_logs, run_started, run_ended)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            INSERT INTO build (package, started, ended, state, progress, fatal, version, run_success, run_logs, run_started, run_ended, reason)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
-            record.package, record.started, record.ended, record.state, record.progress, record.fatal, record.version, record.run_success, record.run_logs, record.run_started, record.run_ended
+            record.package, record.started, record.ended, record.state, record.progress, record.fatal, record.version, record.run_success, record.run_logs, record.run_started, record.run_ended, record.reason
         )
             .execute(db).await?;
 

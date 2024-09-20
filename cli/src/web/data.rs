@@ -3,7 +3,7 @@ use chrono::{Local, Offset};
 use colored::{ColoredString, Colorize};
 use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron_options;
 use cron_descriptor::cronparser::Options;
-use serene_data::build::{BuildInfo, BuildProgress, BuildState};
+use serene_data::build::{BuildInfo, BuildProgress, BuildReason, BuildState};
 use std::str::FromStr;
 
 pub trait BuildStateFormatter {
@@ -27,6 +27,22 @@ impl BuildStateFormatter for BuildState {
             BuildState::Success => "success".green(),
             BuildState::Failure => "failure".red(),
             BuildState::Fatal(_, _) => "fatal".bright_red(),
+        }
+    }
+}
+
+pub trait BuildReasonFormatter {
+    fn colored(&self) -> ColoredString;
+}
+
+impl BuildReasonFormatter for BuildReason {
+    fn colored(&self) -> ColoredString {
+        match self {
+            BuildReason::Webhook => "webhook".bright_blue(),
+            BuildReason::Manual => "manual".bright_blue(),
+            BuildReason::Schedule => "schedule".dimmed(),
+            BuildReason::Initial => "initial".bright_blue(),
+            BuildReason::Unknown => "unknown".dimmed(),
         }
     }
 }

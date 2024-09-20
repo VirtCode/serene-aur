@@ -5,7 +5,8 @@ use crate::config::Config;
 use crate::log::Log;
 use crate::table::{ago, table, Column};
 use crate::web::data::{
-    describe_cron_timezone_hack, get_build_id, BuildProgressFormatter, BuildStateFormatter,
+    describe_cron_timezone_hack, get_build_id, BuildProgressFormatter, BuildReasonFormatter,
+    BuildStateFormatter,
 };
 use crate::web::requests::{
     add_package, build_package, get_build, get_build_logs, get_builds, get_info, get_package,
@@ -362,6 +363,7 @@ pub fn info(c: &Config, package: &str, all: bool) {
         Column::new("id").force(),
         Column::new("version"),
         Column::new("state").force(),
+        Column::new("reason").force(),
         Column::new("date").force(),
         Column::new("time").force(),
     ];
@@ -373,6 +375,7 @@ pub fn info(c: &Config, package: &str, all: bool) {
                 get_build_id(peek).dimmed(),
                 peek.version.as_ref().map(|s| s.normal()).unwrap_or_else(|| "unknown".dimmed()),
                 peek.state.colored_substantive(),
+                peek.reason.colored(),
                 peek.started.with_timezone(&Local).format("%x %X").to_string().normal(),
                 peek.ended
                     .map(|ended| format!("{}s", (ended - peek.started).num_seconds()))
@@ -420,6 +423,7 @@ pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
                 _ => "".to_string(),
             };
 
+            println!("{:<8} {}", "reason:", b.reason.colored());
             println!("\n{:<8} {} {}", "status:", b.state.colored_substantive(), additive);
 
             match &b.state {

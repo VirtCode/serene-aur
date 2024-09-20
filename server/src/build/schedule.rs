@@ -4,6 +4,7 @@ use crate::package::Package;
 use crate::runner::Runner;
 use anyhow::{anyhow, Context};
 use log::{debug, error, info, warn};
+use serene_data::build::BuildReason;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -46,7 +47,12 @@ impl BuildScheduler {
     }
 
     /// runs a one-shot build for a package
-    pub async fn run(&mut self, package: &Package, clean: bool) -> anyhow::Result<()> {
+    pub async fn run(
+        &mut self,
+        package: &Package,
+        clean: bool,
+        reason: BuildReason,
+    ) -> anyhow::Result<()> {
         info!("scheduling one-shot build for package {} now", &package.base);
 
         let lock = self.get_lock(package);
@@ -63,8 +69,9 @@ impl BuildScheduler {
             let lock = lock.clone();
             let base = base.clone();
             let builder = builder.clone();
+            let reason = reason.clone();
 
-            Box::pin(async move { run(lock, builder, true, base, clean).await })
+            Box::pin(async move { run(lock, builder, true, base, clean, reason).await })
         })
         .context(format!("failed to create job for package {}", package.base))?;
 
@@ -103,7 +110,9 @@ impl BuildScheduler {
             let base = base.clone();
             let builder = builder.clone();
 
-            Box::pin(async move { run(lock, builder, false, base, false).await })
+            Box::pin(
+                async move { run(lock, builder, false, base, false, BuildReason::Schedule).await },
+            )
         })
         .context(format!("failed to create job for package {}", package.base))?;
 
@@ -125,6 +134,7 @@ async fn run(
     force: bool,
     base: String,
     clean: bool,
+    reason: BuildReason,
 ) {
     // makes sure a package is not built twice at the same time
     if *lock.read().await {
@@ -133,7 +143,7 @@ async fn run(
     }
 
     *lock.write().await = true;
-    builder.read().await.run_scheduled(&base, force, clean).await;
+    builder.read().await.run_scheduled(&base, force, clean, reason).await;
     *lock.write().await = false;
 }
 

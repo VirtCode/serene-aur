@@ -39,6 +39,7 @@ impl BuildSummary {
             state: self.state.clone(),
             started: self.started,
             ended: self.ended,
+            reason: self.reason.clone(),
         }
     }
 }

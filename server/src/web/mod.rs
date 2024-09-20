@@ -18,6 +18,7 @@ use auth::{create_webhook_secret, AuthWebhook};
 use chrono::DateTime;
 use hyper::StatusCode;
 use serde::Deserialize;
+use serene_data::build::BuildReason;
 use serene_data::package::{
     PackageAddRequest, PackageAddSource, PackageBuildRequest, PackageSettingsRequest,
 };
@@ -101,7 +102,7 @@ pub async fn add(
         // scheduling package
         let mut scheduler = scheduler.write().await;
         scheduler.schedule(&package).await.internal()?;
-        scheduler.run(&package, true).await.internal()?;
+        scheduler.run(&package, true, BuildReason::Initial).await.internal()?;
     }
 
     Ok(Json(package.to_info()))
@@ -187,7 +188,12 @@ pub async fn build(
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    scheduler.write().await.run(&package, body.into_inner().clean).await.internal()?;
+    scheduler
+        .write()
+        .await
+        .run(&package, body.into_inner().clean, BuildReason::Manual)
+        .await
+        .internal()?;
 
     Ok(empty_response())
 }
@@ -364,7 +370,7 @@ pub async fn build_webhook(
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    scheduler.write().await.run(&package, false).await.internal()?;
+    scheduler.write().await.run(&package, false, BuildReason::Webhook).await.internal()?;
 
     Ok(empty_response())
 }
