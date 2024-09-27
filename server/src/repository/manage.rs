@@ -15,19 +15,21 @@ fn sig_path(path: &Path) -> PathBuf {
     ))
 }
 
-fn sign_repository(name: &str, dir: &Path) -> anyhow::Result<()> {
+async fn sign_repository(name: &str, dir: &Path) -> anyhow::Result<()> {
     let db_path = &dir.join(format!("{name}.db"));
     let db_archive_path = &dir.join(db_file(name));
     let files_path = &dir.join(format!("{name}.files"));
     let files_archive_path = &dir.join(format!("{name}.files.tar.gz"));
 
     crypto::sign(&sig_path(db_archive_path), db_archive_path)
+        .await
         .context("failed to sign repository database")?;
     if !sig_path(db_path).exists() {
         unix::fs::symlink(sig_path(db_archive_path), sig_path(db_path))
             .context("failed to link repository database signature")?;
     }
     crypto::sign(&sig_path(files_archive_path), files_archive_path)
+        .await
         .context("failed to sign repository files")?;
     if !sig_path(files_path).exists() {
         unix::fs::symlink(sig_path(files_archive_path), sig_path(files_path))
@@ -47,7 +49,7 @@ pub async fn add(name: &str, packages: &Vec<String>, dir: &Path) -> anyhow::Resu
 
     if output.status.success() {
         if crypto::should_sign_packages() {
-            sign_repository(name, dir)?;
+            sign_repository(name, dir).await?;
         }
         Ok(())
     } else {
@@ -65,7 +67,7 @@ pub async fn remove(name: &str, packages: &Vec<String>, dir: &Path) -> anyhow::R
 
     if output.status.success() {
         if crypto::should_sign_packages() {
-            sign_repository(name, dir)?;
+            sign_repository(name, dir).await?;
         }
         Ok(())
     } else {
@@ -77,6 +79,7 @@ pub async fn sign(files: &Vec<String>, base_path: &Path) -> anyhow::Result<()> {
     for file in files {
         let path = &base_path.join(file);
         crypto::sign(&sig_path(path), path)
+            .await
             .context(format!("failed to create signature for file: {file}"))?;
     }
     Ok(())

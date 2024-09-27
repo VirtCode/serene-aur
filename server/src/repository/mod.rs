@@ -17,7 +17,8 @@ mod manage;
 
 const REPO_DIR: &str = "repository";
 const REPO_SERENE: &str = "bases.json";
-const PRIV_KEY_FILE: &str = "sign_key.asc";
+const KEY_FILE: &str = "sign_key.asc";
+const GPG_AGENT_SOCKET: &str = "S.gpg-agent";
 
 /// returns the webservice which exposes the repository
 pub fn webservice() -> Files {
