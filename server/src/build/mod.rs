@@ -14,8 +14,8 @@ use serene_data::build::{BuildReason, BuildState};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub mod schedule;
 pub mod next;
+pub mod schedule;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BuildSummary {
@@ -46,7 +46,7 @@ impl BuildSummary {
             version: None,
             started: Utc::now(),
             ended: None,
-            reason
+            reason,
         }
     }
 

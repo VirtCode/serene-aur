@@ -192,10 +192,15 @@ pub fn add(
         }
     };
 
-    log.succeed(&format!("successfully added packages {}", info.iter().map(|i| i.base.as_str()).collect::<Vec<_>>().join(", ")));
+    log.succeed(&format!(
+        "successfully added packages {}",
+        info.iter().map(|i| i.base.as_str()).collect::<Vec<_>>().join(", ")
+    ));
 
     // install if requested
-    if install { wait_and_install(c, &info.first().expect("added no package?").base, quiet); }
+    if install {
+        wait_and_install(c, &info.first().expect("added no package?").base, quiet);
+    }
 }
 
 /// removes a package from the repository
@@ -433,9 +438,15 @@ pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
             println!("\n{:<8} {} {}", "status:", b.state.colored_substantive(), additive);
 
             match &b.state {
-                BuildState::Failure => { println!("{:<8} {}", "message:", "see logs for error messages".italic()) }
-                BuildState::Fatal(msg, _) => { println!("{:<8} {}", "message:", msg) }
-                BuildState::Cancelled(msg) => { println!("{:<8} {}", "message:", msg) }
+                BuildState::Failure => {
+                    println!("{:<8} {}", "message:", "see logs for error messages".italic())
+                }
+                BuildState::Fatal(msg, _) => {
+                    println!("{:<8} {}", "message:", msg)
+                }
+                BuildState::Cancelled(msg) => {
+                    println!("{:<8} {}", "message:", msg)
+                }
                 _ => {}
             }
         }

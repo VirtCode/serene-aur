@@ -10,9 +10,9 @@ use anyhow::Context;
 use aur_depends::{Flags, PkgbuildRepo, Resolver};
 use log::{debug, warn};
 use raur::ArcPackage;
+use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use srcinfo::Srcinfo;
 use std::collections::{HashMap, HashSet};
-use serene_data::build::{BuildProgress, BuildReason, BuildState};
 
 pub struct BuildResolver<'a> {
     /// database
@@ -45,7 +45,7 @@ enum Status {
     /// package has successfully resolved deps
     Success(HashSet<String>),
     /// failed to resolve all dependencies
-    Failure(String)
+    Failure(String),
 }
 
 impl<'a> BuildResolver<'a> {
@@ -66,10 +66,7 @@ impl<'a> BuildResolver<'a> {
 
             // update package
             if let Err(e) = package.update().await {
-                warn!(
-                    "failed to update package {} before build: {e:#}",
-                    package.base
-                );
+                warn!("failed to update package {} before build: {e:#}", package.base);
             }
 
             // create build
@@ -84,7 +81,9 @@ impl<'a> BuildResolver<'a> {
     }
 
     /// resolves the added packages
-    pub async fn resolve(&mut self) -> anyhow::Result<Vec<(Package, BuildSummary, HashSet<String>)>>{
+    pub async fn resolve(
+        &mut self,
+    ) -> anyhow::Result<Vec<(Package, BuildSummary, HashSet<String>)>> {
         // build srcinfo repo
         let all = Package::find_all(self.db).await?;
         let mut added = vec![];
@@ -112,26 +111,26 @@ impl<'a> BuildResolver<'a> {
         debug!("parsing resolve infos");
         let mut status = Vec::new();
         for info in infos.into_iter() {
-
             let result = if !info.missing.is_empty() {
                 // totally missing deps
 
-                Status::Failure(
-                    format!("could not resolve dependencies: {}", info.missing.join(", "))
-                )
-
+                Status::Failure(format!(
+                    "could not resolve dependencies: {}",
+                    info.missing.join(", ")
+                ))
             } else if !info.aur.is_empty() {
                 // missing deps from aur
 
-                let mut result = Status::Failure(
-                    format!("missing dependencies from the AUR: {}", info.aur.iter().cloned().collect::<Vec<_>>().join(", "))
-                );
+                let mut result = Status::Failure(format!(
+                    "missing dependencies from the AUR: {}",
+                    info.aur.iter().cloned().collect::<Vec<_>>().join(", ")
+                ));
 
                 for pkg in &info.aur {
                     if Package::has(pkg, self.db).await? {
-                        result = Status::Failure(
-                            format!("dependency {pkg} is added but has never built successfully")
-                        );
+                        result = Status::Failure(format!(
+                            "dependency {pkg} is added but has never built successfully"
+                        ));
                     }
                 }
 
@@ -145,9 +144,12 @@ impl<'a> BuildResolver<'a> {
             status.push(result)
         }
 
-        let mut failed = status.iter().zip(&self.packages)
+        let mut failed = status
+            .iter()
+            .zip(&self.packages)
             .filter(|(status, _)| matches!(status, Status::Failure(_)))
-            .map(|(_, (p, _))| p.base.clone()).collect::<HashSet<_>>();
+            .map(|(_, (p, _))| p.base.clone())
+            .collect::<HashSet<_>>();
 
         loop {
             debug!("starting cleaning round for cancelled packages");
@@ -164,29 +166,36 @@ impl<'a> BuildResolver<'a> {
 
                 if !missing.is_empty() {
                     debug!("package {} depends on cancelled packages", package.base);
-                    *status = Status::Failure(format!("dependencies are added but have been cancelled: {}", missing.join(", ")));
+                    *status = Status::Failure(format!(
+                        "dependencies are added but have been cancelled: {}",
+                        missing.join(", ")
+                    ));
 
                     failed.insert(package.base.clone());
                     removed = true;
                 }
             }
 
-            if !removed { break }
+            if !removed {
+                break;
+            }
         }
 
-        let succeeded = status.iter().zip(&self.packages)
+        let succeeded = status
+            .iter()
+            .zip(&self.packages)
             .filter(|(status, _)| matches!(status, Status::Success(_)))
-            .map(|(_, (p, _))| p.base.clone()).collect::<HashSet<_>>();
-        let mut result = vec!();
+            .map(|(_, (p, _))| p.base.clone())
+            .collect::<HashSet<_>>();
+        let mut result = vec![];
 
         for ((package, mut summary), status) in self.packages.drain(0..).zip(status) {
             match status {
                 Status::Success(set) => {
-                    
                     // remove itself and non-built deps
                     let mut deps = set.intersection(&succeeded).cloned().collect::<HashSet<_>>();
                     deps.remove(&package.base);
-                    
+
                     result.push((package, summary, deps));
                 }
                 Status::Failure(err) => {
@@ -201,14 +210,16 @@ impl<'a> BuildResolver<'a> {
     }
 
     /// resolve the dependencies for one package
-    /// this method returning an error is serious, as it must be a network problem or something
-    async fn resolve_package(&mut self, package: &str, repo: &Vec<Srcinfo>) -> anyhow::Result<ResolveInfo> {
+    /// this method returning an error is serious, as it must be a network
+    /// problem or something
+    async fn resolve_package(
+        &mut self,
+        package: &str,
+        repo: &Vec<Srcinfo>,
+    ) -> anyhow::Result<ResolveInfo> {
         debug!("resolving dependencies of package {}", &package);
 
-        let own = PkgbuildRepo {
-            name: "serene",
-            pkgs: repo.iter().collect(),
-        };
+        let own = PkgbuildRepo { name: "serene", pkgs: repo.iter().collect() };
 
         let result = Resolver::new(&self.alpm, &mut self.cache, &self.aur, Flags::new()) // TODO: what can we change with these flags?
             .pkgbuild_repos(vec![own])
@@ -217,20 +228,15 @@ impl<'a> BuildResolver<'a> {
             .context("failed to resolve deps for package")?;
 
         Ok(ResolveInfo {
-            aur: result
-                .iter_aur_pkgs()
-                .map(|aur| aur.pkg.package_base.clone())
-                .collect(),
-            depend: result
-                .iter_pkgbuilds()
-                .map(|(info, _)| info.base.pkgbase.clone())
-                .collect(),
+            aur: result.iter_aur_pkgs().map(|aur| aur.pkg.package_base.clone()).collect(),
+            depend: result.iter_pkgbuilds().map(|(info, _)| info.base.pkgbase.clone()).collect(),
             missing: result.missing.into_iter().map(|m| m.dep).collect(),
         })
     }
 
-    /// can be called after resolving failed fatally, such that begun builds are ended
-    async fn finish_fatally(&mut self, message: &str) -> anyhow::Result<()>{
+    /// can be called after resolving failed fatally, such that begun builds are
+    /// ended
+    async fn finish_fatally(&mut self, message: &str) -> anyhow::Result<()> {
         for (_, summary) in &mut self.packages {
             summary.end(BuildState::Fatal(message.to_string(), BuildProgress::Resolve));
             summary.save(self.db).await?;
