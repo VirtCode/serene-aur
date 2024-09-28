@@ -9,6 +9,7 @@ adjusted for v0.3.0 on 23.02.24
 - [X] Clear versioning
 - [X] Shell completions with dynamic packages
 - [ ] show webhooks feature in infos
+- [ ] fix cli PKGBUILD so version doesn't have a v- prefix
 
 
 #### Cleanness
