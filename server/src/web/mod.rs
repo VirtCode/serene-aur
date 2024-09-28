@@ -102,7 +102,7 @@ pub async fn add(
 
         for p in &packages {
             scheduler.schedule(p).await.internal()?;
-            scheduler.run(p, true).await.internal()?;
+            scheduler.run(p, true, BuildReason::Initial).await.internal()?;
         }
     }
 

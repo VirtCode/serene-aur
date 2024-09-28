@@ -15,6 +15,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub mod schedule;
+pub mod next;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BuildSummary {
@@ -34,6 +35,25 @@ pub struct BuildSummary {
     pub started: DateTime<Utc>,
     /// end time of the build
     pub ended: Option<DateTime<Utc>>,
+}
+
+impl BuildSummary {
+    pub fn start(package: &Package, reason: BuildReason) -> Self {
+        Self {
+            package: package.base.clone(),
+            state: BuildState::Pending,
+            logs: None,
+            version: None,
+            started: Utc::now(),
+            ended: None,
+            reason
+        }
+    }
+
+    pub fn end(&mut self, state: BuildState) {
+        self.state = state;
+        self.ended = Some(Utc::now());
+    }
 }
 
 pub struct Builder {
@@ -144,6 +164,7 @@ impl Builder {
 
         self.broadcast.notify(&package.base, Event::BuildStart).await;
 
+        // TODO: break with state here and use summary.end()
         'run: {
             // UPDATE
             if update {

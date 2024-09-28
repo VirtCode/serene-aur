@@ -92,7 +92,6 @@ pub fn is_devel(pkg: &raur::Package) -> bool {
 
 /// Finds all latest commits for the sources of a srcinfo.
 /// This is used to determine whether a devel package has to be updated.
-pub async fn source_latest_version(srcinfo: &SrcinfoWrapper) -> anyhow::Result<HashMap<String, String>> {
 pub async fn source_latest_version(
     srcinfo: &SrcinfoWrapper,
 ) -> anyhow::Result<HashMap<String, String>> {

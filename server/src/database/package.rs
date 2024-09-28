@@ -21,6 +21,7 @@ struct PackageRecord {
     version: Option<String>,
     enabled: bool,
     clean: bool,
+    dependency: bool,
     schedule: Option<String>,
     prepare: Option<String>,
     flags: Option<String>,
@@ -39,11 +40,8 @@ impl DatabaseConversion<PackageRecord> for Package {
             clean: self.clean,
             schedule: self.schedule.clone(),
             prepare: self.prepare.clone(),
-            flags: if !self.flags.is_empty() {
-                Some(serde_json::to_string(&self.flags).context("failed to serialize flags")?)
-            } else {
-                None
-            },
+            flags: if !self.flags.is_empty() { Some(serde_json::to_string(&self.flags).context("failed to serialize flags")?) } else { None },
+            dependency: self.dependency
         })
     }
 
@@ -62,10 +60,8 @@ impl DatabaseConversion<PackageRecord> for Package {
             clean: value.clean,
             schedule: value.schedule,
             prepare: value.prepare,
-            flags: value
-                .flags
-                .map(|s| serde_json::from_str(&s).context("failed to deserialize source"))
-                .unwrap_or_else(|| Ok(vec![]))?,
+            flags: value.flags.map(|s| serde_json::from_str(&s).context("failed to deserialize source")).unwrap_or_else(|| Ok(vec![]))?,
+            dependency: value.dependency,
         })
     }
 }
@@ -120,10 +116,10 @@ impl Package {
         let record = self.create_record()?;
 
         query!(r#"
-            INSERT INTO package (base, added, source, srcinfo, pkgbuild, version, enabled, clean, schedule, prepare, flags)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            INSERT INTO package (base, added, source, srcinfo, pkgbuild, version, enabled, clean, schedule, prepare, flags, dependency)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#,
-            record.base, record.added, record.source, record.srcinfo, record.pkgbuild, record.version, record.enabled, record.clean, record.schedule, record.prepare, record.flags
+            record.base, record.added, record.source, record.srcinfo, record.pkgbuild, record.version, record.enabled, record.clean, record.schedule, record.prepare, record.flags, record.dependency
         )
             .execute(db).await?;
 

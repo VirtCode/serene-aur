@@ -88,3 +88,9 @@ impl Deref for SrcinfoWrapper {
         &self.inner
     }
 }
+
+impl Into<Srcinfo> for SrcinfoWrapper {
+    fn into(self) -> Srcinfo {
+        self.inner
+    }
+}
