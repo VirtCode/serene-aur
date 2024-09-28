@@ -89,6 +89,14 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
             log.fail(&format!("fatal failure occurred at {progress}: {message}"));
             return;
         }
+        BuildState::Pending => {
+            log.fail("build didn't actutally start, is still pending");
+            return;
+        }
+        BuildState::Cancelled(message) => {
+            log.fail(&format!("build was cancelled due to: {message}"));
+            return;
+        }
 
         // successful
         BuildState::Success => {
@@ -339,6 +347,7 @@ pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
             match &b.state {
                 BuildState::Failure => { println!("{:<8} {}", "message:", "see logs for error messages".italic()) }
                 BuildState::Fatal(msg, _) => { println!("{:<8} {}", "message:", msg) }
+                BuildState::Cancelled(msg) => { println!("{:<8} {}", "message:", msg) }
                 _ => {}
             }
         }
@@ -556,6 +565,8 @@ pub fn server_info(c: &Config) {
     let mut members = 0;
     let mut devel = 0;
     let mut enabled = 0;
+    
+    // TODO: add states for pending and cancelled?
     let mut passing = 0;
     let mut working = 0;
     let mut failing = 0;
@@ -567,9 +578,11 @@ pub fn server_info(c: &Config) {
 
         if let Some(b) = package.build {
             match b.state {
+                BuildState::Pending => working += 1,
                 BuildState::Running(_) => working += 1,
                 BuildState::Success => passing += 1,
                 BuildState::Failure => failing += 1,
+                BuildState::Cancelled(_) => failing += 1,
                 BuildState::Fatal(_, _) => fatal += 1,
             }
         }

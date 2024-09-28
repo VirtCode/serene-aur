@@ -33,6 +33,8 @@ impl DatabaseConversion<BuildRecord> for BuildSummary {
     fn create_record(&self) -> Result<BuildRecord> {
 
         let (state, progress, fatal) = match &self.state {
+            BuildState::Pending => { ("pending".to_owned(), None, None) }
+            BuildState::Cancelled(m) => { ("cancelled".to_owned(), None, Some(m.clone())) }
             BuildState::Running(p) => { ("running".to_owned(), Some(p.to_string()), None) }
             BuildState::Success => { ("success".to_owned(), None, None) }
             BuildState::Failure => { ("failure".to_owned(), None, None) }
@@ -57,6 +59,8 @@ impl DatabaseConversion<BuildRecord> for BuildSummary {
         let state = match (other.state.as_str(), other.progress, other.fatal) {
             ("success", None, None) => { BuildState::Success },
             ("failure", None, None) => { BuildState::Failure },
+            ("pending", None, None) => { BuildState::Pending },
+            ("cancelled", None, Some(m)) => { BuildState::Cancelled(m) },
             ("running", Some(p), None) => {
                 BuildState::Running(BuildProgress::from_str(&p).map_err(|_| anyhow!("no correct progress"))?)
             }

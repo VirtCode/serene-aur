@@ -14,19 +14,23 @@ pub trait BuildStateFormatter {
 impl BuildStateFormatter for BuildState {
     fn colored_passive(&self) -> ColoredString {
         match self {
-            BuildState::Running(_) => { "working".blue() }
-            BuildState::Success => { "passing".green() }
-            BuildState::Failure => { "failing".red() }
-            BuildState::Fatal(_, _) => { "fatal".bright_red() }
+            BuildState::Pending => "pending".dimmed(),
+            BuildState::Cancelled(_) => "cancelled".bright_yellow(),
+            BuildState::Running(_) => "working".blue(),
+            BuildState::Success => "passing".green(), 
+            BuildState::Failure => "failing".red(),
+            BuildState::Fatal(_, _) => "fatal".bright_red(),
         }
     }
 
     fn colored_substantive(&self) -> ColoredString {
         match self {
-            BuildState::Running(_) => { "working".blue() }
-            BuildState::Success => { "success".green() }
-            BuildState::Failure => { "failure".red() }
-            BuildState::Fatal(_, _) => { "fatal".bright_red() }
+            BuildState::Pending => "pending".dimmed(),
+            BuildState::Cancelled(_) => "cancelled".bright_yellow(),
+            BuildState::Running(_) => "working".blue(),
+            BuildState::Success => "success".green(),
+            BuildState::Failure => "failure".red(),
+            BuildState::Fatal(_, _) => "fatal".bright_red(),
         }
     }
 }
@@ -38,6 +42,7 @@ pub trait BuildProgressFormatter {
 impl BuildProgressFormatter for BuildProgress {
     fn printable_string(&self) -> String {
         match self {
+            BuildProgress::Resolve => { "resolving dependencies" }
             BuildProgress::Update => { "updating sources" }
             BuildProgress::Build => { "building package" }
             BuildProgress::Publish => { "publishing repository" }

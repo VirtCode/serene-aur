@@ -15,6 +15,7 @@ use crate::runner::archive::{begin_read, read_srcinfo};
 use crate::web::broadcast::{Broadcast, Event};
 
 pub mod schedule;
+pub mod next;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BuildSummary {
@@ -32,6 +33,24 @@ pub struct BuildSummary {
     pub started: DateTime<Utc>,
     /// end time of the build
     pub ended: Option<DateTime<Utc>>
+}
+
+impl BuildSummary {
+    pub fn start(package: &Package) -> Self {
+        Self {
+            package: package.base.clone(),
+            state: BuildState::Pending,
+            logs: None,
+            version: None,
+            started: Utc::now(),
+            ended: None
+        }
+    }
+
+    pub fn end(&mut self, state: BuildState) {
+        self.state = state;
+        self.ended = Some(Utc::now());
+    }
 }
 
 pub struct Builder {
@@ -102,7 +121,7 @@ impl Builder {
 
         let mut summary = BuildSummary {
             package: package.base.clone(),
-            state: Running(Build), 
+            state: Running(Build),
             started: start.clone(),
             logs: None, version: None, ended: None,
         };
@@ -110,11 +129,12 @@ impl Builder {
 
         self.broadcast.notify(&package.base, Event::BuildStart).await;
 
+        // TODO: break with state here and use summary.end()
         'run: {
             // UPDATE
             if update {
                 // state is already correct
-                
+
                 match self.update(&mut package).await {
                     Ok(_) => {}
                     Err(e) => {
@@ -128,7 +148,7 @@ impl Builder {
             if package.clean || force_clean {
                 summary.state = Running(Clean);
                 summary.change(&self.db).await?;
-                
+
                 match self.try_clean(&package).await {
                     Ok(()) => {}
                     Err(e) => {
@@ -141,7 +161,7 @@ impl Builder {
             // BUILD
             summary.state = Running(Build);
             summary.change(&self.db).await?;
-            
+
             let (container, success) = match self.build(&mut package).await {
                 Ok((status, container)) => {
                     let next = status.success;
@@ -154,13 +174,13 @@ impl Builder {
                 }
             };
 
-            
+
 
             // PUBLISH
             if success {
                 summary.state = Running(Publish);
                 summary.change(&self.db).await?;
-                
+
                 match self.publish(&mut package, &container).await {
                     Ok(()) => { }
                     Err(e) => {
@@ -182,7 +202,7 @@ impl Builder {
             if package.clean {
                 summary.state = Running(Publish);
                 summary.change(&self.db).await?;
-                
+
                 match self.clean(&container).await {
                     Ok(()) => {}
                     Err(e) => {
@@ -244,7 +264,7 @@ impl Builder {
         if let Some(container) = self.runner.read().await.find_container(package).await? {
             self.clean(&container).await?;
         }
-        
+
         Ok(())
     }
 }

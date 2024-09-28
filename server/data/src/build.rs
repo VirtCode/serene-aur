@@ -6,6 +6,8 @@ use strum_macros::{Display, EnumString};
 #[derive(Clone, Serialize, Deserialize, EnumString, Display)]
 #[strum(serialize_all="lowercase")]
 pub enum BuildProgress {
+    /// the build is resolving dependencies
+    Resolve,
     /// the build is updating the sources
     Update,
     /// the build is building the package in the container
@@ -19,6 +21,10 @@ pub enum BuildProgress {
 /// reports the state of the current build
 #[derive(Clone, Serialize, Deserialize)]
 pub enum BuildState {
+    /// the build is pending, i.e. waiting for dependencies
+    Pending,
+    /// the build was not started because of issues found before the build
+    Cancelled(String),
     /// the build is running
     Running(BuildProgress),
     /// the build succeeded

@@ -67,17 +67,17 @@ async fn checkout(source: &mut Box<dyn Source + Sync + Send>, temp: &Path) -> an
 async fn add(db: &Database, mut source: Box<dyn Source + Sync + Send>, temp: &Path, replace: bool) -> anyhow::Result<Option<Vec<Package>>> {
     // checkout target
     let (path, srcinfo) = checkout(&mut source, temp).await?;
-    info!("adding new package {}", srcinfo.base.pkgbase);
+    let target = srcinfo.base.pkgbase.clone();
+    info!("adding new package {target}");
 
     if Package::find(&srcinfo.base.pkgbase, db).await?.is_some() && !replace {
         return Ok(None);
     }
 
     // resolve deps - this already resolves transitive deps (iirc)
-    let alpm = initialize_alpm()?;
-    let mut resolver = AurResolver::start(&alpm, &db).await?;
+    let mut resolver = AurResolver::start(db, &vec![]).await?;
 
-    let needed = resolver.resolve(&srcinfo).await?;
+    let needed = resolver.resolve_add(&srcinfo).await?;
 
     // checkout other packages
     let mut packages = vec![(path, srcinfo, source, replace)];
@@ -114,7 +114,9 @@ async fn add(db: &Database, mut source: Box<dyn Source + Sync + Send>, temp: &Pa
             (package, false)
 
         } else {
-            (Package::new(srcinfo, source), true)
+            let dependency = srcinfo.base.pkgbase != target;
+
+            (Package::new(srcinfo, source, dependency), true)
         };
 
         // move package
@@ -179,6 +181,8 @@ pub struct Package {
 
     /// whether package is enabled, meaning it is built automatically
     pub enabled: bool,
+    /// whether the package was added as a dependency
+    pub dependency: bool,
     /// whether package should be cleaned after building
     pub clean: bool,
     /// potential custom cron schedule string
@@ -192,11 +196,12 @@ pub struct Package {
 impl Package {
 
     /// creates a new package with default values
-    fn new(srcinfo: SrcinfoWrapper, source: Box<dyn Source + Sync + Send>) -> Self {
+    fn new(srcinfo: SrcinfoWrapper, source: Box<dyn Source + Sync + Send>, dependency: bool) -> Self {
         Self {
             base: srcinfo.base.pkgbase.clone(),
             added: Utc::now(),
 
+            dependency,
             clean: !source.is_devel(),
             enabled: true,
             schedule: None,
@@ -254,6 +259,11 @@ impl Package {
         self.pkgbuild = Some(pkgbuild);
 
         Ok(())
+    }
+    
+    /// returns the next srcinfo that will be built
+    pub async fn get_next_srcinfo(&self) -> anyhow::Result<SrcinfoWrapper> {
+        self.source.get_srcinfo(&self.get_folder()).await
     }
 
     /// returns the expected built files
