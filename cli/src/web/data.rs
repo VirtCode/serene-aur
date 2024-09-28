@@ -58,12 +58,13 @@ pub trait BuildProgressFormatter {
 impl BuildProgressFormatter for BuildProgress {
     fn printable_string(&self) -> String {
         match self {
-            BuildProgress::Resolve => { "resolving dependencies" }
-            BuildProgress::Update => { "updating sources" }
-            BuildProgress::Build => { "building package" }
-            BuildProgress::Publish => { "publishing repository" }
-            BuildProgress::Clean => { "cleaning up" }
-        }.to_string()
+            BuildProgress::Resolve => "resolving dependencies",
+            BuildProgress::Update => "updating sources",
+            BuildProgress::Build => "building package",
+            BuildProgress::Publish => "publishing repository",
+            BuildProgress::Clean => "cleaning up",
+        }
+        .to_string()
     }
 }
 

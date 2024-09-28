@@ -1,35 +1,39 @@
-use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use crate::build::schedule::BuildScheduler;
+use crate::config::{CLI_PACKAGE_NAME, CONFIG};
+use crate::database::Database;
+use crate::package::source::cli::SereneCliSource;
+use crate::package::source::devel::DevelGitSource;
+use crate::package::source::normal::NormalSource;
+use crate::package::source::{Source, SrcinfoWrapper};
+use crate::runner;
+use crate::runner::archive;
 use anyhow::{anyhow, Context, Error};
 use chrono::{DateTime, Utc};
 use hyper::Body;
 use log::{debug, info, warn};
 use resolve::sync::initialize_alpm;
 use resolve::AurResolver;
+use serene_data::build::BuildReason;
+use serene_data::package::MakepkgFlag;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 use time::macros::offset;
 use tokio::fs;
-use serene_data::package::MakepkgFlag;
-use crate::build::schedule::BuildScheduler;
-use crate::config::{CLI_PACKAGE_NAME, CONFIG};
-use crate::database::Database;
-use crate::package::source::{Source, SrcinfoWrapper};
-use crate::package::source::cli::SereneCliSource;
-use crate::package::source::devel::DevelGitSource;
-use crate::package::source::normal::NormalSource;
-use crate::runner;
-use crate::runner::archive;
-use serene_data::build::BuildReason;
 
-pub mod git;
-pub mod source;
 pub mod aur;
+pub mod git;
 pub mod resolve;
+pub mod source;
 
 const SOURCE_FOLDER: &str = "sources";
 
 const PACKAGE_EXTENSION: &str = ".pkg.tar.zst"; // see /etc/makepkg.conf
 
-pub async fn add_source(db: &Database, source: Box<dyn Source + Sync + Send>, replace: bool) -> anyhow::Result<Option<Vec<Package>>> {
+pub async fn add_source(
+    db: &Database,
+    source: Box<dyn Source + Sync + Send>,
+    replace: bool,
+) -> anyhow::Result<Option<Vec<Package>>> {
     let temp = get_temp();
 
     let result = add(db, source, &temp, replace).await;
@@ -53,19 +57,26 @@ fn get_temp_package(temp: &Path) -> PathBuf {
     temp.join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string())
 }
 
-async fn checkout(source: &mut Box<dyn Source + Sync + Send>, temp: &Path) -> anyhow::Result<(PathBuf, SrcinfoWrapper)> {
+async fn checkout(
+    source: &mut Box<dyn Source + Sync + Send>,
+    temp: &Path,
+) -> anyhow::Result<(PathBuf, SrcinfoWrapper)> {
     let folder = get_temp_package(temp);
     fs::create_dir_all(&folder).await?;
 
-    source.create(&folder).await
-        .context("failed to checkout source")?;
+    source.create(&folder).await.context("failed to checkout source")?;
 
     let srcinfo = source.get_srcinfo(&folder).await?;
 
     Ok((folder, srcinfo))
 }
 
-async fn add(db: &Database, mut source: Box<dyn Source + Sync + Send>, temp: &Path, replace: bool) -> anyhow::Result<Option<Vec<Package>>> {
+async fn add(
+    db: &Database,
+    mut source: Box<dyn Source + Sync + Send>,
+    temp: &Path,
+    replace: bool,
+) -> anyhow::Result<Option<Vec<Package>>> {
     // checkout target
     let (path, srcinfo) = checkout(&mut source, temp).await?;
     let target = srcinfo.base.pkgbase.clone();
@@ -90,7 +101,8 @@ async fn add(db: &Database, mut source: Box<dyn Source + Sync + Send>, temp: &Pa
             Box::new(NormalSource::empty(&aur::to_git(&dep)))
         };
 
-        let (path, srcinfo) = checkout(&mut source, temp).await
+        let (path, srcinfo) = checkout(&mut source, temp)
+            .await
             .context("failed to checkout source for dependency")?;
 
         info!("adding new dependency {}", srcinfo.base.pkgbase);
@@ -99,38 +111,40 @@ async fn add(db: &Database, mut source: Box<dyn Source + Sync + Send>, temp: &Pa
     }
 
     // finish up packages
-    let mut result = vec!();
+    let mut result = vec![];
 
     for (path, srcinfo, source, replace) in packages {
         // check other packages
-        let (package, new) = if let Some(mut package) = Package::find(&srcinfo.base.pkgbase, db).await? {
+        let (package, new) =
+            if let Some(mut package) = Package::find(&srcinfo.base.pkgbase, db).await? {
+                // only proceed if replacing enabled
+                if !replace {
+                    warn!("aur-resolve suggested package that was already added: {}", package.base);
+                    continue;
+                }
 
-            // only proceed if replacing enabled
-            if !replace {
-                warn!("aur-resolve suggested package that was already added: {}", package.base);
-                continue
-            }
+                package.source = source;
+                (package, false)
+            } else {
+                let dependency = srcinfo.base.pkgbase != target;
 
-            package.source = source;
-            (package, false)
-
-        } else {
-            let dependency = srcinfo.base.pkgbase != target;
-
-            (Package::new(srcinfo, source, dependency), true)
-        };
+                (Package::new(srcinfo, source, dependency), true)
+            };
 
         // move package
         if package.get_folder().exists() {
-            fs::remove_dir_all(package.get_folder()).await
+            fs::remove_dir_all(package.get_folder())
+                .await
                 .context("failed to remove previous source")?;
         }
 
-        fs::rename(path, package.get_folder()).await
-            .context("failed to move source")?;
+        fs::rename(path, package.get_folder()).await.context("failed to move source")?;
 
-        if new { package.save(db).await? }
-        else { package.change_sources(db).await? }
+        if new {
+            package.save(db).await?
+        } else {
+            package.change_sources(db).await?
+        }
 
         info!("successfully added package {}", &package.base);
         result.push(package);
@@ -146,8 +160,7 @@ pub async fn try_add_cli(db: &Database, scheduler: &mut BuildScheduler) -> anyho
     }
 
     info!("adding and building serene-cli");
-    if let Some(all ) = add_source(db, Box::new(SereneCliSource::new()), false).await? {
-
+    if let Some(all) = add_source(db, Box::new(SereneCliSource::new()), false).await? {
         let Some(mut package) = all.into_iter().next() else {
             return Err(anyhow!("failed to add serene-cli, not in added pkgs"));
         };
@@ -199,9 +212,12 @@ pub struct Package {
 }
 
 impl Package {
-
     /// creates a new package with default values
-    fn new(srcinfo: SrcinfoWrapper, source: Box<dyn Source + Sync + Send>, dependency: bool) -> Self {
+    fn new(
+        srcinfo: SrcinfoWrapper,
+        source: Box<dyn Source + Sync + Send>,
+        dependency: bool,
+    ) -> Self {
         Self {
             base: srcinfo.base.pkgbase.clone(),
             added: Utc::now(),
@@ -257,7 +273,6 @@ impl Package {
         if self.source.is_devel() {
             // upgrade devel package srcinfo to reflect version and rel
             srcinfo = reported;
-
         } else if srcinfo.base.pkgver != reported.base.pkgver {
             // check for version mismatch for non-devel packages
             return Err(anyhow!(
@@ -274,7 +289,7 @@ impl Package {
 
         Ok(())
     }
-    
+
     /// returns the next srcinfo that will be built
     pub async fn get_next_srcinfo(&self) -> anyhow::Result<SrcinfoWrapper> {
         self.source.get_srcinfo(&self.get_folder()).await

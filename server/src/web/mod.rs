@@ -93,7 +93,9 @@ pub async fn add(
     };
 
     // create package
-    let packages = package::add_source(&db, source, body.0.replace).await.internal()?
+    let packages = package::add_source(&db, source, body.0.replace)
+        .await
+        .internal()?
         .ok_or_else(|| ErrorBadRequest("package with the same base is already added"))?;
 
     {

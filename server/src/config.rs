@@ -87,7 +87,7 @@ impl Default for Config {
 
             webhook_secret: None,
 
-            sync_mirror: "https://mirror.init7.net/archlinux/{repo}/os/{arch}".to_string()
+            sync_mirror: "https://mirror.init7.net/archlinux/{repo}/os/{arch}".to_string(),
         }
     }
 }
@@ -147,7 +147,7 @@ impl Config {
 
             webhook_secret: env::var("WEBHOOK_SECRET").ok().or(default.webhook_secret),
 
-            sync_mirror: env::var("SYNC_MIRROR").ok().unwrap_or(default.sync_mirror)
+            sync_mirror: env::var("SYNC_MIRROR").ok().unwrap_or(default.sync_mirror),
         }
     }
 }

@@ -29,7 +29,7 @@ pub async fn find(name: &str) -> anyhow::Result<Option<AurInfo>> {
         Ok(Some(AurInfo {
             base: info.package_base.clone(),
             repository: to_git(info),
-            devel: is_devel(info)
+            devel: is_devel(info),
         }))
     } else {
         Ok(None)
@@ -84,10 +84,10 @@ pub async fn generate_srcinfo_string(pkgbuild: &str) -> anyhow::Result<String> {
     }
 }
 
-
 /// checks whether a package is a devel package based on its name
 pub fn is_devel(pkg: &raur::Package) -> bool {
-    pkg.package_base.ends_with("-git") // currently only -git devel packages are supported
+    pkg.package_base.ends_with("-git") // currently only -git devel packages are
+                                       // supported
 }
 
 /// Finds all latest commits for the sources of a srcinfo.
