@@ -11,15 +11,45 @@ const STOCK_DATABASES: [&str; 2] = ["core", "extra"];
 
 const SYNC_FOLDER: &str = "sync";
 
+/// A thread-safe wrapper around a raw [`alpm::Alpm`].
+/// FIXME: remove this once Alpm is Sync: https://github.com/archlinux/alpm.rs/issues/42
+pub struct AlpmWrapper {
+    /// A wrapper around an inner database handle.
+    pub alpm: Alpm,
+}
+
+impl From<Alpm> for AlpmWrapper {
+    fn from(alpm: Alpm) -> Self {
+        AlpmWrapper { alpm }
+    }
+}
+
+unsafe impl Send for AlpmWrapper {}
+
+/// creates an alpm reference and syncs the db
+pub async fn create_and_sync() -> Result<Alpm> {
+    debug!("starting alpm creation in new thread");
+
+    // we do this in another thread as it could take a moment
+    let wrapper = tokio::task::spawn_blocking(|| {
+        let mut alpm = initialize_alpm()?;
+        synchronize_alpm(&mut alpm)?;
+
+        Ok::<_, anyhow::Error>(AlpmWrapper::from(alpm))
+    })
+    .await
+    .context("failed to create alpm spawning thread")??;
+
+    Ok(wrapper.alpm)
+}
+
 /// returns the server for a given database
 fn get_server_for(name: &str) -> String {
     CONFIG.sync_mirror.replace("{repo}", name).replace("{arch}", &CONFIG.architecture)
 }
 
-// TODO: convert this to async (might take a while)
-
 /// initializes a libalpm reference by adding required databases and mirrors
-pub fn initialize_alpm() -> Result<Alpm> {
+fn initialize_alpm() -> Result<Alpm> {
     debug!("creating new libalpm reference");
 
     let path = PathBuf::from(SYNC_FOLDER);
@@ -40,11 +70,11 @@ pub fn initialize_alpm() -> Result<Alpm> {
             .with_context(|| format!("failed to add server to database '{db}' of libalpm"))?;
     }
 
-    Ok(alpm)
+    Ok(Alpm::from(alpm))
 }
 
 /// updates the sync databases of a libalmp reference
-pub fn synchronize_alpm(alpm: &mut Alpm) -> Result<()> {
+fn synchronize_alpm(alpm: &mut Alpm) -> Result<()> {
     info!("updating sync databases");
 
     alpm.syncdbs_mut().update(false).context("failed to synchronize databases with libalpm")?;

@@ -16,6 +16,7 @@ use tokio::sync::RwLock;
 
 pub mod next;
 pub mod schedule;
+pub mod session;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BuildSummary {
@@ -110,8 +111,11 @@ impl Builder {
         };
 
         if updatable || force {
+            let summary = BuildSummary::start(&package, reason);
+            summary.save(&self.db).await.unwrap();
+
             match self
-                .run_build(package, updatable, clean, reason)
+                .run_build(package, updatable, clean, summary)
                 .await
                 .context("build run for package failed extremely fatally")
             {
@@ -147,34 +151,20 @@ impl Builder {
         mut package: Package,
         update: bool,
         force_clean: bool,
-        reason: BuildReason,
-    ) -> anyhow::Result<()> {
-        let start = Utc::now();
-
-        let mut summary = BuildSummary {
-            package: package.base.clone(),
-            reason,
-            state: Running(Build),
-            started: start.clone(),
-            logs: None,
-            version: None,
-            ended: None,
-        };
-        summary.save(&self.db).await?;
-
+        mut summary: BuildSummary,
+    ) -> anyhow::Result<BuildSummary> {
         self.broadcast.notify(&package.base, Event::BuildStart).await;
 
-        // TODO: break with state here and use summary.end()
-        'run: {
+        let state = 'run: {
             // UPDATE
             if update {
-                // state is already correct
+                summary.state = Running(Update);
+                summary.change(&self.db).await?;
 
                 match self.update(&mut package).await {
                     Ok(_) => {}
                     Err(e) => {
-                        summary.state = Fatal(format!("{e:#}"), Update);
-                        break 'run;
+                        break 'run Fatal(format!("{e:#}"), Update);
                     }
                 };
             }
@@ -187,8 +177,7 @@ impl Builder {
                 match self.try_clean(&package).await {
                     Ok(()) => {}
                     Err(e) => {
-                        summary.state = Fatal(format!("{e:#}"), Clean);
-                        break 'run;
+                        break 'run Fatal(format!("{e:#}"), Clean);
                     }
                 }
             }
@@ -204,8 +193,7 @@ impl Builder {
                     (container, next)
                 }
                 Err(e) => {
-                    summary.state = Fatal(format!("{e:#}"), Build);
-                    break 'run;
+                    break 'run Fatal(format!("{e:#}"), Build);
                 }
             };
 
@@ -217,8 +205,7 @@ impl Builder {
                 match self.publish(&mut package, &container).await {
                     Ok(()) => {}
                     Err(e) => {
-                        summary.state = Fatal(format!("{e:#}"), Publish);
-                        break 'run;
+                        break 'run Fatal(format!("{e:#}"), Publish);
                     }
                 }
 
@@ -239,21 +226,23 @@ impl Builder {
                 match self.clean(&container).await {
                     Ok(()) => {}
                     Err(e) => {
-                        summary.state = Fatal(format!("{e:#}"), Clean);
-                        break 'run;
+                        break 'run Fatal(format!("{e:#}"), Clean);
                     }
                 }
             }
 
-            summary.state = if success { Success } else { Failure };
+            if success {
+                Success
+            } else {
+                Failure
+            }
         };
 
-        summary.ended = Some(Utc::now());
+        summary.end(state);
         summary.change(&self.db).await?;
-
         self.broadcast.notify(&package.base, Event::BuildFinish).await;
 
-        Ok(())
+        Ok(summary)
     }
 
     /// updates the sources of a given package

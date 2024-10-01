@@ -11,7 +11,6 @@ use anyhow::{anyhow, Context, Error};
 use chrono::{DateTime, Utc};
 use hyper::Body;
 use log::{debug, info, warn};
-use resolve::sync::initialize_alpm;
 use resolve::AurResolver;
 use serene_data::build::BuildReason;
 use serene_data::package::MakepkgFlag;
@@ -161,6 +160,7 @@ pub async fn try_add_cli(db: &Database, scheduler: &mut BuildScheduler) -> anyho
 
     info!("adding and building serene-cli");
     if let Some(all) = add_source(db, Box::new(SereneCliSource::new()), false).await? {
+        // TODO: cleanify with support for deps
         let Some(mut package) = all.into_iter().next() else {
             return Err(anyhow!("failed to add serene-cli, not in added pkgs"));
         };
@@ -169,7 +169,9 @@ pub async fn try_add_cli(db: &Database, scheduler: &mut BuildScheduler) -> anyho
         package.change_settings(db).await?;
 
         scheduler.schedule(&package).await?;
-        scheduler.run(&package, true, BuildReason::Initial).await?;
+
+        let packages = vec![package];
+        scheduler.run(packages, true, BuildReason::Initial).await?;
 
         info!("successfully added serene-cli");
     }

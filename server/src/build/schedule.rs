@@ -1,97 +1,62 @@
+use crate::build::session::BuildSession;
 use crate::build::Builder;
 use crate::config::CONFIG;
+use crate::database::Database;
 use crate::package::Package;
 use crate::runner::Runner;
 use anyhow::{anyhow, Context};
+use chrono::{DateTime, Utc};
+use cron::Schedule;
 use log::{debug, error, info, warn};
 use serene_data::build::BuildReason;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
+use tokio::select;
+use tokio::sync::mpsc::{Sender, UnboundedSender};
+use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::task::LocalSet;
 use tokio_cron_scheduler::{Job, JobScheduler};
+use tokio_stream::StreamExt;
 use uuid::Uuid;
 
 /// this struct schedules builds for all packages
 pub struct BuildScheduler {
+    db: Database,
     builder: Arc<RwLock<Builder>>,
 
-    sched: JobScheduler,
-    jobs: HashMap<String, Uuid>,
-    /// stores whether a package is currently being built
-    locks: HashMap<String, Arc<RwLock<bool>>>,
+    signal: Option<Sender<()>>,
+    queue: Option<Sender<Vec<Package>>>,
+    jobs: Arc<Mutex<HashMap<DateTime<Utc>, HashSet<String>>>>,
 }
 
 impl BuildScheduler {
     /// creates a new scheduler
-    pub async fn new(builder: Arc<RwLock<Builder>>) -> anyhow::Result<Self> {
+    pub async fn new(builder: Arc<RwLock<Builder>>, db: Database) -> anyhow::Result<Self> {
         Ok(Self {
             builder,
-            sched: JobScheduler::new().await.context("failed to initialize job scheduler")?,
-            jobs: HashMap::new(),
-            locks: HashMap::new(),
+            db,
+            signal: None,
+            queue: None,
+            jobs: Arc::new(Mutex::new(HashMap::new())),
         })
-    }
-
-    /// starts the scheduler
-    pub async fn start(&self) -> anyhow::Result<()> {
-        self.sched.start().await.context("failed to start scheduler")
-    }
-
-    /// get the build lock of a package
-    fn get_lock(&mut self, package: &Package) -> Arc<RwLock<bool>> {
-        self.locks
-            .entry(package.base.clone())
-            .or_insert_with(|| Arc::new(RwLock::new(false)))
-            .clone()
     }
 
     /// runs a one-shot build for a package
     pub async fn run(
-        &mut self,
-        package: &Package,
+        &self,
+        packages: Vec<Package>,
         clean: bool,
         reason: BuildReason,
     ) -> anyhow::Result<()> {
-        info!("scheduling one-shot build for package {} now", &package.base);
+        info!("scheduling one-shot build for some packages now");
 
-        let lock = self.get_lock(package);
-        let base = package.base.clone();
-        let builder = self.builder.clone();
+        let Some(queue) = &self.queue else {
+            return Err(anyhow!("scheduler is not yet started, build won't happen"));
+        };
 
-        if *lock.read().await {
-            return Err(anyhow!(
-                "cannot run build for package {base} now because lock for build is set"
-            ));
-        }
-
-        let job = Job::new_one_shot_async(Duration::from_secs(0), move |_, _| {
-            let lock = lock.clone();
-            let base = base.clone();
-            let builder = builder.clone();
-            let reason = reason.clone();
-
-            Box::pin(async move { run(lock, builder, true, base, clean, reason).await })
-        })
-        .context(format!("failed to create job for package {}", package.base))?;
-
-        self.sched
-            .add(job)
-            .await
-            .context(format!("failed to schedule oneshot for package {}", &package.base))?;
-
-        Ok(())
-    }
-
-    /// unschedules the build for a package
-    pub async fn unschedule(&mut self, package: &Package) -> anyhow::Result<()> {
-        if let Some(id) = self.jobs.remove(&package.base) {
-            debug!("unscheduling job for {}", package.base);
-            self.sched
-                .remove(&id)
-                .await
-                .context(format!("failed to unschedule job for package {}", package.base))?;
-        }
+        queue.send(packages).await.context("failed to submit packages")?;
 
         Ok(())
     }
@@ -101,101 +66,185 @@ impl BuildScheduler {
         info!("scheduling recurring build for package {}", &package.base);
         self.unschedule(package).await?;
 
-        let lock = self.get_lock(package);
-        let base = package.base.clone();
+        Self::schedule_into(&[package.clone()], &self.jobs).await;
+        if let Some(signal) = &mut self.signal {
+            signal.send(()).await.context("failed to signal rescheduling")?;
+        }
+
+        Ok(())
+    }
+
+    /// unschedules the build for a package
+    pub async fn unschedule(&mut self, package: &Package) -> anyhow::Result<()> {
+        for set in self.jobs.lock().await.values_mut() {
+            set.remove(&package.base);
+        }
+
+        Ok(())
+    }
+
+    /// starts the scheduling thread
+    pub async fn start(&mut self) -> anyhow::Result<()> {
+        if self.signal.is_some() {
+            return Err(anyhow!("tried to start scheduler twice!"));
+        }
+
+        let (tx, mut rx) = mpsc::channel::<()>(1);
+        self.signal = Some(tx);
+
+        let queue = self.spawn_runner();
+        self.queue = Some(queue.clone());
+
+        let jobs = self.jobs.clone();
+        let db = self.db.clone();
         let builder = self.builder.clone();
 
-        let job = Job::new_async(package.get_schedule().as_str(), move |_, _| {
-            let lock = lock.clone();
-            let base = base.clone();
-            let builder = builder.clone();
+        tokio::spawn(async move {
+            loop {
+                let min = jobs.lock().await.keys().min().cloned();
 
-            Box::pin(
-                async move { run(lock, builder, false, base, false, BuildReason::Schedule).await },
-            )
-        })
-        .context(format!("failed to create job for package {}", package.base))?;
+                if let Some(min) = min {
+                    debug!("blocking until next schedule target at {min:#}");
 
-        self.jobs.insert(package.base.clone(), job.guid());
+                    // only wait if time is in the future (otherwise this would error)
+                    if let Ok(duration) = (min - Utc::now()).to_std() {
+                        let timeout = tokio::time::sleep(duration);
 
-        self.sched
-            .add(job)
-            .await
-            .context(format!("failed to schedule job for package {}", package.base))?;
+                        select! {
+                            result = rx.recv() => { match result {
+                                None => { break; }
+                                Some(_) => { continue; }
+                            }}
+                            _ = timeout => {}
+                        }
+                    }
 
-        Ok(())
-    }
-}
+                    debug!("schedule target reached");
 
-/// runs a build for a package
-async fn run(
-    lock: Arc<RwLock<bool>>,
-    builder: Arc<RwLock<Builder>>,
-    force: bool,
-    base: String,
-    clean: bool,
-    reason: BuildReason,
-) {
-    // makes sure a package is not built twice at the same time
-    if *lock.read().await {
-        warn!("cancelling schedule for package {base} because the lock is set");
-        return;
-    }
+                    let Some(set) = jobs.lock().await.remove(&min) else {
+                        warn!("schedule target no longer present, rescheduling");
+                        continue;
+                    };
 
-    *lock.write().await = true;
-    builder.read().await.run_scheduled(&base, force, clean, reason).await;
-    *lock.write().await = false;
-}
+                    let mut packages = vec![];
+                    for base in set {
+                        match Package::find(&base, &db).await {
+                            Ok(Some(p)) => packages.push(p),
+                            Ok(None) => {
+                                warn!("package with base {base} was scheduled but is no longer present")
+                            }
+                            Err(e) => {
+                                error!("failed to access database: {e:#}")
+                            }
+                        }
+                    }
 
-/// Schedules the pulling of the runner image
-pub struct ImageScheduler {
-    runner: Arc<RwLock<Runner>>,
-    sched: JobScheduler,
-    job: Uuid,
-}
+                    // reschedule these packages
+                    Self::schedule_into(&packages, &jobs).await;
 
-impl ImageScheduler {
-    /// creates a new image scheduler
-    pub async fn new(runner: Arc<RwLock<Runner>>) -> anyhow::Result<Self> {
-        let mut s = Self {
-            runner,
-            sched: JobScheduler::new().await.context("failed to initialize job scheduler")?,
-            job: Uuid::from_u128(0u128),
-        };
-
-        s.schedule().await?;
-        Ok(s)
-    }
-
-    /// starts the scheduler
-    pub async fn start(&self) -> anyhow::Result<()> {
-        self.sched.start().await.context("failed to start image scheduler")
-    }
-
-    // schedules an image update
-    async fn schedule(&mut self) -> anyhow::Result<()> {
-        let runner = self.runner.clone();
-
-        info!("scheduling image update");
-
-        let job = Job::new_async(CONFIG.schedule_image.as_str(), move |_, _| {
-            let runner = runner.clone();
-
-            Box::pin(async move {
-                info!("updating runner image");
-
-                if let Err(e) = runner.read().await.update_image().await {
-                    error!("failed to update runner image: {e:#}");
+                    // submit to builder thread
+                    if let Err(e) = queue.send(packages).await {
+                        error!("failed to schedule build, sending builder thread failed: {e:#}")
+                    }
                 } else {
-                    info!("successfully updated runner image");
-                }
-            })
-        })
-        .context("failed to schedule job image updating")?;
+                    debug!("blocking until woken with reschedule");
 
-        self.job = job.guid();
-        self.sched.add(job).await.context("failed to schedule image update")?;
+                    // block until we receive something
+                    if let None = rx.recv().await {
+                        break;
+                    }
+                }
+            }
+
+            info!("channel for scheduler closed, no rescheduling happening anymore");
+        });
 
         Ok(())
+    }
+
+    /// this spawns an OS thread which will run the builds
+    /// this is necessary, because Alpm is not send, and thus we cannot run the
+    /// resolving on tokio
+    /// see https://docs.rs/tokio/latest/tokio/task/struct.LocalSet.html#use-inside-tokiospawn
+    /// FIXME: remove this once Alpm is sync: https://github.com/archlinux/alpm.rs/issues/42
+    fn spawn_runner(&self) -> Sender<Vec<Package>> {
+        let (tx, mut rx) = mpsc::channel(1);
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("no build tokio runtime?");
+
+        let builder = self.builder.clone();
+        let db = self.db.clone();
+        std::thread::spawn(move || {
+            let local = LocalSet::new();
+
+            local.spawn_local(async move {
+                // receive stuff from channel
+                while let Some(packages) = rx.recv().await {
+                    let db = db.clone();
+                    let builder = builder.clone();
+
+                    // we can use spawn_local here
+                    tokio::task::spawn_local(async move {
+                        Self::run_now(packages, &builder, &db).await;
+                    });
+                }
+            });
+
+            rt.block_on(local)
+        });
+
+        tx
+    }
+
+    /// schedules a set of packages into the given schedule map
+    /// this is usually done before they are run so they are ready for the next
+    /// target
+    async fn schedule_into(
+        package: &[Package],
+        targets: &Arc<Mutex<HashMap<DateTime<Utc>, HashSet<String>>>>,
+    ) {
+        for package in package {
+            let Ok(schedule) = Schedule::from_str(&package.get_schedule()) else {
+                error!("failed to schedule package {}, couldn't parse cron", package.base);
+                return;
+            };
+
+            let Some(time) = schedule.upcoming(Utc).next() else {
+                error!("failed to schedule package {}, cron string won't happen", package.base);
+                return;
+            };
+
+            let mut jobs = targets.lock().await;
+
+            if let Some(set) = jobs.get_mut(&time) {
+                set.insert(package.base.clone());
+            } else {
+                jobs.insert(time, HashSet::from([package.base.clone()]));
+            }
+        }
+    }
+
+    /// runs a build for a set of packages right now
+    async fn run_now(packages: Vec<Package>, builder: &Arc<RwLock<Builder>>, db: &Database) {
+        info!(
+            "running build for these packages: {}",
+            packages.iter().map(|p| p.base.clone()).collect::<Vec<_>>().join(", ")
+        );
+
+        // TODO: filter for updateable
+        // TODO: respect stuff like clean, reason, resolve
+        match BuildSession::start(packages, BuildReason::Unknown, db, builder.clone(), true).await {
+            Ok(mut session) => {
+                if let Err(e) = session.run().await {
+                    error!("failed to run build session: {e:#}");
+                }
+            }
+            Err(e) => {
+                error!("failed to start build session: {e:#}");
+            }
+        };
     }
 }

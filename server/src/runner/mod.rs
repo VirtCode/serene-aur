@@ -1,4 +1,5 @@
 pub mod archive;
+pub mod update;
 
 use crate::config::{CONFIG, INFO};
 use crate::package::Package;

@@ -1,18 +1,15 @@
 use crate::build::BuildSummary;
 use crate::database::Database;
-use crate::package::resolve::sync::initialize_alpm;
-use crate::package::resolve::AurResolver;
+use crate::package::resolve::sync::create_and_sync;
 use crate::package::Package;
-use actix_web_lab::__reexports::tracing::field::debug;
 use alpm::Alpm;
-use alpm_utils::AsTarg;
 use anyhow::Context;
 use aur_depends::{Flags, PkgbuildRepo, Resolver};
 use log::{debug, warn};
 use raur::ArcPackage;
 use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use srcinfo::Srcinfo;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 pub struct BuildResolver<'a> {
     /// database
@@ -49,9 +46,9 @@ enum Status {
 }
 
 impl<'a> BuildResolver<'a> {
-    pub fn new(db: &'a Database) -> anyhow::Result<Self> {
+    pub async fn new(db: &'a Database) -> anyhow::Result<Self> {
         Ok(Self {
-            alpm: initialize_alpm()?,
+            alpm: create_and_sync().await?,
             aur: raur::Handle::new(),
             cache: HashSet::new(),
             packages: Vec::new(),
@@ -59,7 +56,18 @@ impl<'a> BuildResolver<'a> {
         })
     }
 
+    /// combines the lower two functions
+    pub async fn add_and_resolve(
+        &mut self,
+        packages: Vec<Package>,
+        reason: BuildReason,
+    ) -> anyhow::Result<Vec<(Package, BuildSummary, HashSet<String>)>> {
+        self.add(packages, reason).await?;
+        self.resolve().await
+    }
+
     /// add packages that will be built
+    /// added packages will be updated
     pub async fn add(&mut self, packages: Vec<Package>, reason: BuildReason) -> anyhow::Result<()> {
         for mut package in packages {
             debug!("adding package {} to resolver", &package.base);
@@ -236,7 +244,7 @@ impl<'a> BuildResolver<'a> {
 
     /// can be called after resolving failed fatally, such that begun builds are
     /// ended
-    async fn finish_fatally(&mut self, message: &str) -> anyhow::Result<()> {
+    pub async fn finish_fatally(&mut self, message: &str) -> anyhow::Result<()> {
         for (_, summary) in &mut self.packages {
             summary.end(BuildState::Fatal(message.to_string(), BuildProgress::Resolve));
             summary.save(self.db).await?;
