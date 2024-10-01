@@ -1,14 +1,11 @@
 use super::{source::SrcinfoWrapper, Package};
 use crate::database::Database;
-use crate::package::resolve::sync::{initialize_alpm, synchronize_alpm};
+use crate::package::resolve::sync::create_and_sync;
 use alpm::Alpm;
 use anyhow::{anyhow, Context, Result};
 use aur_depends::{Flags, PkgbuildRepo, Resolver};
-use either::{Either, Left, Right};
-use log::warn;
 use raur::{ArcPackage, Handle};
 use srcinfo::Srcinfo;
-use std::collections::HashMap;
 use std::{collections::HashSet, ops::Deref};
 
 pub mod sync;
@@ -35,7 +32,7 @@ impl AurResolver {
             .collect();
 
         Ok(Self {
-            alpm: initialize_alpm()?,
+            alpm: create_and_sync().await?,
             added,
             aur: raur::Handle::new(),
             aur_cache: HashSet::new(),
@@ -85,10 +82,5 @@ impl AurResolver {
         }
 
         Ok(result.iter_aur_pkgs().map(|p| p.pkg.clone()).collect())
-    }
-
-    /// sync integrated alpm dbs
-    pub async fn sync(&mut self) -> Result<()> {
-        synchronize_alpm(&mut self.alpm)
     }
 }

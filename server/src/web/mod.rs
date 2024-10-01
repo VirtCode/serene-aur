@@ -98,17 +98,20 @@ pub async fn add(
         .internal()?
         .ok_or_else(|| ErrorBadRequest("package with the same base is already added"))?;
 
+    let response = packages.iter().map(|p| p.to_info()).collect::<Vec<_>>();
+
     {
         // scheduling package
         let mut scheduler = scheduler.write().await;
 
         for p in &packages {
             scheduler.schedule(p).await.internal()?;
-            scheduler.run(p, true, BuildReason::Initial).await.internal()?;
         }
+
+        scheduler.run(packages, true, BuildReason::Initial).await.internal()?;
     }
 
-    Ok(Json(packages.iter().map(|p| p.to_info()).collect::<Vec<_>>()))
+    Ok(Json(response))
 }
 
 #[get("/package/list")]
@@ -194,7 +197,7 @@ pub async fn build(
     scheduler
         .write()
         .await
-        .run(&package, body.into_inner().clean, BuildReason::Manual)
+        .run(vec![package], body.into_inner().clean, BuildReason::Manual)
         .await
         .internal()?;
 
@@ -373,7 +376,7 @@ pub async fn build_webhook(
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    scheduler.write().await.run(&package, false, BuildReason::Webhook).await.internal()?;
+    scheduler.write().await.run(vec![package], false, BuildReason::Webhook).await.internal()?;
 
     Ok(empty_response())
 }

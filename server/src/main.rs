@@ -1,3 +1,5 @@
+#![feature(extract_if)]
+
 pub mod package;
 pub mod runner;
 
@@ -7,18 +9,23 @@ mod database;
 mod repository;
 mod web;
 
-use crate::build::schedule::{BuildScheduler, ImageScheduler};
+use crate::build::schedule::BuildScheduler;
+use crate::build::session::BuildSession;
 use crate::build::Builder;
 use crate::config::CONFIG;
+use crate::database::Database;
 use crate::package::Package;
 use crate::repository::PackageRepository;
+use crate::runner::update::ImageScheduler;
 use crate::runner::Runner;
 use crate::web::broadcast::Broadcast;
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
 use anyhow::Context;
 use config::INFO;
+use lazy_static::lazy_static;
 use log::{error, info};
+use serene_data::build::BuildReason;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -54,8 +61,9 @@ async fn main() -> anyhow::Result<()> {
     )));
 
     // creating scheduler
-    let mut schedule =
-        BuildScheduler::new(builder.clone()).await.context("failed to start package scheduler")?;
+    let mut schedule = BuildScheduler::new(builder.clone(), db.clone())
+        .await
+        .context("failed to start package scheduler")?;
 
     // creating image scheduler
     let image_scheduler =
@@ -80,6 +88,16 @@ async fn main() -> anyhow::Result<()> {
             error!("Failed to add cli package: {e:#}")
         }
     }
+
+    /*
+    let packages = Package::find_all(&db).await.unwrap();
+    let mut session =
+        BuildSession::start(packages, BuildReason::Initial, &db, builder.clone(), true)
+            .await
+            .unwrap();
+    session.run().await.unwrap();
+
+     */
 
     image_scheduler.start().await?;
     schedule.start().await?;
