@@ -3,13 +3,15 @@ use crate::build::{BuildSummary, Builder};
 use crate::config::CONFIG;
 use crate::database::Database;
 use crate::package::Package;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use log::{debug, error, info, warn};
 use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use std::collections::HashSet;
 use std::sync::Arc;
+use tokio::runtime::Handle;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::RwLock;
+use tokio::sync::{oneshot, RwLock};
+use tokio::task::LocalSet;
 
 pub struct BuildSession<'a> {
     packages: Vec<(Package, BuildSummary, HashSet<String>)>,
@@ -34,19 +36,7 @@ impl<'a> BuildSession<'a> {
     ) -> Result<Self> {
         let result = if resolve && CONFIG.resolve_build_sequence {
             // updates the sources too
-            let mut resolver = BuildResolver::new(db).await?;
-
-            match resolver.add_and_resolve(packages, reason).await {
-                Ok(r) => r,
-                Err(e) => {
-                    if let Err(again) = resolver.finish_fatally(&e.to_string()).await {
-                        warn!("failed to finish started resolver builds: {again}");
-                    }
-
-                    warn!("failed to resolve packages for build: {e}");
-                    return Err(e);
-                }
-            }
+            Self::resolve(packages, reason, db).await?
         } else {
             let mut result = vec![];
 
@@ -61,6 +51,56 @@ impl<'a> BuildSession<'a> {
         };
 
         Ok(Self { builder, db, packages: result, building: HashSet::new() })
+    }
+
+    // FIXME: remove this once Alpm is sync, see sync.rs
+    /// resolves the packages in a seperate thread
+    /// yes, this is pretty ugly, but async is anyways
+    /// (cause alpm is non-send)
+    async fn resolve(
+        packages: Vec<Package>,
+        reason: BuildReason,
+        db: &'a Database,
+    ) -> Result<Vec<(Package, BuildSummary, HashSet<String>)>> {
+        let (tx, rx) = oneshot::channel();
+
+        let db = db.clone();
+
+        // spawn new thread
+        std::thread::spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("no build tokio runtime?")
+                .block_on(async move {
+                    debug!("resolving packages on seperate thread");
+
+                    let result = 'content: {
+                        let mut resolver = match BuildResolver::new(&db).await {
+                            Ok(r) => r,
+                            Err(e) => break 'content Err(e),
+                        };
+
+                        match resolver.add_and_resolve(packages, reason).await {
+                            Ok(r) => Ok(r),
+                            Err(e) => {
+                                if let Err(again) = resolver.finish_fatally(&e.to_string()).await {
+                                    warn!("failed to finish started resolver builds: {again}");
+                                }
+
+                                warn!("failed to resolve packages for build: {e}");
+                                Err(e)
+                            }
+                        }
+                    };
+
+                    debug!("resolving on seperate thread finished");
+
+                    tx.send(result).unwrap_or_else(|_| error!("failed to send resolving error"));
+                })
+        });
+
+        rx.await.context("failed to receive resolving info from thread")?
     }
 
     /// builds all packages in the optimal sequence

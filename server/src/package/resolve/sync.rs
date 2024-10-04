@@ -11,26 +11,24 @@ const STOCK_DATABASES: [&str; 2] = ["core", "extra"];
 
 const SYNC_FOLDER: &str = "sync";
 
-/// A thread-safe wrapper around a raw [`alpm::Alpm`].
-/// FIXME: remove this once Alpm is Sync: https://github.com/archlinux/alpm.rs/issues/42
-pub struct AlpmWrapper {
-    /// A wrapper around an inner database handle.
-    pub alpm: Alpm,
-}
-
-impl From<Alpm> for AlpmWrapper {
-    fn from(alpm: Alpm) -> Self {
-        AlpmWrapper { alpm }
-    }
-}
-
-unsafe impl Send for AlpmWrapper {}
-
+// FIXME: clean this once Alpm is Sync: https://github.com/archlinux/alpm.rs/issues/42
 /// creates an alpm reference and syncs the db
+/// internally, a thread-safe wrapper around a raw [`alpm::Alpm`] is used, for
+/// which sync is unsafely implemented
 pub async fn create_and_sync() -> Result<Alpm> {
-    debug!("starting alpm creation in new thread");
+    pub struct AlpmWrapper {
+        pub alpm: Alpm,
+    }
 
-    // we do this in another thread as it could take a moment
+    impl From<Alpm> for AlpmWrapper {
+        fn from(alpm: Alpm) -> Self {
+            AlpmWrapper { alpm }
+        }
+    }
+
+    unsafe impl Send for AlpmWrapper {}
+
+    // we do this in a blocking task as it may take a moment
     let wrapper = tokio::task::spawn_blocking(|| {
         let mut alpm = initialize_alpm()?;
         synchronize_alpm(&mut alpm)?;
@@ -38,7 +36,7 @@ pub async fn create_and_sync() -> Result<Alpm> {
         Ok::<_, anyhow::Error>(AlpmWrapper::from(alpm))
     })
     .await
-    .context("failed to create alpm spawning thread")??;
+    .context("failed to create alpm creation task")??;
 
     Ok(wrapper.alpm)
 }
