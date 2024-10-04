@@ -13,6 +13,7 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::runtime::Handle;
 use tokio::select;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 use tokio::sync::{mpsc, Mutex, RwLock};
@@ -27,20 +28,13 @@ pub struct BuildScheduler {
     builder: Arc<RwLock<Builder>>,
 
     signal: Option<Sender<()>>,
-    queue: Option<Sender<Vec<Package>>>,
     jobs: Arc<Mutex<HashMap<DateTime<Utc>, HashSet<String>>>>,
 }
 
 impl BuildScheduler {
     /// creates a new scheduler
     pub async fn new(builder: Arc<RwLock<Builder>>, db: Database) -> anyhow::Result<Self> {
-        Ok(Self {
-            builder,
-            db,
-            signal: None,
-            queue: None,
-            jobs: Arc::new(Mutex::new(HashMap::new())),
-        })
+        Ok(Self { builder, db, signal: None, jobs: Arc::new(Mutex::new(HashMap::new())) })
     }
 
     /// runs a one-shot build for a package
@@ -52,11 +46,10 @@ impl BuildScheduler {
     ) -> anyhow::Result<()> {
         info!("scheduling one-shot build for some packages now");
 
-        let Some(queue) = &self.queue else {
-            return Err(anyhow!("scheduler is not yet started, build won't happen"));
-        };
+        let builder = self.builder.clone();
+        let db = self.db.clone();
 
-        queue.send(packages).await.context("failed to submit packages")?;
+        tokio::spawn(async move { Self::run_now(packages, &builder, &db).await });
 
         Ok(())
     }
@@ -91,9 +84,6 @@ impl BuildScheduler {
 
         let (tx, mut rx) = mpsc::channel::<()>(1);
         self.signal = Some(tx);
-
-        let queue = self.spawn_runner();
-        self.queue = Some(queue.clone());
 
         let jobs = self.jobs.clone();
         let db = self.db.clone();
@@ -142,10 +132,11 @@ impl BuildScheduler {
                     // reschedule these packages
                     Self::schedule_into(&packages, &jobs).await;
 
-                    // submit to builder thread
-                    if let Err(e) = queue.send(packages).await {
-                        error!("failed to schedule build, sending builder thread failed: {e:#}")
-                    }
+                    // run build
+                    let builder = builder.clone();
+                    let db = db.clone();
+
+                    tokio::spawn(async move { Self::run_now(packages, &builder, &db).await });
                 } else {
                     debug!("blocking until woken with reschedule");
 
@@ -160,43 +151,6 @@ impl BuildScheduler {
         });
 
         Ok(())
-    }
-
-    /// this spawns an OS thread which will run the builds
-    /// this is necessary, because Alpm is not send, and thus we cannot run the
-    /// resolving on tokio
-    /// see https://docs.rs/tokio/latest/tokio/task/struct.LocalSet.html#use-inside-tokiospawn
-    /// FIXME: remove this once Alpm is sync: https://github.com/archlinux/alpm.rs/issues/42
-    fn spawn_runner(&self) -> Sender<Vec<Package>> {
-        let (tx, mut rx) = mpsc::channel(1);
-
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("no build tokio runtime?");
-
-        let builder = self.builder.clone();
-        let db = self.db.clone();
-        std::thread::spawn(move || {
-            let local = LocalSet::new();
-
-            local.spawn_local(async move {
-                // receive stuff from channel
-                while let Some(packages) = rx.recv().await {
-                    let db = db.clone();
-                    let builder = builder.clone();
-
-                    // we can use spawn_local here
-                    tokio::task::spawn_local(async move {
-                        Self::run_now(packages, &builder, &db).await;
-                    });
-                }
-            });
-
-            rt.block_on(local)
-        });
-
-        tx
     }
 
     /// schedules a set of packages into the given schedule map
@@ -235,6 +189,7 @@ impl BuildScheduler {
         );
 
         // TODO: filter for updateable
+        // TODO: also build lock
         // TODO: respect stuff like clean, reason, resolve
         match BuildSession::start(packages, BuildReason::Unknown, db, builder.clone(), true).await {
             Ok(mut session) => {
