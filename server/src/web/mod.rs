@@ -1,4 +1,4 @@
-use crate::build::schedule::BuildScheduler;
+use crate::build::schedule::{BuildMeta, BuildScheduler};
 use crate::build::{BuildSummary, Builder};
 use crate::config::{CONFIG, INFO};
 use crate::database::Database;
@@ -108,7 +108,7 @@ pub async fn add(
             scheduler.schedule(p).await.internal()?;
         }
 
-        scheduler.run(packages, true, BuildReason::Initial).await.internal()?;
+        scheduler.run(packages, BuildMeta::normal(BuildReason::Initial)).await.internal()?;
     }
 
     Ok(Json(response))
@@ -197,7 +197,10 @@ pub async fn build(
     scheduler
         .write()
         .await
-        .run(vec![package], body.into_inner().clean, BuildReason::Manual)
+        .run(
+            vec![package],
+            BuildMeta::new(BuildReason::Manual, true, body.into_inner().clean, true),
+        )
         .await
         .internal()?;
 
@@ -376,7 +379,12 @@ pub async fn build_webhook(
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    scheduler.write().await.run(vec![package], false, BuildReason::Webhook).await.internal()?;
+    scheduler
+        .write()
+        .await
+        .run(vec![package], BuildMeta::normal(BuildReason::Webhook))
+        .await
+        .internal()?;
 
     Ok(empty_response())
 }

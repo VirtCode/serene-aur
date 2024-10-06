@@ -75,58 +75,6 @@ impl Builder {
         Self { db, runner, repository, broadcast }
     }
 
-    /// starts a build for a package, if there is no update, the build will be
-    /// skipped (except when forced)
-    pub async fn run_scheduled(
-        &self,
-        package: &str,
-        force: bool,
-        clean: bool,
-        reason: BuildReason,
-    ) {
-        info!("starting build for package {package} now");
-
-        let package = match Package::find(package, &self.db).await {
-            Ok(Some(p)) => p,
-            Ok(None) => {
-                warn!("package scheduled for build is no longer in package store");
-                return;
-            }
-            Err(e) => {
-                error!("failed to read package from database: {e:#}");
-                return;
-            }
-        };
-
-        let updatable = match package
-            .updatable()
-            .await
-            .context("failed to check for package updates on scheduled build")
-        {
-            Ok(u) => u,
-            Err(e) => {
-                error!("{e:#}");
-                return;
-            }
-        };
-
-        if updatable || force {
-            let summary = BuildSummary::start(&package, reason);
-            summary.save(&self.db).await.unwrap();
-
-            match self
-                .run_build(package, updatable, clean, summary)
-                .await
-                .context("build run for package failed extremely fatally")
-            {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("{e:#}")
-                }
-            };
-        }
-    }
-
     /// Removes a package from the system, by removing the container, from the
     /// repo, and the database
     pub async fn run_remove(&self, package: &Package) -> anyhow::Result<()> {
@@ -146,6 +94,7 @@ impl Builder {
     }
 
     /// this runs a complete build of a package
+    /// if this function returns an error, the issue is with the database
     pub async fn run_build(
         &self,
         mut package: Package,

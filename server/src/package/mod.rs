@@ -1,4 +1,4 @@
-use crate::build::schedule::BuildScheduler;
+use crate::build::schedule::{BuildMeta, BuildScheduler};
 use crate::config::{CLI_PACKAGE_NAME, CONFIG};
 use crate::database::Database;
 use crate::package::source::cli::SereneCliSource;
@@ -171,7 +171,7 @@ pub async fn try_add_cli(db: &Database, scheduler: &mut BuildScheduler) -> anyho
         scheduler.schedule(&package).await?;
 
         let packages = vec![package];
-        scheduler.run(packages, true, BuildReason::Initial).await?;
+        scheduler.run(packages, BuildMeta::normal(BuildReason::Initial)).await?;
 
         info!("successfully added serene-cli");
     }
@@ -197,6 +197,9 @@ pub struct Package {
     pub srcinfo: Option<SrcinfoWrapper>,
     /// DEPRECATED: version of the current build of the package
     pub version: Option<String>,
+    /// state of the source that is built, can be used to check if the source
+    /// has new stuff
+    pub built_state: String,
 
     /// whether package is enabled, meaning it is built automatically
     pub enabled: bool,
@@ -234,6 +237,7 @@ impl Package {
             version: None,
             srcinfo: None,
             pkgbuild: None,
+            built_state: "init".to_owned(),
 
             source,
         }
@@ -258,8 +262,9 @@ impl Package {
             .clone()
     }
 
-    pub async fn updatable(&self) -> anyhow::Result<bool> {
-        self.source.update_available().await
+    /// is the newest version of the package already built and in the repos
+    pub fn newest_built(&self) -> bool {
+        self.built_state == self.source.get_state()
     }
 
     pub async fn update(&mut self) -> anyhow::Result<()> {
@@ -271,6 +276,7 @@ impl Package {
     pub async fn upgrade(&mut self, reported: SrcinfoWrapper) -> anyhow::Result<()> {
         let mut srcinfo = self.source.get_srcinfo(&self.get_folder()).await?;
         let pkgbuild = self.source.get_pkgbuild(&self.get_folder()).await?;
+        let state = self.source.get_state();
 
         if self.source.is_devel() {
             // upgrade devel package srcinfo to reflect version and rel
@@ -288,6 +294,7 @@ impl Package {
         self.version = Some(srcinfo.base.pkgver.clone());
         self.srcinfo = Some(srcinfo);
         self.pkgbuild = Some(pkgbuild);
+        self.built_state = state;
 
         Ok(())
     }

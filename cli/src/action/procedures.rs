@@ -262,7 +262,7 @@ pub fn list(c: &Config) {
                         peek.version
                             .as_ref()
                             .map(|s| s.normal())
-                            .unwrap_or_else(|| "unknown".dimmed()),
+                            .unwrap_or_else(|| "never built".dimmed()),
                         if peek.devel { "X".dimmed() } else { "".dimmed() },
                         if peek.enabled { "X".yellow() } else { "".dimmed() },
                         peek.build

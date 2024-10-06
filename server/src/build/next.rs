@@ -67,18 +67,12 @@ impl<'a> BuildResolver<'a> {
     }
 
     /// add packages that will be built
-    /// added packages will be updated
     pub async fn add(&mut self, packages: Vec<Package>, reason: BuildReason) -> anyhow::Result<()> {
-        for mut package in packages {
+        for package in packages {
             debug!("adding package {} to resolver", &package.base);
 
-            // update package
-            if let Err(e) = package.update().await {
-                warn!("failed to update package {} before build: {e:#}", package.base);
-            }
-
             // create build
-            let summary = BuildSummary::start(&package, reason.clone());
+            let summary = BuildSummary::start(&package, reason);
             summary.save(self.db).await?;
 
             // add them
