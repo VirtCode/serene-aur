@@ -1,5 +1,5 @@
 use crate::database::{Database, DatabaseConversion};
-use crate::package::source::SrcinfoWrapper;
+use crate::package::source::{Source, SrcinfoWrapper};
 use crate::package::Package;
 use anyhow::{Context, Result};
 use chrono::NaiveDateTime;
@@ -9,6 +9,7 @@ use std::str::FromStr;
 /// See migrations:
 /// server/migrations/20240210163236_package.sql,
 /// server/migrations/20240306195926_makepkg_flags.sql
+/// server/migrations/20241004212454_built_state.sql
 #[derive(Debug)]
 struct PackageRecord {
     /// id
@@ -18,6 +19,7 @@ struct PackageRecord {
     source: String,
     srcinfo: Option<String>,
     pkgbuild: Option<String>,
+    built_state: String,
     version: Option<String>,
     enabled: bool,
     clean: bool,
@@ -35,6 +37,7 @@ impl DatabaseConversion<PackageRecord> for Package {
             source: serde_json::to_string(&self.source).context("failed to serialize source")?,
             srcinfo: self.srcinfo.as_ref().map(|s| s.to_string()),
             pkgbuild: self.pkgbuild.clone(),
+            built_state: self.built_state.clone(),
             version: self.version.clone(),
             enabled: self.enabled,
             clean: self.clean,
@@ -60,6 +63,7 @@ impl DatabaseConversion<PackageRecord> for Package {
             version: value.version,
             pkgbuild: value.pkgbuild,
             srcinfo: value.srcinfo.map(|a| SrcinfoWrapper::from_str(&a)).transpose()?,
+            built_state: value.built_state,
             enabled: value.enabled,
             clean: value.clean,
             schedule: value.schedule,
@@ -123,10 +127,10 @@ impl Package {
         let record = self.create_record()?;
 
         query!(r#"
-            INSERT INTO package (base, added, source, srcinfo, pkgbuild, version, enabled, clean, schedule, prepare, flags, dependency)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            INSERT INTO package (base, added, source, srcinfo, pkgbuild, version, enabled, clean, schedule, prepare, flags, dependency, built_state)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         "#,
-            record.base, record.added, record.source, record.srcinfo, record.pkgbuild, record.version, record.enabled, record.clean, record.schedule, record.prepare, record.flags, record.dependency
+            record.base, record.added, record.source, record.srcinfo, record.pkgbuild, record.version, record.enabled, record.clean, record.schedule, record.prepare, record.flags, record.dependency, record.built_state
         )
             .execute(db).await?;
 
@@ -163,14 +167,15 @@ impl Package {
         query!(
             r#"
             UPDATE package
-            SET source = $2, srcinfo = $3, pkgbuild = $4, version = $5
+            SET source = $2, srcinfo = $3, pkgbuild = $4, version = $5, built_state = $6
             WHERE base = $1
         "#,
             record.base,
             record.source,
             record.srcinfo,
             record.pkgbuild,
-            record.version
+            record.version,
+            record.built_state
         )
         .execute(db)
         .await?;

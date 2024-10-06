@@ -1,4 +1,5 @@
 use crate::build::next::BuildResolver;
+use crate::build::schedule::BuildMeta;
 use crate::build::{BuildSummary, Builder};
 use crate::config::CONFIG;
 use crate::database::Database;
@@ -16,6 +17,7 @@ use tokio::task::LocalSet;
 pub struct BuildSession<'a> {
     packages: Vec<(Package, BuildSummary, HashSet<String>)>,
     building: HashSet<String>,
+    meta: BuildMeta,
 
     builder: Arc<RwLock<Builder>>,
     db: &'a Database,
@@ -25,23 +27,22 @@ pub struct BuildSession<'a> {
 struct BuildResult(String, bool);
 
 impl<'a> BuildSession<'a> {
-    /// starts a session by resolving the packages
-    /// also updates all the sources as part of the resolving
+    /// starts a session by resolving the packages.
+    /// packages should be updated outside, as they might not build successfully
+    /// anyway
     pub async fn start(
         packages: Vec<Package>,
-        reason: BuildReason,
         db: &'a Database,
         builder: Arc<RwLock<Builder>>,
-        resolve: bool,
+        meta: BuildMeta,
     ) -> Result<Self> {
-        let result = if resolve && CONFIG.resolve_build_sequence {
-            // updates the sources too
-            Self::resolve(packages, reason, db).await?
+        let result = if meta.resolve && CONFIG.resolve_build_sequence {
+            Self::resolve(packages, meta.reason, db).await?
         } else {
             let mut result = vec![];
 
             for package in packages {
-                let summary = BuildSummary::start(&package, reason.clone());
+                let summary = BuildSummary::start(&package, meta.reason);
                 summary.save(db).await?;
 
                 result.push((package, summary, HashSet::new()))
@@ -50,7 +51,7 @@ impl<'a> BuildSession<'a> {
             result
         };
 
-        Ok(Self { builder, db, packages: result, building: HashSet::new() })
+        Ok(Self { builder, db, packages: result, building: HashSet::new(), meta })
     }
 
     // FIXME: remove this once Alpm is sync, see sync.rs
@@ -172,11 +173,12 @@ impl<'a> BuildSession<'a> {
 
         self.building.insert(package.base.clone());
         let builder = self.builder.clone();
+        let clean = self.meta.clean;
 
         tokio::spawn(async move {
             let base = package.base.clone();
 
-            let success = match builder.read().await.run_build(package, false, false, summary).await
+            let success = match builder.read().await.run_build(package, false, clean, summary).await
             {
                 Ok(summary) => {
                     matches!(summary.state, BuildState::Success)

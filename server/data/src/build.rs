@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
 /// reports the progress of a running build
-#[derive(Clone, Serialize, Deserialize, EnumString, Display)]
+#[derive(Clone, Serialize, Deserialize, EnumString, Display, Copy)]
 #[strum(serialize_all = "lowercase")]
 pub enum BuildProgress {
     /// the build is resolving dependencies
@@ -52,7 +52,7 @@ pub struct BuildInfo {
     pub ended: Option<DateTime<Utc>>,
 }
 
-#[derive(Serialize, Deserialize, EnumString, Display, Clone)]
+#[derive(Serialize, Deserialize, EnumString, Display, Clone, Copy)]
 #[strum(serialize_all = "lowercase")]
 pub enum BuildReason {
     /// build was triggered by a webhook

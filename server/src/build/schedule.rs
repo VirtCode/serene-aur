@@ -1,9 +1,7 @@
 use crate::build::session::BuildSession;
 use crate::build::Builder;
-use crate::config::CONFIG;
 use crate::database::Database;
 use crate::package::Package;
-use crate::runner::Runner;
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
@@ -12,15 +10,32 @@ use serene_data::build::BuildReason;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
-use tokio::runtime::Handle;
 use tokio::select;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 use tokio::sync::{mpsc, Mutex, RwLock};
-use tokio::task::LocalSet;
 use tokio_cron_scheduler::{Job, JobScheduler};
-use tokio_stream::StreamExt;
-use uuid::Uuid;
+
+/// metadata associated with a build
+/// can be used to override stuff like clean
+pub struct BuildMeta {
+    /// reason the build started
+    pub reason: BuildReason,
+    /// should build in order of dependencies (and abort if necessary)
+    pub resolve: bool,
+    /// remove the containers of the packages before building
+    pub clean: bool,
+    /// don't check if a package can be updated
+    pub force: bool,
+}
+
+impl BuildMeta {
+    pub fn new(reason: BuildReason, resolve: bool, clean: bool, force: bool) -> Self {
+        Self { resolve, reason, clean, force }
+    }
+    pub fn normal(reason: BuildReason) -> Self {
+        Self::new(reason, true, false, false)
+    }
+}
 
 /// this struct schedules builds for all packages
 pub struct BuildScheduler {
@@ -38,18 +53,13 @@ impl BuildScheduler {
     }
 
     /// runs a one-shot build for a package
-    pub async fn run(
-        &self,
-        packages: Vec<Package>,
-        clean: bool,
-        reason: BuildReason,
-    ) -> anyhow::Result<()> {
+    pub async fn run(&self, packages: Vec<Package>, meta: BuildMeta) -> anyhow::Result<()> {
         info!("scheduling one-shot build for some packages now");
 
         let builder = self.builder.clone();
         let db = self.db.clone();
 
-        tokio::spawn(async move { Self::run_now(packages, &builder, &db).await });
+        tokio::spawn(async move { Self::run_now(packages, &builder, &db, meta).await });
 
         Ok(())
     }
@@ -136,7 +146,15 @@ impl BuildScheduler {
                     let builder = builder.clone();
                     let db = db.clone();
 
-                    tokio::spawn(async move { Self::run_now(packages, &builder, &db).await });
+                    tokio::spawn(async move {
+                        Self::run_now(
+                            packages,
+                            &builder,
+                            &db,
+                            BuildMeta::normal(BuildReason::Schedule),
+                        )
+                        .await
+                    });
                 } else {
                     debug!("blocking until woken with reschedule");
 
@@ -182,16 +200,34 @@ impl BuildScheduler {
     }
 
     /// runs a build for a set of packages right now
-    async fn run_now(packages: Vec<Package>, builder: &Arc<RwLock<Builder>>, db: &Database) {
+    async fn run_now(
+        mut packages: Vec<Package>,
+        builder: &Arc<RwLock<Builder>>,
+        db: &Database,
+        meta: BuildMeta,
+    ) {
         info!(
             "running build for these packages: {}",
             packages.iter().map(|p| p.base.clone()).collect::<Vec<_>>().join(", ")
         );
 
-        // TODO: filter for updateable
+        // update sources here as they are needed for the up-to-date check, and also for
+        // the resolving
+        for package in &mut packages {
+            if let Err(e) = package.update().await {
+                warn!("failed to update source for {}: {e:#}", package.base);
+            } else if let Err(e) = package.change_sources(db).await {
+                error!("failed to store updated source in db for {}: {e:#}", package.base);
+            }
+        }
+
+        if !meta.force {
+            // remove packages which are already built
+            packages.retain(|p| !p.newest_built());
+        }
+
         // TODO: also build lock
-        // TODO: respect stuff like clean, reason, resolve
-        match BuildSession::start(packages, BuildReason::Unknown, db, builder.clone(), true).await {
+        match BuildSession::start(packages, db, builder.clone(), meta).await {
             Ok(mut session) => {
                 if let Err(e) = session.run().await {
                     error!("failed to run build session: {e:#}");
