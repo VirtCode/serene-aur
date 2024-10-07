@@ -52,6 +52,10 @@ pub trait Source: Sync + Send + DynClone {
         archive.append_dir_all("", folder).await.context("failed to load sources into tar")
     }
 
+    /// returns internal state of the source, used for checking whether the
+    /// current build is up-to-date
+    fn get_state(&self) -> String;
+
     fn is_devel(&self) -> bool;
 }
 
@@ -86,5 +90,11 @@ impl Deref for SrcinfoWrapper {
 
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+
+impl Into<Srcinfo> for SrcinfoWrapper {
+    fn into(self) -> Srcinfo {
+        self.inner
     }
 }

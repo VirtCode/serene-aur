@@ -1,3 +1,5 @@
+#![feature(extract_if)]
+
 pub mod package;
 pub mod runner;
 
@@ -7,18 +9,23 @@ mod database;
 mod repository;
 mod web;
 
-use crate::build::schedule::{BuildScheduler, ImageScheduler};
+use crate::build::schedule::BuildScheduler;
+use crate::build::session::BuildSession;
 use crate::build::Builder;
 use crate::config::CONFIG;
+use crate::database::Database;
 use crate::package::Package;
 use crate::repository::PackageRepository;
+use crate::runner::update::ImageScheduler;
 use crate::runner::Runner;
 use crate::web::broadcast::Broadcast;
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
 use anyhow::Context;
 use config::INFO;
+use lazy_static::lazy_static;
 use log::{error, info};
+use serene_data::build::BuildReason;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -54,12 +61,12 @@ async fn main() -> anyhow::Result<()> {
     )));
 
     // creating scheduler
-    let mut schedule =
-        BuildScheduler::new(builder.clone()).await.context("failed to start package scheduler")?;
+    let mut schedule = BuildScheduler::new(builder.clone(), db.clone())
+        .await
+        .context("failed to start package scheduler")?;
 
     // creating image scheduler
-    let image_scheduler =
-        ImageScheduler::new(runner.clone()).await.context("failed to start image scheduler")?;
+    let image_scheduler = ImageScheduler::new(runner.clone());
 
     // schedule packages
     for package in Package::find_all(&db).await? {
@@ -69,12 +76,10 @@ async fn main() -> anyhow::Result<()> {
             .context(format!("failed to start schedule for package {}", &package.base))?;
     }
 
-    // pull image before cli build
-    if let Err(e) = runner.read().await.update_image().await {
-        error!("failed to update runner image on startup: {e:#}");
-    }
+    // yes, this will wait before starting the api, because after updates stuff
+    // can't be built without a new image
+    image_scheduler.run_sync().await;
 
-    // add cli if enabled
     if config::CONFIG.build_cli {
         if let Err(e) = package::try_add_cli(&db, &mut schedule).await {
             error!("Failed to add cli package: {e:#}")

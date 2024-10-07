@@ -1,4 +1,4 @@
-use crate::build::schedule::BuildScheduler;
+use crate::build::schedule::{BuildMeta, BuildScheduler};
 use crate::build::{BuildSummary, Builder};
 use crate::config::{CONFIG, INFO};
 use crate::database::Database;
@@ -93,19 +93,25 @@ pub async fn add(
     };
 
     // create package
-    let package = package::add_source(&db, source, body.0.replace)
+    let packages = package::add_source(&db, source, body.0.replace)
         .await
         .internal()?
         .ok_or_else(|| ErrorBadRequest("package with the same base is already added"))?;
 
+    let response = packages.iter().map(|p| p.to_info()).collect::<Vec<_>>();
+
     {
         // scheduling package
         let mut scheduler = scheduler.write().await;
-        scheduler.schedule(&package).await.internal()?;
-        scheduler.run(&package, true, BuildReason::Initial).await.internal()?;
+
+        for p in &packages {
+            scheduler.schedule(p).await.internal()?;
+        }
+
+        scheduler.run(packages, BuildMeta::normal(BuildReason::Initial)).await.internal()?;
     }
 
-    Ok(Json(package.to_info()))
+    Ok(Json(response))
 }
 
 #[get("/package/list")]
@@ -191,7 +197,10 @@ pub async fn build(
     scheduler
         .write()
         .await
-        .run(&package, body.into_inner().clean, BuildReason::Manual)
+        .run(
+            vec![package],
+            BuildMeta::new(BuildReason::Manual, true, body.into_inner().clean, true),
+        )
         .await
         .internal()?;
 
@@ -370,7 +379,12 @@ pub async fn build_webhook(
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    scheduler.write().await.run(&package, false, BuildReason::Webhook).await.internal()?;
+    scheduler
+        .write()
+        .await
+        .run(vec![package], BuildMeta::normal(BuildReason::Webhook))
+        .await
+        .internal()?;
 
     Ok(empty_response())
 }

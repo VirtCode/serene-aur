@@ -1,0 +1,1 @@
+ALTER TABLE package ADD COLUMN dependency BOOLEAN NOT NULL DEFAULT false;

@@ -77,6 +77,10 @@ impl Source for SereneCliSource {
         archive.append_file("PKGBUILD", &mut file).await.context("failed to load sources into tar")
     }
 
+    fn get_state(&self) -> String {
+        self.last_commit.clone()
+    }
+
     fn is_devel(&self) -> bool {
         true
     }

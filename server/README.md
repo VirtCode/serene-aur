@@ -163,6 +163,10 @@ ALLOW_READS=false
 # when left empty, webhooks are disabled
 WEBHOOK_SECRET=none
 
+# mirror used to synchronize package databases
+# must contain {repo} and {arch}, with will be filled with the corresponding repo and architecture
+SYNC_MIRROR=https://mirror.init7.net/archlinux/{repo}/os/{arch}
+
 # DEBUG the unix or tcp url to docker with a prefix (e.g. tcp://127.0.0.1:2375)
 #       the runner containers will be spun up on this docker instance
 DOCKER_URL=unix:///var/run/docker.sock

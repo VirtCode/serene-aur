@@ -3,7 +3,7 @@ use actix_web_lab::sse::Sse;
 use actix_web_lab::util::InfallibleStream;
 use chrono::Utc;
 use futures::future::join_all;
-use log::debug;
+use log::{debug, trace};
 use serene_data::package::BroadcastEvent;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -104,7 +104,7 @@ impl Broadcast {
         let pkg = package.to_lowercase();
         let subscriptions = self.subscriptions.lock().await;
         let receivers = subscriptions.get(&pkg).cloned().unwrap_or_default();
-        debug!("notifying package {pkg} with {} receivers", receivers.len());
+        trace!("notifying package {pkg} with {} receivers", receivers.len());
 
         let mut cache = self.cache.lock().await;
         let event = match event {

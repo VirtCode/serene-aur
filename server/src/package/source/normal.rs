@@ -51,4 +51,8 @@ impl Source for NormalSource {
     fn is_devel(&self) -> bool {
         false
     }
+
+    fn get_state(&self) -> String {
+        self.last_commit.clone()
+    }
 }
