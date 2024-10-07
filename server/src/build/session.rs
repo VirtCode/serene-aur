@@ -119,19 +119,6 @@ impl<'a> BuildSession<'a> {
             if self.building.is_empty() {
                 info!("finished building successfully");
 
-                for (p, summary, rem) in &mut self.packages {
-                    warn!("orphaned package {} found during build", p.base);
-
-                    summary.end(BuildState::Fatal(
-                        format!(
-                            "package was orphaned in the build process, waiting for {}",
-                            rem.iter().cloned().collect::<Vec<_>>().join(", ")
-                        ),
-                        BuildProgress::Resolve,
-                    ));
-                    summary.change(self.db).await?;
-                }
-
                 break;
             }
 
@@ -157,6 +144,19 @@ impl<'a> BuildSession<'a> {
                     sum.change(self.db).await?
                 }
             }
+        }
+
+        for (p, summary, rem) in &mut self.packages {
+            warn!("orphaned package {} found during build", p.base);
+
+            summary.end(BuildState::Fatal(
+                format!(
+                    "package was orphaned in the build process, waiting for {}",
+                    rem.iter().cloned().collect::<Vec<_>>().join(", ")
+                ),
+                BuildProgress::Resolve,
+            ));
+            summary.change(self.db).await?;
         }
 
         Ok(())
