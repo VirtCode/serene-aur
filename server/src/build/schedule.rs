@@ -13,7 +13,6 @@ use std::sync::Arc;
 use tokio::select;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 use tokio::sync::{mpsc, Mutex, RwLock};
-use tokio_cron_scheduler::{Job, JobScheduler};
 
 /// metadata associated with a build
 /// can be used to override stuff like clean
@@ -44,22 +43,45 @@ pub struct BuildScheduler {
 
     signal: Option<Sender<()>>,
     jobs: Arc<Mutex<HashMap<DateTime<Utc>, HashSet<String>>>>,
+    lock: Arc<Mutex<HashSet<String>>>,
 }
 
 impl BuildScheduler {
     /// creates a new scheduler
     pub async fn new(builder: Arc<RwLock<Builder>>, db: Database) -> anyhow::Result<Self> {
-        Ok(Self { builder, db, signal: None, jobs: Arc::new(Mutex::new(HashMap::new())) })
+        Ok(Self {
+            builder,
+            db,
+            signal: None,
+            jobs: Arc::new(Mutex::new(HashMap::new())),
+            lock: Arc::new(Mutex::new(HashSet::new())),
+        })
     }
 
     /// runs a one-shot build for a package
     pub async fn run(&self, packages: Vec<Package>, meta: BuildMeta) -> anyhow::Result<()> {
         info!("scheduling one-shot build for some packages now");
 
+        // we prematurely check for build lock, such that the user receives an error
+        {
+            let locked = self.lock.lock().await;
+
+            for package in &packages {
+                if locked.contains(&package.base) {
+                    warn!("not building one-shot, {} is locked", &package.base);
+                    return Err(anyhow!(
+                        "cannot build now, {} is currently in a running build session",
+                        &package.base
+                    ));
+                }
+            }
+        }
+
         let builder = self.builder.clone();
+        let lock = self.lock.clone();
         let db = self.db.clone();
 
-        tokio::spawn(async move { Self::run_now(packages, &builder, &db, meta).await });
+        tokio::spawn(async move { Self::run_now(packages, &builder, &lock, &db, meta).await });
 
         Ok(())
     }
@@ -98,6 +120,7 @@ impl BuildScheduler {
         let jobs = self.jobs.clone();
         let db = self.db.clone();
         let builder = self.builder.clone();
+        let lock = self.lock.clone();
 
         tokio::spawn(async move {
             loop {
@@ -144,12 +167,14 @@ impl BuildScheduler {
 
                     // run build
                     let builder = builder.clone();
+                    let lock = lock.clone();
                     let db = db.clone();
 
                     tokio::spawn(async move {
                         Self::run_now(
                             packages,
                             &builder,
+                            &lock,
                             &db,
                             BuildMeta::normal(BuildReason::Schedule),
                         )
@@ -203,6 +228,7 @@ impl BuildScheduler {
     async fn run_now(
         mut packages: Vec<Package>,
         builder: &Arc<RwLock<Builder>>,
+        lock: &Arc<Mutex<HashSet<String>>>,
         db: &Database,
         meta: BuildMeta,
     ) {
@@ -210,6 +236,25 @@ impl BuildScheduler {
             "running build for these packages: {}",
             packages.iter().map(|p| p.base.clone()).collect::<Vec<_>>().join(", ")
         );
+
+        {
+            let mut locked = lock.lock().await;
+
+            // remove locked packages
+            packages.retain(|p| {
+                if locked.contains(&p.base) {
+                    warn!("package {} will not be built as it is currently locked", p.base);
+                    false
+                } else {
+                    true
+                }
+            });
+
+            // lock packages for build
+            for package in &packages {
+                locked.insert(package.base.clone());
+            }
+        }
 
         // update sources here as they are needed for the up-to-date check, and also for
         // the resolving
@@ -221,12 +266,17 @@ impl BuildScheduler {
             }
         }
 
+        // remove packages which are already built (and unlock them)
         if !meta.force {
-            // remove packages which are already built
-            packages.retain(|p| !p.newest_built());
+            let mut locked = lock.lock().await;
+
+            for p in packages.extract_if(|p| !p.newest_built()) {
+                locked.remove(&p.base);
+            }
         }
 
-        // TODO: also build lock
+        let targets = packages.iter().map(|p| p.base.clone()).collect::<HashSet<_>>();
+
         match BuildSession::start(packages, db, builder.clone(), meta).await {
             Ok(mut session) => {
                 if let Err(e) = session.run().await {
@@ -237,5 +287,14 @@ impl BuildScheduler {
                 error!("failed to start build session: {e:#}");
             }
         };
+
+        {
+            // unlock packages after build
+            let mut locked = lock.lock().await;
+
+            for package in targets {
+                locked.remove(&package);
+            }
+        }
     }
 }

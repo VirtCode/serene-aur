@@ -1,61 +1,75 @@
 use crate::config::CONFIG;
 use crate::runner::Runner;
 use anyhow::Context;
-use log::{error, info};
+use chrono::Utc;
+use log::{debug, error, info};
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio_cron_scheduler::{Job, JobScheduler};
-use uuid::Uuid;
 
 /// Schedules the pulling of the runner image
 pub struct ImageScheduler {
     runner: Arc<RwLock<Runner>>,
-    sched: JobScheduler,
-    job: Uuid,
 }
 
 impl ImageScheduler {
     /// creates a new image scheduler
-    pub async fn new(runner: Arc<RwLock<Runner>>) -> anyhow::Result<Self> {
-        let mut s = Self {
-            runner,
-            sched: JobScheduler::new().await.context("failed to initialize job scheduler")?,
-            job: Uuid::from_u128(0u128),
-        };
-
-        s.schedule().await?;
-        Ok(s)
+    pub fn new(runner: Arc<RwLock<Runner>>) -> Self {
+        Self { runner }
     }
 
     /// starts the scheduler
     pub async fn start(&self) -> anyhow::Result<()> {
-        self.sched.start().await.context("failed to start image scheduler")
-    }
-
-    // schedules an image update
-    async fn schedule(&mut self) -> anyhow::Result<()> {
         let runner = self.runner.clone();
+        let cron = cron::Schedule::from_str(&CONFIG.schedule_image)
+            .context("failed to parse image cron string")?;
 
-        info!("scheduling image update");
+        tokio::task::spawn(async move {
+            loop {
+                let Some(time) = cron.upcoming(Utc).next() else {
+                    error!("image schedule cron string has no time, aborting image scheduler");
+                    break;
+                };
 
-        let job = Job::new_async(CONFIG.schedule_image.as_str(), move |_, _| {
-            let runner = runner.clone();
+                debug!("blocking until next image schedule {time:#}");
 
-            Box::pin(async move {
-                info!("updating runner image");
+                if let Ok(duration) = (time - Utc::now()).to_std() {
+                    tokio::time::sleep(duration).await;
 
-                if let Err(e) = runner.read().await.update_image().await {
-                    error!("failed to update runner image: {e:#}");
+                    Self::run_now(&runner).await;
                 } else {
-                    info!("successfully updated runner image");
+                    error!("next image schedule out of range, aborting image scheduler");
+                    break;
                 }
-            })
-        })
-        .context("failed to schedule job image updating")?;
+            }
 
-        self.job = job.guid();
-        self.sched.add(job).await.context("failed to schedule image update")?;
+            debug!("image scheduler finished");
+        });
 
         Ok(())
+    }
+
+    // runs updating now, in the evoking thread
+    pub async fn run_sync(&self) {
+        Self::run_now(&self.runner).await;
+    }
+
+    // runs updating now, in a nother task
+    pub async fn run_async(&self) {
+        let runner = self.runner.clone();
+
+        tokio::task::spawn(async move {
+            Self::run_now(&runner).await;
+        });
+    }
+
+    async fn run_now(runner: &Arc<RwLock<Runner>>) {
+        info!("updating runner image");
+
+        if let Err(e) = runner.read().await.update_image().await {
+            error!("failed to update runner image: {e:#}");
+        } else {
+            info!("successfully updated runner image");
+        }
     }
 }

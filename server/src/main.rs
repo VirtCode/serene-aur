@@ -66,8 +66,7 @@ async fn main() -> anyhow::Result<()> {
         .context("failed to start package scheduler")?;
 
     // creating image scheduler
-    let image_scheduler =
-        ImageScheduler::new(runner.clone()).await.context("failed to start image scheduler")?;
+    let image_scheduler = ImageScheduler::new(runner.clone());
 
     // schedule packages
     for package in Package::find_all(&db).await? {
@@ -77,27 +76,15 @@ async fn main() -> anyhow::Result<()> {
             .context(format!("failed to start schedule for package {}", &package.base))?;
     }
 
-    // pull image before cli build
-    if let Err(e) = runner.read().await.update_image().await {
-        error!("failed to update runner image on startup: {e:#}");
-    }
+    // yes, this will wait before starting the api, because after updates stuff
+    // can't be built without a new image
+    image_scheduler.run_sync().await;
 
-    // add cli if enabled
     if config::CONFIG.build_cli {
         if let Err(e) = package::try_add_cli(&db, &mut schedule).await {
             error!("Failed to add cli package: {e:#}")
         }
     }
-
-    /*
-    let packages = Package::find_all(&db).await.unwrap();
-    let mut session =
-        BuildSession::start(packages, BuildReason::Initial, &db, builder.clone(), true)
-            .await
-            .unwrap();
-    session.run().await.unwrap();
-
-     */
 
     image_scheduler.start().await?;
     schedule.start().await?;
