@@ -195,8 +195,6 @@ pub struct Package {
     /// srcinfo of the current build, reported from the package for devel
     /// packages
     pub srcinfo: Option<SrcinfoWrapper>,
-    /// DEPRECATED: version of the current build of the package
-    pub version: Option<String>,
     /// state of the source that is built, can be used to check if the source
     /// has new stuff
     pub built_state: String,
@@ -234,7 +232,6 @@ impl Package {
             prepare: None,
             flags: vec![],
 
-            version: None,
             srcinfo: None,
             pkgbuild: None,
             built_state: "init".to_owned(),
@@ -291,7 +288,6 @@ impl Package {
             ));
         }
 
-        self.version = Some(srcinfo.base.pkgver.clone());
         self.srcinfo = Some(srcinfo);
         self.pkgbuild = Some(pkgbuild);
         self.built_state = state;
@@ -302,6 +298,11 @@ impl Package {
     /// returns the next srcinfo that will be built
     pub async fn get_next_srcinfo(&self) -> anyhow::Result<SrcinfoWrapper> {
         self.source.get_srcinfo(&self.get_folder()).await
+    }
+
+    /// returns the currently built version of the package
+    pub fn get_version(&self) -> Option<String> {
+        self.srcinfo.as_ref().map(|s| s.base.pkgver.clone())
     }
 
     /// returns the expected built files

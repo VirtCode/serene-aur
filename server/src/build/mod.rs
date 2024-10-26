@@ -158,7 +158,7 @@ impl Builder {
                     }
                 }
 
-                summary.version = package.version.clone();
+                summary.version = package.get_version();
                 summary.state = Running(Clean);
 
                 summary.change(&self.db).await?;

@@ -9,7 +9,7 @@ impl Package {
             base: self.base.clone(),
             enabled: self.enabled,
             devel: self.source.is_devel(),
-            version: self.version.clone(),
+            version: self.get_version(),
             added: self.added,
             members: self.get_packages(),
             build: build.map(|b| b.as_info()),
@@ -20,7 +20,7 @@ impl Package {
         PackageInfo {
             base: self.base.clone(),
             members: self.get_packages(),
-            version: self.version.clone(),
+            version: self.get_version(),
             devel: self.source.is_devel(),
             enabled: self.enabled,
             clean: self.clean,
