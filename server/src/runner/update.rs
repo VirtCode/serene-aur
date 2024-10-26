@@ -64,8 +64,6 @@ impl ImageScheduler {
     }
 
     async fn run_now(runner: &Arc<RwLock<Runner>>) {
-        info!("updating runner image");
-
         if let Err(e) = runner.read().await.update_image().await {
             error!("failed to update runner image: {e:#}");
         } else {
