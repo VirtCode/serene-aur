@@ -2,6 +2,7 @@ use crate::build::BuildSummary;
 use crate::database::Database;
 use crate::package::resolve::sync::create_and_sync;
 use crate::package::Package;
+use crate::web::broadcast::Broadcast;
 use alpm::Alpm;
 use anyhow::Context;
 use aur_depends::{Flags, PkgbuildRepo, Resolver};
@@ -10,10 +11,12 @@ use raur::ArcPackage;
 use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use srcinfo::Srcinfo;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 pub struct BuildResolver<'a> {
     /// database
     db: &'a Database,
+    broadcast: Arc<Broadcast>,
 
     /// handle on alpm for dependency resolving
     alpm: Alpm,
@@ -46,13 +49,14 @@ enum Status {
 }
 
 impl<'a> BuildResolver<'a> {
-    pub async fn new(db: &'a Database) -> anyhow::Result<Self> {
+    pub async fn new(db: &'a Database, broadcast: Arc<Broadcast>) -> anyhow::Result<Self> {
         Ok(Self {
             alpm: create_and_sync().await?,
             aur: raur::Handle::new(),
             cache: HashSet::new(),
             packages: Vec::new(),
             db,
+            broadcast,
         })
     }
 
@@ -204,6 +208,7 @@ impl<'a> BuildResolver<'a> {
                     debug!("cancelling package {} because: {err}", package.base);
                     summary.end(BuildState::Cancelled(err));
                     summary.change(self.db).await?;
+                    self.broadcast.change(&package.base, summary.state.clone()).await;
                 }
             }
         }

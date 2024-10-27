@@ -26,6 +26,7 @@ adjusted for v0.3.0 on 23.02.24
 - [ ] Combine devel and non-devel git sources
 - [X] Be able to view pkgbuild from cli
 - [ ] More efficient queries for the web handlers
+- [ ] Combine DB and Broadcast to one "storage" object
 
 #### Improvements
 
@@ -72,7 +73,7 @@ adjusted for v0.3.0 on 23.02.24
 #### Dependency Support
 
 - [X] Add dependencies to repo if adding new package
-  - resolve these deps from srcinfo, cause we also have non-aur packages
+    - resolve these deps from srcinfo, cause we also have non-aur packages
 - [X] Build in waves, based on topological sorting of MAKE-AND-NORMAL-deps graph
 - [ ] Add reason for adding to package, create `manage purge` command which removes all deps that are no longer needed
 - [ ] A provider list, a list of packages which should be chosen if possible (also install deps explicitly and not via

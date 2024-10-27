@@ -1,11 +1,15 @@
-use crate::build::BuildInfo;
+use crate::build::{BuildInfo, BuildState};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
 #[derive(Serialize, Deserialize)]
 pub struct PackageAddRequest {
+    /// replace package of the same name
     pub replace: bool,
+    /// resolve dependencies while adding
+    pub resolve: bool,
+    /// source of the package
     pub source: PackageAddSource,
 }
 
@@ -22,14 +26,18 @@ pub enum PackageAddSource {
 pub enum PackageSettingsRequest {
     Clean(bool),
     Enabled(bool),
-    Schedule(String),
-    Prepare(String),
+    Dependency(bool),
+    Schedule(Option<String>),
+    Prepare(Option<String>),
     Flags(Vec<MakepkgFlag>),
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct PackageBuildRequest {
+    /// perform a clean build
     pub clean: bool,
+    /// also build all dependencies
+    pub dependencies: bool,
 }
 
 /// All supported makepkg flags which make sense to supply. Name the enum
@@ -106,6 +114,8 @@ pub struct PackageInfo {
     pub enabled: bool,
     /// does clean-build
     pub clean: bool,
+    /// is added as a dependency
+    pub dependency: bool,
     /// schedule of the package
     pub schedule: String,
     /// prepare commands ran before build
@@ -118,16 +128,13 @@ pub struct PackageInfo {
 }
 
 /// All events which can be emitted by the broadcast for a package
-#[derive(Serialize, Deserialize, EnumString, Display, Clone)]
-#[strum(serialize_all = "lowercase")]
+#[derive(Serialize, Deserialize, Display, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum BroadcastEvent {
-    /// A build job for the package was started
-    BuildStart,
-    /// A build job for the package finished
-    BuildEnd,
+    /// Change in the package build state
+    Change(BuildState),
     /// Log message for the package build
-    Log,
+    Log(String),
     /// Ping to the event subscriber
     Ping,
 }

@@ -51,7 +51,7 @@ fn empty_response() -> impl Responder {
 pub async fn info() -> actix_web::Result<impl Responder> {
     Ok(Json(SereneInfo {
         version: INFO.version.clone(),
-        started: INFO.start_time.clone(),
+        started: INFO.start_time,
         name: CONFIG.repository_name.clone(),
         architecture: CONFIG.architecture.clone(),
         readable: CONFIG.allow_reads,
@@ -93,7 +93,7 @@ pub async fn add(
     };
 
     // create package
-    let packages = package::add_source(&db, source, body.0.replace)
+    let packages = package::add_source(&db, source, body.replace)
         .await
         .internal()?
         .ok_or_else(|| ErrorBadRequest("package with the same base is already added"))?;
@@ -108,7 +108,10 @@ pub async fn add(
             scheduler.schedule(p).await.internal()?;
         }
 
-        scheduler.run(packages, BuildMeta::normal(BuildReason::Initial)).await.internal()?;
+        scheduler
+            .run(packages, BuildMeta::new(BuildReason::Initial, body.resolve, true, false))
+            .await
+            .internal()?;
     }
 
     Ok(Json(response))
@@ -199,7 +202,7 @@ pub async fn build(
         .await
         .run(
             vec![package],
-            BuildMeta::new(BuildReason::Manual, true, body.into_inner().clean, true),
+            BuildMeta::new(BuildReason::Manual, body.dependencies, body.clean, true),
         )
         .await
         .internal()?;
@@ -308,28 +311,29 @@ pub async fn settings(
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
     // get repo and devel tag
-    let reschedule = match &body.0 {
+    let reschedule = match body.0 {
         PackageSettingsRequest::Clean(b) => {
-            package.clean = *b;
+            package.clean = b;
             false
         }
         PackageSettingsRequest::Enabled(b) => {
-            package.enabled = *b;
+            package.enabled = b;
             true
         }
+        PackageSettingsRequest::Dependency(b) => {
+            package.dependency = b;
+            false
+        }
         PackageSettingsRequest::Schedule(s) => {
-            package.schedule = if s.trim().is_empty() { None } else { Some(s.clone()) };
-
+            package.schedule = s;
             true
         }
         PackageSettingsRequest::Prepare(s) => {
-            package.prepare = if s.trim().is_empty() { None } else { Some(s.clone()) };
-
+            package.prepare = s;
             false
         }
         PackageSettingsRequest::Flags(f) => {
-            package.flags = f.clone();
-
+            package.flags = f;
             false
         }
     };

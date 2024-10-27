@@ -27,14 +27,14 @@ pub fn run(config: &Config, action: Action) {
             }
         }
 
-        Action::Add { what, pkgbuild, custom, devel, replace, install, quiet, file } => {
-            add(config, &what, replace, file, custom, pkgbuild, devel, install, quiet);
+        Action::Add { what, pkgbuild, custom, noresolve, devel, replace, install, quiet, file } => {
+            add(config, &what, replace, noresolve, file, custom, pkgbuild, devel, install, quiet);
         }
         Action::Remove { name } => {
             remove(config, &name);
         }
-        Action::Build { name, clean, install, quiet } => {
-            build(config, &name, clean, install, quiet);
+        Action::Build { name, clean, resolve, install, quiet } => {
+            build(config, &name, clean, resolve, install, quiet);
         }
         Action::List => {
             list(config);
@@ -53,7 +53,7 @@ pub fn run(config: &Config, action: Action) {
                 if id.is_some() {
                     build_logs(config, &name, &id);
                 } else {
-                    subscribe_build_logs(config, &name, linger, subscribe);
+                    subscribe_build_logs(config, &name, subscribe, linger);
                 }
             }
             Some(InfoCommand::Set { property }) => set_setting(config, &name, property),

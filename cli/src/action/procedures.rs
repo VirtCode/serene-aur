@@ -29,32 +29,43 @@ use std::str::FromStr;
 
 /// waits for a package to build and then installs it
 fn wait_and_install(c: &Config, base: &str, quiet: bool) {
-    let log = RefCell::new(Some(Log::start("subscribing to logs")));
+    let log = RefCell::new(Some(Log::start("subscribing to package build events")));
     let mut started = false;
 
     // waiting for build to finish
-    let mut log = match subscribe_events(c, base, |e, data| {
-        match e {
-            BroadcastEvent::BuildStart | BroadcastEvent::Log => {
-                if !started {
-                    if !quiet {
-                        if let Some(log) = log.replace(None) {
-                            log.succeed("subscribed to logs successfully")
-                        }
-                    } else if let Some(log) = log.borrow_mut().as_mut() {
-                        log.next("waiting for build to finish")
+    let mut log = match subscribe_events(c, base, |_package, event| {
+        match event {
+            BroadcastEvent::Log(msg) => {
+                if !started && !quiet {
+                    if let Some(log) = log.replace(None) {
+                        log.succeed("package build started successfully")
                     }
                 }
 
                 if !quiet {
-                    print!("{data}");
+                    print!("{msg}");
                 }
 
                 started = true;
             }
-            BroadcastEvent::BuildEnd => {
-                return true;
-            }
+            BroadcastEvent::Change(event) => match event {
+                BuildState::Pending => {
+                    if let Some(log) = log.borrow_mut().as_mut() {
+                        log.next("waiting for resolving and dependencies to build")
+                    }
+                }
+                BuildState::Running(_) => {
+                    if let Some(log) = log.borrow_mut().as_mut() {
+                        log.next("waiting for package to build")
+                    }
+                }
+                BuildState::Cancelled(_)
+                | BuildState::Success
+                | BuildState::Failure
+                | BuildState::Fatal(_, _) => {
+                    return true;
+                }
+            },
             BroadcastEvent::Ping => {}
         }
 
@@ -100,7 +111,7 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
     // build must be successful
     match build.state {
         BuildState::Running(progress) => {
-            log.fail(&format!("build somehow not finished, but at {progress}"));
+            log.fail(&format!("build somehow not finished, but at {progress}? bug this"));
             return;
         }
         BuildState::Failure => {
@@ -112,7 +123,7 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
             return;
         }
         BuildState::Pending => {
-            log.fail("build didn't actutally start, is still pending");
+            log.fail("build didn't actually start, is still pending? bug this");
             return;
         }
         BuildState::Cancelled(message) => {
@@ -139,6 +150,7 @@ pub fn add(
     c: &Config,
     what: &str,
     replace: bool,
+    noresolve: bool,
     file: bool,
     custom: bool,
     pkgbuild: bool,
@@ -184,7 +196,7 @@ pub fn add(
     };
 
     // add package on server
-    let info = match add_package(c, PackageAddRequest { replace, source }) {
+    let info = match add_package(c, PackageAddRequest { replace, source, resolve: !noresolve }) {
         Ok(info) => info,
         Err(e) => {
             log.fail(&e.msg());
@@ -214,10 +226,11 @@ pub fn remove(c: &Config, package: &str) {
 }
 
 /// builds a package right now
-pub fn build(c: &Config, package: &str, clean: bool, install: bool, quiet: bool) {
+pub fn build(c: &Config, package: &str, clean: bool, resolve: bool, install: bool, quiet: bool) {
     let log = Log::start(&format!("requesting immediate build for package {}", package.italic()));
 
-    if let Err(e) = build_package(c, package, PackageBuildRequest { clean }) {
+    if let Err(e) = build_package(c, package, PackageBuildRequest { clean, dependencies: resolve })
+    {
         log.fail(&e.msg());
         return;
     }
@@ -336,6 +349,9 @@ pub fn info(c: &Config, package: &str, all: bool) {
     }
     if info.devel {
         tags.push("devel".dimmed())
+    }
+    if info.dependency {
+        tags.push("dependency".purple())
     }
 
     println!(
@@ -499,23 +515,24 @@ pub fn subscribe_build_logs(c: &Config, package: &str, explicit: bool, linger: b
     // we have to use a rc ref cell here because of the closure later down
     let log = RefCell::new(Some(Log::start("looking for existing builds")));
 
-    let mut first_build_finished = false;
-
     // skip if explicit subscription
     if !explicit {
         // we ignore failure here, as we just want to check
-        if let Ok(latest) = get_build_logs(c, package, "latest") {
+        if let (Ok(latest), Ok(info)) =
+            (get_build_logs(c, package, "latest"), get_build(c, package, "latest"))
+        {
             if let Some(s) = log.replace(None) {
                 s.succeed("found existing build successfully")
             }
 
             if linger {
                 println!(
-                    "{}\n\n{latest}\n{}",
-                    "### package build started".italic().dimmed(),
-                    "### package build finished".italic().dimmed()
+                    "{} {}\n{latest}{} {}",
+                    "### package build is".italic().dimmed(),
+                    BuildState::Pending.colored_passive(),
+                    "### package build is".italic().dimmed(),
+                    info.state.colored_passive(),
                 );
-                first_build_finished = true;
             } else {
                 print!("{latest}"); // already has newline at end
 
@@ -528,7 +545,7 @@ pub fn subscribe_build_logs(c: &Config, package: &str, explicit: bool, linger: b
         s.next("subscribing to live logs and waiting")
     }
 
-    if let Err(err) = subscribe_events(c, package, |event, data| {
+    if let Err(err) = subscribe_events(c, package, |_package, event| {
         if let Some(s) = log.replace(None) {
             s.succeed("subscription was successful")
         }
@@ -536,21 +553,10 @@ pub fn subscribe_build_logs(c: &Config, package: &str, explicit: bool, linger: b
         // ignore unknown events
         match event {
             BroadcastEvent::Ping => {}
-            BroadcastEvent::BuildStart => {
-                if linger && first_build_finished {
-                    println!("{}\n", "### package build started".italic().dimmed())
-                }
+            BroadcastEvent::Change(state) => {
+                println!("{} {}", "### package build is".italic().dimmed(), state.colored_passive())
             }
-            BroadcastEvent::BuildEnd => {
-                first_build_finished = true;
-
-                if linger {
-                    println!("\n{}", "### package build finished".italic().dimmed())
-                } else {
-                    return true; // exit
-                }
-            }
-            BroadcastEvent::Log => print!("{}", data),
+            BroadcastEvent::Log(data) => print!("{}", data),
         }
 
         false // stay attached
@@ -582,18 +588,40 @@ pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
             ));
             PackageSettingsRequest::Enabled(enabled)
         }
+        SettingsSubcommand::Dependency { set } => {
+            log.next(&format!(
+                "{} dependency flag for {package}",
+                if set { "setting" } else { "removing" }
+            ));
+            PackageSettingsRequest::Dependency(set)
+        }
         SettingsSubcommand::Schedule { cron } => {
-            let Ok(description) = describe_cron_timezone_hack(&cron) else {
+            let sched = if cron.trim().is_empty() {
+                log.next(&format!("reverting to default schedule for package {package}"));
+                None
+            } else if let Ok(description) = describe_cron_timezone_hack(&cron) {
+                log.next(&format!(
+                    "setting custom schedule '{}' for package {package}",
+                    description
+                ));
+                Some(cron)
+            } else {
                 log.fail("invalid cron string provided");
                 return;
             };
 
-            log.next(&format!("setting custom schedule '{}' for package {package}", description));
-            PackageSettingsRequest::Schedule(cron)
+            PackageSettingsRequest::Schedule(sched)
         }
         SettingsSubcommand::Prepare { command } => {
-            log.next(&format!("setting prepare command for package {package}"));
-            PackageSettingsRequest::Prepare(command)
+            let cmd = if command.trim().is_empty() {
+                log.next(&format!("removing prepare command for package {package}"));
+                None
+            } else {
+                log.next(&format!("setting prepare command for package {package}"));
+                Some(command)
+            };
+
+            PackageSettingsRequest::Prepare(cmd)
         }
         SettingsSubcommand::Flags { flags } => {
             let flags = flags

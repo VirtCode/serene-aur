@@ -142,7 +142,7 @@ impl Package {
         query!(
             r#"
             UPDATE package
-            SET enabled = $2, clean = $3, schedule = $4, prepare = $5, flags = $6
+            SET enabled = $2, clean = $3, schedule = $4, prepare = $5, flags = $6, dependency = $7
             WHERE base = $1
         "#,
             record.base,
@@ -150,7 +150,8 @@ impl Package {
             record.clean,
             record.schedule,
             record.prepare,
-            record.flags
+            record.flags,
+            record.dependency
         )
         .execute(db)
         .await?;

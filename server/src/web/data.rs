@@ -22,6 +22,7 @@ impl Package {
             members: self.get_packages(),
             version: self.get_version(),
             devel: self.source.is_devel(),
+            dependency: self.dependency,
             enabled: self.enabled,
             clean: self.clean,
             schedule: self.get_schedule(),
@@ -39,7 +40,7 @@ impl BuildSummary {
             state: self.state.clone(),
             started: self.started,
             ended: self.ended,
-            reason: self.reason.clone(),
+            reason: self.reason,
         }
     }
 }
