@@ -72,13 +72,13 @@ pub fn get_packages(c: &Config) -> Result<Vec<PackagePeek>> {
 /// subscribe to build events and logs
 pub fn subscribe_events<F>(c: &Config, package: &str, mut callback: F) -> Result<()>
 where
-    F: FnMut(BroadcastEvent, String) -> bool,
+    F: FnMut(String, BroadcastEvent) -> bool,
 {
     eventsource(c, &format!("package/{package}/build/logs/subscribe"), |event| {
         if let Event::Message(event) = event {
             // ignore unknown events
-            if let Ok(brd) = BroadcastEvent::from_str(&event.event) {
-                return callback(brd, event.data);
+            if let Ok(brd) = serde_json::from_str(&event.data) {
+                return callback(event.event, brd);
             }
         }
 

@@ -1,9 +1,10 @@
 use actix_web_lab::sse;
-use actix_web_lab::sse::Sse;
+use actix_web_lab::sse::{Data, Event, Sse};
 use actix_web_lab::util::InfallibleStream;
 use chrono::Utc;
 use futures::future::join_all;
-use log::{debug, trace};
+use log::{debug, error, trace};
+use serene_data::build::BuildState;
 use serene_data::package::BroadcastEvent;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -11,16 +12,10 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
 
-pub enum Event {
-    BuildStart,
-    BuildFinish,
-    Log(String),
-}
-
 pub struct Broadcast {
     subscriptions: Mutex<HashMap<String, Vec<tokio::sync::mpsc::Sender<sse::Event>>>>,
     // cache contains build logs for packages which are currently building
-    cache: Mutex<HashMap<String, Vec<String>>>,
+    cache: Mutex<HashMap<String, (Vec<String>, BuildState)>>,
 }
 
 impl Broadcast {
@@ -51,11 +46,13 @@ impl Broadcast {
 
         *subscriptions = join_all(subscriptions.iter().map(|(package, receivers)| async {
             let receivers = join_all(receivers.iter().map(|recv| async {
-                let event = sse::Event::Data(
-                    sse::Data::new(Utc::now().timestamp_millis().to_string())
-                        .event(BroadcastEvent::Ping.to_string()),
-                );
-                recv.send(event).await.ok().map(|_| recv.clone())
+                recv.send(
+                    Self::create_event("", BroadcastEvent::Ping)
+                        .expect("ping should be serializable"),
+                )
+                .await
+                .ok()
+                .map(|_| recv.clone())
             }))
             .await
             .into_iter()
@@ -89,43 +86,64 @@ impl Broadcast {
         let cache = self.cache.lock().await;
         // should there be logs in the cache then there is currently a build running and
         // we want to return those logs
-        if let Some(logs) = cache.get(&pkg) {
-            let event = sse::Event::Data(
-                sse::Data::new(logs.join("")).event(BroadcastEvent::Log.to_string()),
-            );
-            tx.send(event).await.ok();
+        if let Some((logs, state)) = cache.get(&pkg) {
+            if let Some(state) = Self::create_event(&pkg, BroadcastEvent::Change(state.clone())) {
+                let _ = tx.send(state).await;
+            } else {
+                error!("failed serialize state to send to new receiver");
+            }
+
+            if let Some(logs) = Self::create_event(&pkg, BroadcastEvent::Log(logs.join(""))) {
+                let _ = tx.send(logs).await;
+            } else {
+                error!("failed serialize logs to send to new receiver");
+            }
         }
 
         Ok(Sse::from_infallible_receiver(rx))
     }
 
-    /// notify all subscriptions for a specific package with an event
-    pub async fn notify(&self, package: &str, event: Event) {
-        let pkg = package.to_lowercase();
-        let subscriptions = self.subscriptions.lock().await;
-        let receivers = subscriptions.get(&pkg).cloned().unwrap_or_default();
-        trace!("notifying package {pkg} with {} receivers", receivers.len());
-
+    /// send a state change through the event source
+    pub async fn change(&self, package: &str, state: BuildState) {
         let mut cache = self.cache.lock().await;
-        let event = match event {
-            Event::BuildStart => {
-                cache.insert(pkg, vec![]);
-                sse::Event::Data(
-                    sse::Data::new(String::new()).event(BroadcastEvent::BuildStart.to_string()),
-                )
-            }
-            Event::BuildFinish => {
-                cache.remove(&pkg);
-                sse::Event::Data(
-                    sse::Data::new(String::new()).event(BroadcastEvent::BuildEnd.to_string()),
-                )
-            }
-            Event::Log(log) => {
-                if let Some(logs) = cache.get_mut(&pkg) {
-                    logs.push(log.clone())
-                }
-                sse::Event::Data(sse::Data::new(log).event(BroadcastEvent::Log.to_string()))
-            }
+        let package = package.to_owned();
+
+        // initialize or remove cache
+        if state.done() {
+            cache.remove(&package);
+        } else if let Some((_, s)) = cache.get_mut(&package) {
+            *s = state.clone();
+        } else {
+            cache.insert(package.to_owned(), (vec![], state.clone()));
+        }
+
+        self.notify(&package, BroadcastEvent::Change(state)).await
+    }
+
+    /// send a log through the event source
+    pub async fn log(&self, package: &str, log: String) {
+        let mut cache = self.cache.lock().await;
+        let package = package.to_owned();
+
+        // add logs to cache
+        if let Some((logs, _)) = cache.get_mut(&package) {
+            logs.push(log.clone())
+        }
+
+        self.notify(&package, BroadcastEvent::Log(log)).await
+    }
+
+    /// notify all subscriptions for a specific package with an event
+    pub async fn notify(&self, package: &str, event: BroadcastEvent) {
+        let package = package.to_owned();
+        let subscriptions = self.subscriptions.lock().await;
+        let receivers = subscriptions.get(&package).cloned().unwrap_or_default();
+
+        trace!("notifying package {package} with {} receivers", receivers.len());
+
+        let Some(event) = Self::create_event(&package, event) else {
+            error!("failed to serialize event to send to event source");
+            return;
         };
 
         for receiver in receivers {
@@ -133,5 +151,10 @@ impl Broadcast {
             // anyways
             receiver.send(event.clone()).await.ok();
         }
+    }
+
+    /// create a sse event for a package and an event
+    fn create_event(package: &str, event: BroadcastEvent) -> Option<Event> {
+        serde_json::to_string(&event).map(|event| Event::Data(Data::new(event).event(package))).ok()
     }
 }

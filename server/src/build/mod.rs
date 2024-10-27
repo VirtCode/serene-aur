@@ -3,7 +3,7 @@ use crate::package::Package;
 use crate::repository::PackageRepository;
 use crate::runner::archive::{begin_read, read_srcinfo};
 use crate::runner::{ContainerId, RunStatus, Runner};
-use crate::web::broadcast::{Broadcast, Event};
+use crate::web::broadcast::Broadcast;
 use anyhow::Context;
 use chrono::{DateTime, Utc};
 use log::{error, info, warn};
@@ -102,13 +102,12 @@ impl Builder {
         force_clean: bool,
         mut summary: BuildSummary,
     ) -> anyhow::Result<BuildSummary> {
-        self.broadcast.notify(&package.base, Event::BuildStart).await;
-
         let state = 'run: {
             // UPDATE
             if update {
                 summary.state = Running(Update);
                 summary.change(&self.db).await?;
+                self.broadcast.change(&package.base, summary.state.clone()).await;
 
                 match self.update(&mut package).await {
                     Ok(_) => {}
@@ -122,6 +121,7 @@ impl Builder {
             if package.clean || force_clean {
                 summary.state = Running(Clean);
                 summary.change(&self.db).await?;
+                self.broadcast.change(&package.base, summary.state.clone()).await;
 
                 match self.try_clean(&package).await {
                     Ok(()) => {}
@@ -134,6 +134,7 @@ impl Builder {
             // BUILD
             summary.state = Running(Build);
             summary.change(&self.db).await?;
+            self.broadcast.change(&package.base, summary.state.clone()).await;
 
             let (container, success) = match self.build(&mut package).await {
                 Ok((status, container)) => {
@@ -150,6 +151,7 @@ impl Builder {
             if success {
                 summary.state = Running(Publish);
                 summary.change(&self.db).await?;
+                self.broadcast.change(&package.base, summary.state.clone()).await;
 
                 match self.publish(&mut package, &container).await {
                     Ok(()) => {}
@@ -162,6 +164,7 @@ impl Builder {
                 summary.state = Running(Clean);
 
                 summary.change(&self.db).await?;
+                self.broadcast.change(&package.base, summary.state.clone()).await;
 
                 // change sources here as the new package was successfully published
                 package.change_sources(&self.db).await?;
@@ -171,6 +174,7 @@ impl Builder {
             if package.clean {
                 summary.state = Running(Publish);
                 summary.change(&self.db).await?;
+                self.broadcast.change(&package.base, summary.state.clone()).await;
 
                 match self.clean(&container).await {
                     Ok(()) => {}
@@ -189,7 +193,7 @@ impl Builder {
 
         summary.end(state);
         summary.change(&self.db).await?;
-        self.broadcast.notify(&package.base, Event::BuildFinish).await;
+        self.broadcast.change(&package.base, summary.state.clone()).await;
 
         Ok(summary)
     }

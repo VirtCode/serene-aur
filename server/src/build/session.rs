@@ -4,6 +4,7 @@ use crate::build::{BuildSummary, Builder};
 use crate::config::CONFIG;
 use crate::database::Database;
 use crate::package::Package;
+use crate::web::broadcast::Broadcast;
 use anyhow::{Context, Result};
 use log::{debug, error, info, warn};
 use serene_data::build::{BuildProgress, BuildReason, BuildState};
@@ -20,6 +21,7 @@ pub struct BuildSession<'a> {
     meta: BuildMeta,
 
     builder: Arc<RwLock<Builder>>,
+    broadcast: Arc<Broadcast>,
     db: &'a Database,
 }
 
@@ -34,16 +36,18 @@ impl<'a> BuildSession<'a> {
         packages: Vec<Package>,
         db: &'a Database,
         builder: Arc<RwLock<Builder>>,
+        broadcast: Arc<Broadcast>,
         meta: BuildMeta,
     ) -> Result<Self> {
         let result = if meta.resolve && CONFIG.resolve_build_sequence {
-            Self::resolve(packages, meta.reason, db).await?
+            Self::resolve(packages, meta.reason, db, broadcast.clone()).await?
         } else {
             let mut result = vec![];
 
             for package in packages {
                 let summary = BuildSummary::start(&package, meta.reason);
                 summary.save(db).await?;
+                broadcast.change(&package.base, summary.state.clone()).await;
 
                 result.push((package, summary, HashSet::new()))
             }
@@ -51,7 +55,7 @@ impl<'a> BuildSession<'a> {
             result
         };
 
-        Ok(Self { builder, db, packages: result, building: HashSet::new(), meta })
+        Ok(Self { builder, broadcast, db, packages: result, building: HashSet::new(), meta })
     }
 
     // FIXME: remove this once Alpm is sync, see sync.rs
@@ -62,10 +66,12 @@ impl<'a> BuildSession<'a> {
         packages: Vec<Package>,
         reason: BuildReason,
         db: &'a Database,
+        broadcast: Arc<Broadcast>,
     ) -> Result<Vec<(Package, BuildSummary, HashSet<String>)>> {
         let (tx, rx) = oneshot::channel();
 
         let db = db.clone();
+        let broadcast = broadcast.clone();
 
         // spawn new thread
         std::thread::spawn(move || {
@@ -77,7 +83,7 @@ impl<'a> BuildSession<'a> {
                     debug!("resolving packages on seperate thread");
 
                     let result = 'content: {
-                        let mut resolver = match BuildResolver::new(&db).await {
+                        let mut resolver = match BuildResolver::new(&db, broadcast).await {
                             Ok(r) => r,
                             Err(e) => break 'content Err(e),
                         };
@@ -137,11 +143,12 @@ impl<'a> BuildSession<'a> {
                     deps.remove(&built);
                 }
             } else {
-                for (_, mut sum, _) in self.packages.extract_if(|(_, _, d)| d.contains(&built)) {
+                for (pkg, mut sum, _) in self.packages.extract_if(|(_, _, d)| d.contains(&built)) {
                     sum.end(BuildState::Cancelled(format!(
                         "failed to build dependency {built} successfully"
                     )));
-                    sum.change(self.db).await?
+                    sum.change(self.db).await?;
+                    self.broadcast.change(&pkg.base, sum.state.clone()).await;
                 }
             }
         }
@@ -157,6 +164,7 @@ impl<'a> BuildSession<'a> {
                 BuildProgress::Resolve,
             ));
             summary.change(self.db).await?;
+            self.broadcast.change(&p.base, summary.state.clone()).await;
         }
 
         Ok(())

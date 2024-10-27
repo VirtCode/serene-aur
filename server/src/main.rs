@@ -61,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
     )));
 
     // creating scheduler
-    let mut schedule = BuildScheduler::new(builder.clone(), db.clone())
+    let mut schedule = BuildScheduler::new(builder.clone(), db.clone(), broadcast.clone())
         .await
         .context("failed to start package scheduler")?;
 

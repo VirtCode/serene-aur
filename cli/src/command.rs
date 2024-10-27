@@ -38,6 +38,10 @@ pub enum Action {
         #[clap(short, long)]
         replace: bool,
 
+        /// do not resolve dependencies for the package
+        #[clap(short, long)]
+        noresolve: bool,
+
         /// read the contents for <WHAT> from a file
         #[clap(short, long)]
         file: bool,
@@ -65,6 +69,10 @@ pub enum Action {
         /// force clean before the next build
         #[clap(short, long)]
         clean: bool,
+
+        /// also build dependencies before it
+        #[clap(short, long)]
+        resolve: bool,
 
         /// install package with `pacman` after build
         #[clap(short, long, help_heading = "Installing")]
@@ -169,6 +177,13 @@ pub enum SettingsSubcommand {
         /// enable automatic building
         #[arg(action = ArgAction::Set)]
         enabled: bool,
+    },
+
+    /// set the dependency mark of the package
+    Dependency {
+        /// the package was added as a dependency
+        #[arg(action = ArgAction::Set)]
+        set: bool,
     },
 
     /// set custom schedule

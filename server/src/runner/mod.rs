@@ -3,7 +3,7 @@ pub mod update;
 
 use crate::config::{CONFIG, INFO};
 use crate::package::Package;
-use crate::web::broadcast::{Broadcast, Event};
+use crate::web::broadcast::Broadcast;
 use anyhow::Context;
 use async_tar::Archive;
 use bollard::container::{
@@ -97,8 +97,9 @@ impl Runner {
             while let Some(next) = stream.next().await {
                 if let Ok(log) = next {
                     let value = log.to_string();
+
                     logs.push(value.clone());
-                    broadcast.notify(&base, Event::Log(value)).await;
+                    broadcast.log(&base, value).await;
                 }
             }
             logs.join("")

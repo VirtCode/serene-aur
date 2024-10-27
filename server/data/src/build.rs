@@ -35,6 +35,18 @@ pub enum BuildState {
     Fatal(String, BuildProgress),
 }
 
+impl BuildState {
+    pub fn done(&self) -> bool {
+        match self {
+            BuildState::Pending | BuildState::Running(_) => false,
+            BuildState::Cancelled(_)
+            | BuildState::Success
+            | BuildState::Failure
+            | BuildState::Fatal(_, _) => true,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct BuildInfo {
     /// state of the build
