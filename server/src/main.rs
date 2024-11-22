@@ -7,6 +7,7 @@ mod build;
 pub mod config;
 mod database;
 mod repository;
+mod resolve;
 mod web;
 
 use crate::build::schedule::BuildScheduler;

@@ -1,9 +1,9 @@
-use crate::build::next::BuildResolver;
 use crate::build::schedule::BuildMeta;
 use crate::build::{BuildSummary, Builder};
 use crate::config::CONFIG;
 use crate::database::Database;
 use crate::package::Package;
+use crate::resolve::build::BuildResolver;
 use crate::web::broadcast::Broadcast;
 use anyhow::{Context, Result};
 use log::{debug, error, info, warn};
