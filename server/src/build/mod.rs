@@ -14,7 +14,6 @@ use serene_data::build::{BuildReason, BuildState};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub mod next;
 pub mod schedule;
 pub mod session;
 

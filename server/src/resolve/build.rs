@@ -1,7 +1,8 @@
 use crate::build::BuildSummary;
 use crate::database::Database;
-use crate::package::resolve::sync::create_and_sync;
 use crate::package::Package;
+use crate::resolve::sync::create_and_sync;
+use crate::resolve::AurResolver;
 use crate::web::broadcast::Broadcast;
 use alpm::Alpm;
 use anyhow::Context;
@@ -18,26 +19,8 @@ pub struct BuildResolver<'a> {
     db: &'a Database,
     broadcast: Arc<Broadcast>,
 
-    /// handle on alpm for dependency resolving
-    alpm: Alpm,
-
-    /// handle on the aur rpc service
-    aur: raur::Handle,
-    /// aur cache so we don't flood the server with requests
-    cache: HashSet<ArcPackage>,
-
     /// packages involved in this build round
     packages: Vec<(Package, BuildSummary)>,
-}
-
-/// information returned from the aur-resolve resolver
-struct ResolveInfo {
-    /// requirements missing from aur and repos
-    missing: Vec<String>,
-    /// packages required from the aur
-    aur: HashSet<String>,
-    /// packages depended on (already added)
-    depend: HashSet<String>,
 }
 
 /// internal enum used for tracking package status
@@ -50,14 +33,7 @@ enum Status {
 
 impl<'a> BuildResolver<'a> {
     pub async fn new(db: &'a Database, broadcast: Arc<Broadcast>) -> anyhow::Result<Self> {
-        Ok(Self {
-            alpm: create_and_sync().await?,
-            aur: raur::Handle::new(),
-            cache: HashSet::new(),
-            packages: Vec::new(),
-            db,
-            broadcast,
-        })
+        Ok(Self { packages: Vec::new(), db, broadcast })
     }
 
     /// combines the lower two functions
@@ -90,28 +66,13 @@ impl<'a> BuildResolver<'a> {
     pub async fn resolve(
         &mut self,
     ) -> anyhow::Result<Vec<(Package, BuildSummary, HashSet<String>)>> {
-        // build srcinfo repo
-        let all = Package::find_all(self.db).await?;
-        let mut added = vec![];
-
-        for pkg in all {
-            if self.packages.iter().any(|(o, _)| o.base == pkg.base) {
-                match pkg.get_next_srcinfo().await {
-                    Ok(srcinfo) => added.push(srcinfo.into()),
-                    Err(e) => {
-                        warn!("failed to read next srcinfo for package to be built: {e:#}");
-                    }
-                }
-            } else if let Some(srcinfo) = pkg.srcinfo {
-                added.push(srcinfo.into())
-            }
-        }
+        let mut resolver = AurResolver::next(self.db, self.packages.iter().map(|(p, _)| p)).await?;
 
         // resolve packages
         debug!("starting to resolve all packages for build");
         let mut infos = Vec::new(); // can't use map cause async
         for x in self.packages.iter().map(|(p, _)| p.base.clone()).collect::<Vec<_>>() {
-            infos.push(self.resolve_package(&x, &added).await?);
+            infos.push(resolver.resolve_package(&x).await?);
         }
 
         debug!("parsing resolve infos");
@@ -214,31 +175,6 @@ impl<'a> BuildResolver<'a> {
         }
 
         Ok(result)
-    }
-
-    /// resolve the dependencies for one package
-    /// this method returning an error is serious, as it must be a network
-    /// problem or something
-    async fn resolve_package(
-        &mut self,
-        package: &str,
-        repo: &Vec<Srcinfo>,
-    ) -> anyhow::Result<ResolveInfo> {
-        debug!("resolving dependencies of package {}", &package);
-
-        let own = PkgbuildRepo { name: "serene", pkgs: repo.iter().collect() };
-
-        let result = Resolver::new(&self.alpm, &mut self.cache, &self.aur, Flags::new()) // TODO: what can we change with these flags?
-            .pkgbuild_repos(vec![own])
-            .resolve_targets(&[package])
-            .await
-            .context("failed to resolve deps for package")?;
-
-        Ok(ResolveInfo {
-            aur: result.iter_aur_pkgs().map(|aur| aur.pkg.package_base.clone()).collect(),
-            depend: result.iter_pkgbuilds().map(|(info, _)| info.base.pkgbase.clone()).collect(),
-            missing: result.missing.into_iter().map(|m| m.dep).collect(),
-        })
     }
 
     /// can be called after resolving failed fatally, such that begun builds are

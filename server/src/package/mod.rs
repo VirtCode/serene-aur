@@ -5,23 +5,21 @@ use crate::package::source::cli::SereneCliSource;
 use crate::package::source::devel::DevelGitSource;
 use crate::package::source::normal::NormalSource;
 use crate::package::source::{Source, SrcinfoWrapper};
+use crate::resolve::AurResolver;
 use crate::runner;
 use crate::runner::archive;
 use anyhow::{anyhow, Context, Error};
 use chrono::{DateTime, Utc};
 use hyper::Body;
 use log::{debug, info, warn};
-use resolve::AurResolver;
 use serene_data::build::BuildReason;
 use serene_data::package::MakepkgFlag;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use time::macros::offset;
 use tokio::fs;
 
 pub mod aur;
 pub mod git;
-pub mod resolve;
 pub mod source;
 
 const SOURCE_FOLDER: &str = "sources";
@@ -85,19 +83,26 @@ async fn add(
         return Ok(None);
     }
 
-    // resolve deps - this already resolves transitive deps (iirc)
-    let mut resolver = AurResolver::start(db, &vec![]).await?;
+    // resolve deps - this already resolves transitive deps
+    let mut resolver = AurResolver::with(db, &srcinfo).await?;
+    let actions = resolver.resolve_package_raw(&srcinfo.base.pkgbase).await?;
 
-    let needed = resolver.resolve_add(&srcinfo).await?;
+    if !actions.missing.is_empty() {
+        return Err(anyhow!(
+            "failed to satisfy all dependencies for {}, missing are {}",
+            srcinfo.base.pkgbase,
+            actions.missing.iter().map(|a| a.dep.clone()).collect::<Vec<_>>().join(", ")
+        ));
+    }
 
     // checkout other packages
     let mut packages = vec![(path, srcinfo, source, replace)];
 
-    for dep in needed {
-        let mut source: Box<dyn Source + Sync + Send> = if aur::is_devel(&dep) {
-            Box::new(DevelGitSource::empty(&aur::to_git(&dep)))
+    for dep in actions.iter_aur_pkgs().map(|p| &p.pkg) {
+        let mut source: Box<dyn Source + Sync + Send> = if aur::is_devel(dep) {
+            Box::new(DevelGitSource::empty(&aur::to_git(dep)))
         } else {
-            Box::new(NormalSource::empty(&aur::to_git(&dep)))
+            Box::new(NormalSource::empty(&aur::to_git(dep)))
         };
 
         let (path, srcinfo) = checkout(&mut source, temp)
