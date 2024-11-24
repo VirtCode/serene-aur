@@ -184,25 +184,56 @@ pub async fn get_all_builds(
     Ok(Json(builds.iter().map(|b| b.as_info()).collect::<Vec<_>>()))
 }
 
-#[post("/package/{name}/build")]
+#[post("/build/all")]
+pub async fn build_all(
+    _: AuthWrite,
+    db: Data<Database>,
+    scheduler: BuildSchedulerData,
+) -> actix_web::Result<impl Responder> {
+    let packages = Package::find_all(&db)
+        .await
+        .internal()?
+        .into_iter()
+        .filter(|p| p.enabled)
+        .collect::<Vec<_>>();
+
+    scheduler
+        .write()
+        .await
+        .run(packages, BuildMeta::normal(BuildReason::Manual))
+        .await
+        .internal()?;
+
+    Ok(empty_response())
+}
+
+#[post("/build")]
 pub async fn build(
     _: AuthWrite,
-    package: Path<String>,
     db: Data<Database>,
     body: Json<PackageBuildRequest>,
     scheduler: BuildSchedulerData,
 ) -> actix_web::Result<impl Responder> {
-    let package = Package::find(&package, &db)
-        .await
-        .internal()?
-        .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
+    let mut packages = vec![];
+
+    for package in &body.packages {
+        packages.push(
+            Package::find(package, &db).await.internal()?.ok_or_else(|| {
+                ErrorNotFound(format!("package with base {} is not added", package))
+            })?,
+        )
+    }
+
+    if (packages.is_empty()) {
+        return Ok(empty_response());
+    }
 
     scheduler
         .write()
         .await
         .run(
-            vec![package],
-            BuildMeta::new(BuildReason::Manual, body.dependencies, body.clean, true),
+            packages,
+            BuildMeta::new(BuildReason::Manual, body.dependencies, body.clean, body.force),
         )
         .await
         .internal()?;

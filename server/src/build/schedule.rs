@@ -284,7 +284,8 @@ impl BuildScheduler {
         if !meta.force {
             let mut locked = lock.lock().await;
 
-            for p in packages.extract_if(|p| !p.newest_built()) {
+            for p in packages.extract_if(|p| p.newest_built()) {
+                debug!("skipping build for {}, is up-to-date", p.base);
                 locked.remove(&p.base);
             }
         }

@@ -61,10 +61,11 @@ pub enum Action {
         name: String,
     },
 
-    /// schedules an immediate build for a package
+    /// schedule immediate builds for packages
     Build {
-        /// base name of the package
-        name: String,
+        /// names of the package bases to build
+        #[clap(required_unless_present = "all")]
+        names: Vec<String>,
 
         /// force clean before the next build
         #[clap(short, long)]
@@ -74,6 +75,10 @@ pub enum Action {
         #[clap(short, long)]
         resolve: bool,
 
+        /// do not build if the package is up-to-date
+        #[clap(short, long)]
+        gentle: bool,
+
         /// install package with `pacman` after build
         #[clap(short, long, help_heading = "Installing")]
         install: bool,
@@ -81,6 +86,10 @@ pub enum Action {
         /// do not print logs when installing
         #[clap(short, long, requires = "install", help_heading = "Installing")]
         quiet: bool,
+
+        /// build all packages of the repository instead
+        #[clap(short, long, conflicts_with_all = ["names", "clean", "resolve", "install", "gentle"], help_heading = "All")]
+        all: bool,
     },
 
     /// get and set info about a package

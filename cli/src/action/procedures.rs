@@ -9,9 +9,9 @@ use crate::web::data::{
     BuildStateFormatter,
 };
 use crate::web::requests::{
-    add_package, build_package, get_build, get_build_logs, get_builds, get_info, get_package,
-    get_package_pkgbuild, get_packages, get_webhook_secret, remove_package, set_package_setting,
-    subscribe_events,
+    add_package, build_all_packages, build_package, get_build, get_build_logs, get_builds,
+    get_info, get_package, get_package_pkgbuild, get_packages, get_webhook_secret, remove_package,
+    set_package_setting, subscribe_events,
 };
 use chrono::{Local, Utc};
 use colored::{ColoredString, Colorize};
@@ -225,11 +225,34 @@ pub fn remove(c: &Config, package: &str) {
     }
 }
 
-/// builds a package right now
-pub fn build(c: &Config, package: &str, clean: bool, resolve: bool, install: bool, quiet: bool) {
-    let log = Log::start(&format!("requesting immediate build for package {}", package.italic()));
+pub fn build_all(c: &Config) {
+    let log = Log::start("requesting build for all packages");
 
-    if let Err(e) = build_package(c, package, PackageBuildRequest { clean, dependencies: resolve })
+    if let Err(e) = build_all_packages(c) {
+        log.fail(&e.msg());
+    } else {
+        log.succeed("queued build for every package successfully")
+    }
+}
+
+/// builds a package right now
+pub fn build(
+    c: &Config,
+    packages: Vec<String>,
+    clean: bool,
+    resolve: bool,
+    install: bool,
+    quiet: bool,
+    force: bool,
+) {
+    let log = Log::start(&format!(
+        "requesting immediate build for package{} {}",
+        if packages.len() > 1 { "s" } else { "" },
+        packages.join(", ").italic()
+    ));
+
+    if let Err(e) =
+        build_package(c, PackageBuildRequest { clean, dependencies: resolve, force, packages })
     {
         log.fail(&e.msg());
         return;
@@ -239,7 +262,7 @@ pub fn build(c: &Config, package: &str, clean: bool, resolve: bool, install: boo
 
     // install if requested
     if install {
-        wait_and_install(c, package, quiet);
+        // FIXME: wait_and_install(c, package, quiet);
     }
 }
 

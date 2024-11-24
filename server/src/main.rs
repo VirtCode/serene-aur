@@ -106,6 +106,7 @@ async fn main() -> anyhow::Result<()> {
             .service(web::list)
             .service(web::status)
             .service(web::remove)
+            .service(web::build_all)
             .service(web::build)
             .service(web::get_all_builds)
             .service(web::get_build)

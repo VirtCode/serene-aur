@@ -2,13 +2,14 @@ pub mod pacman;
 mod procedures;
 
 use crate::action::procedures::{
-    add, build, build_info, build_logs, info, list, pkgbuild, remove, set_setting,
+    add, build, build_all, build_info, build_logs, info, list, pkgbuild, remove, set_setting,
     subscribe_build_logs, webhook_secret,
 };
 use crate::command::{Action, InfoCommand, ManageSubcommand};
 use crate::complete::generate_completions;
 use crate::config::Config;
 use crate::log::Log;
+use crate::web::requests::build_all_packages;
 use clap_complete::Shell;
 use colored::Colorize;
 use procedures::server_info;
@@ -33,8 +34,12 @@ pub fn run(config: &Config, action: Action) {
         Action::Remove { name } => {
             remove(config, &name);
         }
-        Action::Build { name, clean, resolve, install, quiet } => {
-            build(config, &name, clean, resolve, install, quiet);
+        Action::Build { names, clean, resolve, gentle, install, quiet, all } => {
+            if all {
+                build_all(config);
+            } else {
+                build(config, names, clean, resolve, install, quiet, !gentle);
+            }
         }
         Action::List => {
             list(config);
