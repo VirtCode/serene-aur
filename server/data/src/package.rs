@@ -34,10 +34,14 @@ pub enum PackageSettingsRequest {
 
 #[derive(Serialize, Deserialize)]
 pub struct PackageBuildRequest {
+    /// packages to build
+    pub packages: Vec<String>,
     /// perform a clean build
     pub clean: bool,
     /// also build all dependencies
     pub dependencies: bool,
+    /// force rebuild
+    pub force: bool,
 }
 
 /// All supported makepkg flags which make sense to supply. Name the enum

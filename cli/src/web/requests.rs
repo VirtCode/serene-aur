@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::web::{delete_empty, eventsource, get, post, post_simple, Result};
+use crate::web::{delete_empty, eventsource, get, post, post_empty, post_simple, Result};
 use reqwest_eventsource::Event;
 use serene_data::build::BuildInfo;
 use serene_data::package::{
@@ -24,8 +24,13 @@ pub fn remove_package(c: &Config, package: &str) -> Result<()> {
 }
 
 /// build a package immediately
-pub fn build_package(c: &Config, package: &str, request: PackageBuildRequest) -> Result<()> {
-    post_simple(c, &format!("package/{package}/build"), request)
+pub fn build_package(c: &Config, request: PackageBuildRequest) -> Result<()> {
+    post_simple(c, "build", request)
+}
+
+/// build all packages immediately
+pub fn build_all_packages(c: &Config) -> Result<()> {
+    post_empty(c, "build/all")
 }
 
 /// changes a setting of a package
