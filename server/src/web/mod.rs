@@ -15,7 +15,7 @@ use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound}
 use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{delete, get, post, Responder};
 use auth::{create_webhook_secret, AuthWebhook};
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use hyper::StatusCode;
 use serde::Deserialize;
 use serene_data::build::BuildReason;
@@ -98,7 +98,11 @@ pub async fn add(
         .internal()?
         .ok_or_else(|| ErrorBadRequest("package with the same base is already added"))?;
 
-    let response = packages.iter().map(|p| p.to_info()).collect::<Vec<_>>();
+    let mut response = vec![];
+    for package in &packages {
+        let count = BuildSummary::count_for_package(&package.base, &db).await.internal()?;
+        response.push(package.to_info(count));
+    }
 
     {
         // scheduling package
@@ -144,7 +148,9 @@ pub async fn status(
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    Ok(Json(package.to_info()))
+    let count = BuildSummary::count_for_package(&package.base, &db).await.internal()?;
+
+    Ok(Json(package.to_info(count)))
 }
 
 #[get("/package/{name}/pkgbuild")]
@@ -246,17 +252,16 @@ async fn get_build_for(
     time: &str,
     db: &Database,
 ) -> actix_web::Result<Option<BuildSummary>> {
-    match time {
-        "latest" => BuildSummary::find_latest_for_package(base, &db).await.internal(),
-        t => BuildSummary::find(
-            &DateTime::from_str(t).map_err(|_| {
-                ErrorBadRequest(format!("expected valid date or 'latest', not '{time}'"))
-            })?,
-            base,
-            &db,
-        )
-        .await
-        .internal(),
+    if time == "latest" {
+        BuildSummary::find_latest_for_package(base, db).await.internal()
+    } else if let Ok(n) = u32::from_str(time) {
+        BuildSummary::find_nth_for_package(n, base, db).await.internal()
+    } else if let Ok(date) = DateTime::from_str(time) {
+        BuildSummary::find(&date, base, db).await.internal()
+    } else {
+        Err(ErrorBadRequest(format!(
+            "expected valid date, valid index number, or 'latest', not '{time}'"
+        )))
     }
 }
 

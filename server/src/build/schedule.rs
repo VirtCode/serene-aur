@@ -251,6 +251,10 @@ impl BuildScheduler {
             packages.iter().map(|p| p.base.clone()).collect::<Vec<_>>().join(", ")
         );
 
+        // remove duplicates, as this would cause problems later down the line
+        packages.sort_by(|a, b| a.base.cmp(&b.base));
+        packages.dedup_by(|a, b| a.base == b.base);
+
         {
             let mut locked = lock.lock().await;
 

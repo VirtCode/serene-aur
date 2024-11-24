@@ -116,6 +116,35 @@ impl BuildSummary {
         record.map(BuildSummary::from_record).transpose()
     }
 
+    pub async fn find_nth_for_package(n: u32, base: &str, db: &Database) -> Result<Option<Self>> {
+        let record = query_as!(
+            BuildRecord,
+            r#"
+            SELECT * FROM build WHERE package = $1 ORDER BY started ASC LIMIT $2, 1
+        "#,
+            base,
+            n
+        )
+        .fetch_optional(db)
+        .await?;
+
+        record.map(BuildSummary::from_record).transpose()
+    }
+
+    pub async fn count_for_package(base: &str, db: &Database) -> Result<u32> {
+        let count = query!(
+            r#"
+            SELECT COUNT(1) as count FROM build WHERE package = $1
+        "#,
+            base,
+        )
+        .fetch_one(db)
+        .await?
+        .count;
+
+        Ok(count as u32)
+    }
+
     pub async fn find_all_for_package(base: &str, db: &Database) -> Result<Vec<Self>> {
         let records = query_as!(
             BuildRecord,

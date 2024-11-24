@@ -108,6 +108,8 @@ pub struct PackageInfo {
     pub base: String,
     /// members of the package
     pub members: Vec<String>,
+    /// total count of builds
+    pub builds: u32,
 
     /// version of the package
     pub version: Option<String>,

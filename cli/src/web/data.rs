@@ -68,11 +68,6 @@ impl BuildProgressFormatter for BuildProgress {
     }
 }
 
-pub fn get_build_id(summary: &BuildInfo) -> String {
-    let string = format!("{:x}", summary.started.timestamp());
-    string[(string.len() - 4)..string.len()].to_owned()
-}
-
 /// this converts a cron string from utc to local time
 /// note that this is a very hacky implementation and does not work in all cases
 pub fn describe_cron_timezone_hack(schedule: &str) -> anyhow::Result<String> {
