@@ -16,7 +16,7 @@ impl Package {
         }
     }
 
-    pub fn to_info(&self) -> PackageInfo {
+    pub fn to_info(&self, build_count: u32) -> PackageInfo {
         PackageInfo {
             base: self.base.clone(),
             members: self.get_packages(),
@@ -29,6 +29,7 @@ impl Package {
             added: self.added,
             prepare_commands: self.prepare.clone(),
             makepkg_flags: self.flags.clone(),
+            builds: build_count,
         }
     }
 }

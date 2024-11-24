@@ -1,7 +1,5 @@
 ## TODO
 
-adjusted for v0.3.0 on 23.02.24
-
 #### Polish
 
 *polish for a better user experience*
@@ -13,6 +11,7 @@ adjusted for v0.3.0 on 23.02.24
 - [X] Shell completions with dynamic packages
 - [ ] show webhooks feature in infos
 - [ ] fix cli PKGBUILD so version doesn't have a v- prefix
+- [ ] Wait for build on multiple packages
 
 #### Cleanness
 

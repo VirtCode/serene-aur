@@ -9,7 +9,6 @@ use crate::command::{Action, InfoCommand, ManageSubcommand};
 use crate::complete::generate_completions;
 use crate::config::Config;
 use crate::log::Log;
-use crate::web::requests::build_all_packages;
 use clap_complete::Shell;
 use colored::Colorize;
 use procedures::server_info;
@@ -28,17 +27,40 @@ pub fn run(config: &Config, action: Action) {
             }
         }
 
-        Action::Add { what, pkgbuild, custom, noresolve, devel, replace, install, quiet, file } => {
-            add(config, &what, replace, noresolve, file, custom, pkgbuild, devel, install, quiet);
+        Action::Add {
+            what,
+            pkgbuild,
+            custom,
+            noresolve,
+            devel,
+            replace,
+            install,
+            listen,
+            quiet,
+            file,
+        } => {
+            add(
+                config,
+                &what,
+                replace,
+                noresolve,
+                file,
+                custom,
+                pkgbuild,
+                devel,
+                install || listen,
+                quiet,
+                listen,
+            );
         }
         Action::Remove { name } => {
             remove(config, &name);
         }
-        Action::Build { names, clean, resolve, gentle, install, quiet, all } => {
+        Action::Build { names, clean, resolve, gentle, install, listen, quiet, all } => {
             if all {
                 build_all(config);
             } else {
-                build(config, names, clean, resolve, install, quiet, !gentle);
+                build(config, names, clean, resolve, install || listen, quiet, !gentle, listen);
             }
         }
         Action::List => {

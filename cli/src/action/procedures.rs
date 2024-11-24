@@ -5,8 +5,7 @@ use crate::config::Config;
 use crate::log::Log;
 use crate::table::{ago, table, Column};
 use crate::web::data::{
-    describe_cron_timezone_hack, get_build_id, BuildProgressFormatter, BuildReasonFormatter,
-    BuildStateFormatter,
+    describe_cron_timezone_hack, BuildProgressFormatter, BuildReasonFormatter, BuildStateFormatter,
 };
 use crate::web::requests::{
     add_package, build_all_packages, build_package, get_build, get_build_logs, get_builds,
@@ -26,9 +25,10 @@ use std::env::consts::ARCH;
 use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
+use std::sync::mpsc;
 
 /// waits for a package to build and then installs it
-fn wait_and_install(c: &Config, base: &str, quiet: bool) {
+fn wait_and_install(c: &Config, base: &str, quiet: bool, just_listen: bool) {
     let log = RefCell::new(Some(Log::start("subscribing to package build events")));
     let mut started = false;
 
@@ -138,10 +138,12 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
     }
 
     // install via pacman
-    if pacman::install(c, package.members) {
-        Log::success("successfully installed packages");
-    } else {
-        Log::failure("failed to install packages");
+    if !just_listen {
+        if pacman::install(c, package.members) {
+            Log::success("successfully installed packages");
+        } else {
+            Log::failure("failed to install packages");
+        }
     }
 }
 
@@ -157,6 +159,7 @@ pub fn add(
     devel: bool,
     install: bool,
     quiet: bool,
+    listen: bool,
 ) {
     let mut log = Log::start("initializing package adding");
 
@@ -211,7 +214,7 @@ pub fn add(
 
     // install if requested
     if install {
-        wait_and_install(c, &info.first().expect("added no package?").base, quiet);
+        wait_and_install(c, &info.first().expect("added no package?").base, quiet, listen);
     }
 }
 
@@ -235,7 +238,7 @@ pub fn build_all(c: &Config) {
     }
 }
 
-/// builds a package right now
+/// builds packages right now
 pub fn build(
     c: &Config,
     packages: Vec<String>,
@@ -244,6 +247,7 @@ pub fn build(
     install: bool,
     quiet: bool,
     force: bool,
+    listen: bool,
 ) {
     let log = Log::start(&format!(
         "requesting immediate build for package{} {}",
@@ -251,9 +255,10 @@ pub fn build(
         packages.join(", ").italic()
     ));
 
-    if let Err(e) =
-        build_package(c, PackageBuildRequest { clean, dependencies: resolve, force, packages })
-    {
+    if let Err(e) = build_package(
+        c,
+        PackageBuildRequest { clean, dependencies: resolve, force, packages: packages.clone() },
+    ) {
         log.fail(&e.msg());
         return;
     }
@@ -262,7 +267,11 @@ pub fn build(
 
     // install if requested
     if install {
-        // FIXME: wait_and_install(c, package, quiet);
+        if packages.len() > 1 {
+            Log::warning("waiting for multiple packages to build is not yet supported");
+        } else {
+            wait_and_install(c, packages.first().expect("no first argument?"), quiet, listen);
+        }
     }
 }
 
@@ -400,6 +409,8 @@ pub fn info(c: &Config, package: &str, all: bool) {
         }
     );
 
+    println!("{:<9} {}", "builds:", info.builds);
+
     if let Some(prepare) = &info.prepare_commands {
         println!();
         println!("prepare commands:");
@@ -420,9 +431,10 @@ pub fn info(c: &Config, package: &str, all: bool) {
 
     let rows = builds
         .iter()
-        .map(|peek| {
+        .enumerate()
+        .map(|(i, peek)| {
             [
-                get_build_id(peek).dimmed(),
+                format!("{:0>4}", info.builds - i as u32 - 1).dimmed(),
                 peek.version.as_ref().map(|s| s.normal()).unwrap_or_else(|| "unknown".dimmed()),
                 peek.state.colored_substantive(),
                 peek.reason.colored(),
@@ -448,7 +460,7 @@ pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
         Ok(b) => {
             log.succeed("found build successfully");
 
-            println!("{} {}", "build".bold(), get_build_id(&b).bold());
+            println!("build for {}", package.bold());
             println!("{:<8} {}", "started:", b.started.with_timezone(&Local).format("%x %X"));
             println!(
                 "{:<8} {}",

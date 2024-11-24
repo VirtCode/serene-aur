@@ -46,12 +46,16 @@ pub enum Action {
         #[clap(short, long)]
         file: bool,
 
-        /// install package with `pacman` after build
-        #[clap(short, long, help_heading = "Installing")]
+        /// install package with `pacman` after successful build
+        #[clap(short, long, group = "logs", help_heading = "Installing")]
         install: bool,
 
-        /// do not print logs when installing
-        #[clap(short, long, requires = "install", help_heading = "Installing")]
+        /// just listen, don't install after the build is finished
+        #[clap(short, long, group = "logs", help_heading = "Installing")]
+        listen: bool,
+
+        /// do not print logs during the build
+        #[clap(short, long, requires = "logs", help_heading = "Installing")]
         quiet: bool,
     },
 
@@ -79,16 +83,20 @@ pub enum Action {
         #[clap(short, long)]
         gentle: bool,
 
-        /// install package with `pacman` after build
-        #[clap(short, long, help_heading = "Installing")]
+        /// install package with `pacman` after successful build
+        #[clap(short, long, group = "logs", help_heading = "Installing")]
         install: bool,
 
-        /// do not print logs when installing
-        #[clap(short, long, requires = "install", help_heading = "Installing")]
+        /// just listen, don't install after the build is finished
+        #[clap(short, long, group = "logs", help_heading = "Installing")]
+        listen: bool,
+
+        /// do not print logs during the build
+        #[clap(short, long, requires = "logs", help_heading = "Installing")]
         quiet: bool,
 
         /// build all packages of the repository instead
-        #[clap(short, long, conflicts_with_all = ["names", "clean", "resolve", "install", "gentle"], help_heading = "All")]
+        #[clap(short, long, conflicts_with_all = ["names", "logs", "clean", "resolve", "gentle"], help_heading = "All")]
         all: bool,
     },
 
