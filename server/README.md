@@ -3,10 +3,24 @@ The server is the main part of serene, as it actually builds and manages the pac
 
 The server is distributed in the form of a docker container. This file documents the direct usage, building and configuration of it.
 
-## Repository
+## Features
+These are the main features the server has which you might want to enable and configure further. For a complete list of configuration options, see the [configuration section](#configuration) below.
+
+### Repository
 The server will expose a package repository over http. It is located at `/[arch]` so most probably on `/x86_64` and does not require authentication.
 
-The repository follows the format of an ordinary Arch Linux repository, just the way pacman expects it. The name of the actual repository (determined by the .db file) can be [configured](#configuration) on the container, and is `serene` by default. The package archive format is `.tar.zst`.
+The repository follows the format of an ordinary Arch Linux repository, just the way pacman expects it. The name of the actual repository (determined by the .db file) can be [configured](#configuration) with `NAME`, and is `serene` by default. The package archive format is `.tar.zst`.
+
+### Dependency Resolving
+Some AUR packages require dependencies, which themselves are only available on the AUR. To efficiently deal with this problem, the server supports resolving dependencies on adding and before a build.
+
+Resolving is enabled by default. To use it effectively however, you need to give the [runner](../runner/README.md) containers access to your package repository. This has to be done via the `OWN_REPOSITORY` [configuration option](#configuration). Other options to change the resolving process are also available.
+
+When adding a package, its dependencies from the AUR will automatically be resolved and added alongside it. If a dependency cannot be resolved, the adding will fail. The [CLI](../cli/README.md#usage) will report all additionally added packages. Packages which are added this way by the server are automatically marked with a **dependency** which can however be altered after the fact.
+
+During a build, the server will by default also resolve the dependency relationship between all packages that are going to be built (this can be [disabled](#configuration) with `RESOLVE_BUILD_SEQUENCE`). If the dependencies for a package are not satisfied, the package build will be **aborted** prematurely. After the initial resolving, the packages will then be built in order of the dependency tree. If the build of a package fails, later to-be-built packages depending on it will then by default be **aborted** (this can be [changed](#configuration) with `RESOLVE_IGNORE_FAILED`).
+
+Note that the server **will not** add new dependencies, if they change after a package has been added. This is deliberate, such that you don't suddenly find packages on your server you have never added yourself.
 
 ### Package Signing
 For security reasons the packages built by the build server can be signed. Whilst the signature is no guarantee the built package does not contain any malware it still verifies the package was built on your build server.
@@ -45,9 +59,6 @@ Since the packages are now signed you can remove the `SigLevel = Optional TrustA
 By removing this configuration pacman will fall back to the `SigLevel` defined at the `[options]` level which by default only allows signed packages to be downloaded from a repository.
 More about the `SigLevel` configuration can be read in the [arch wiki](https://wiki.archlinux.org/title/Pacman/Package_signing#Configuring_pacman).
 
->[!NOTE]
-> The downloading and importing of the public key should in the future be possible through the cli
-
 ## API
 Additionally, the server exposes a REST API under`/package`. This api is used by the CLI to interact with the server to query, add, etc. packages. By default, the whole API is secured behind authentication via a secret. Read-only endpoints can be [configured](#configuration) to be open for everyone.
 
@@ -82,8 +93,8 @@ It also stores many things on the filesystem, which may or may not be of interes
 - `/app/authorized_secrets`: This **file** contains the secrets which are allowed to access the api. You probably want to mount this outside the container for easier access.
 - `/app/serene.db`: This is the *sqlite* database where all the builds, logs, etc. are stored about the different packages.
 - `/app/sources`: This is a directory structure that stores the `PKGBUILD`s which are copied to containers for building.
-- `/app/repository`: This is the repository containing the build packages. It is served as is for pacman to access.
-- `/app/sign_key.asc`: This **file** contains the private key used for package signing if provided
+- `/app/repository`: This is the repository containing the built packages. It is served as is for pacman to access.
+- `/app/sign_key.asc`: This file contains the private key used for package signing if provided
 
 ### Deployment
 It is recommended to deploy the container via docker compose. Here is an example for a basic deployment:
@@ -125,8 +136,9 @@ NAME=serene
 # whether the serene-cli is added and built automatically
 BUILD_CLI=true
 
-# http url to use to reference own package store from the outside
-# if this url is provided, packages can use dependencies of others inside the container
+# http url to use to access its own repository
+# this is used by the runner containers to access the repository for dependencies
+# it is easiest to set this to the url the repo is accessible with from the outside (e.g. https://my.tld/x86_64)
 OWN_REPOSITORY_URL=none
 
 # optional password to unlock the private key used for package signing
@@ -166,6 +178,14 @@ WEBHOOK_SECRET=none
 # mirror used to synchronize package databases
 # must contain {repo} and {arch}, with will be filled with the corresponding repo and architecture
 SYNC_MIRROR=https://mirror.init7.net/archlinux/{repo}/os/{arch}
+
+# build the package in order of the dependency tree
+# if true, dependencies between packages are resolved before building, so they are built in the correct order
+RESOLVE_BUILD_SEQUENCE=true
+
+# ignore build failures of dependencies while building
+# if false, a package build will be aborted if dependencies fail to build
+RESOLVE_IGNORE_FAILED=false
 
 # DEBUG the unix or tcp url to docker with a prefix (e.g. tcp://127.0.0.1:2375)
 #       the runner containers will be spun up on this docker instance
