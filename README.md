@@ -39,11 +39,11 @@ Many more commands are found on the documentation for the CLI:
 **[<kbd>&ensp;<br>&ensp;CLI Documentation&ensp;<br>&ensp;</kbd>](./cli/README.md)**
 
 ## State
-This project is still in its early stages, but already usable on a daily basis. There are also a couple of features and improvements that still need to be implemented. 
-Notable missing features include:
+This project is still in its early stages, but already usable on a daily basis. There are also a couple of improvements and optimizations that still need to be implemented. 
+Big, recently implemented features include:
 - [X] Entirely custom PKGBUILDs without a git repository
 - [X] Package signing
-- [ ] Automatic AUR dependency resolving ([#4](https://github.com/VirtCode/serene-aur/issues/4))
+- [X] Automatic AUR dependency resolving
 
 Refer to the [TODO File](TODO.md) for more features, tasks and enhancements and don't hesitate to contribute if interested.
 
@@ -54,7 +54,7 @@ Installing serene involves two things, deploying the server, and installing a lo
 Here is a quick overview of hosting a serene server, based on the main branch. The server is just a single docker container, making it straightforward: 
 1. First, **create an empty file** called `authorized_secrets` in your directory. 
 2. Set up a reverse proxy for docker (e.g. traefik) to use SSL/TLS.
-4. Add the following service to your docker compose in the same directory:
+3. Add the following service to your docker compose in the same directory:
 ```yaml
 # docker-compose.yml > services
 
@@ -67,7 +67,11 @@ serene:
     - "your traefik labels here (the server is open on 80)"
 ```
 
-Now you are done and can start your deployment. Note that the container **requires write access to the docker socket** so that it can spin up containers for building the package. See the full server documentation for more information:
+Now you are done and can start your deployment. Note that the container **requires write access to the docker socket** so that it can spin up containers for building the package.
+
+##### Next Steps
+You have now deployed a basic server with default settings successfully. You are now ready to start building your first packages on your new server. To configure more advanced features like **automatic dependency resolving** or **package signing**, see the full server documentation:
+
 
 **[<kbd>&ensp;<br>&ensp;Server Documentation&ensp;<br>&ensp;</kbd>](./server/README.md)** &ensp; **[<kbd>&ensp;<br>&ensp;Runner Documentation&ensp;<br>&ensp;</kbd>](./runner/README.md)**
 

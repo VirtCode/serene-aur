@@ -58,7 +58,7 @@ pub struct Config {
     pub own_repository_url: Option<String>,
     /// secret used to sign webhook tokens
     pub webhook_secret: Option<String>,
-    /// mirror used to sychronize package dbs
+    /// mirror used to synchronize package dbs
     pub sync_mirror: String,
     /// build the packages in the sequence they depend on each other
     pub resolve_build_sequence: bool,
