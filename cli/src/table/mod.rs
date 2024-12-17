@@ -37,6 +37,11 @@ pub fn table<const COUNT: usize>(
     rows: Vec<[ColoredString; COUNT]>,
     sep: &str,
 ) {
+    // don't display empty tables
+    if rows.is_empty() {
+        return;
+    }
+
     // calculate data for columns
     let data = (0..COUNT)
         .map(|i| {

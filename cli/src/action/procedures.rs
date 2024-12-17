@@ -299,7 +299,7 @@ pub fn list(c: &Config) {
                 Column::new("time ago").force(),
             ];
 
-            let rows = list
+            let rows: Vec<[ColoredString; 6]> = list
                 .iter()
                 .map(|peek| {
                     [
@@ -331,7 +331,11 @@ pub fn list(c: &Config) {
                 })
                 .collect();
 
-            table(columns, rows, "  ");
+            if rows.is_empty() {
+                println!("{}\n", "no packages added yet".dimmed())
+            } else {
+                table(columns, rows, "  ");
+            }
         }
         Err(e) => log.fail(&e.msg()),
     }
@@ -393,10 +397,11 @@ pub fn info(c: &Config, package: &str, all: bool) {
     );
 
     println!(
-        "{:<9} {}",
+        "{:<9} {}{}",
         "schedule:",
         describe_cron_timezone_hack(&info.schedule)
-            .unwrap_or_else(|_| "could not parse cron".to_owned())
+            .unwrap_or_else(|_| "could not parse cron".to_owned()),
+        if info.schedule_changed { " *".red() } else { "".normal() }
     );
 
     println!(

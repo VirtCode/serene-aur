@@ -16,7 +16,9 @@ use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{delete, get, post, Responder};
 use auth::{create_webhook_secret, AuthWebhook};
 use chrono::{DateTime, Utc};
+use cron::Schedule;
 use hyper::StatusCode;
+use log::error;
 use serde::Deserialize;
 use serene_data::build::BuildReason;
 use serene_data::package::{
@@ -230,7 +232,7 @@ pub async fn build(
         )
     }
 
-    if (packages.is_empty()) {
+    if packages.is_empty() {
         return Ok(empty_response());
     }
 
@@ -361,6 +363,12 @@ pub async fn settings(
             false
         }
         PackageSettingsRequest::Schedule(s) => {
+            if s.as_ref().and_then(|c| Schedule::from_str(c).err()).is_some() {
+                return Err(ErrorBadRequest(
+                    "cannot parse cron expression (you probably forgot the seconds)",
+                ));
+            }
+
             package.schedule = s;
             true
         }

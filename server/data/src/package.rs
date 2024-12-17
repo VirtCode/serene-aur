@@ -124,6 +124,8 @@ pub struct PackageInfo {
     pub dependency: bool,
     /// schedule of the package
     pub schedule: String,
+    /// schedule of the package was changed
+    pub schedule_changed: bool,
     /// prepare commands ran before build
     pub prepare_commands: Option<String>,
     /// makepkg flags
