@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::select;
-use tokio::sync::mpsc::{Sender, UnboundedSender};
+use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, Mutex, RwLock};
 
 /// metadata associated with a build

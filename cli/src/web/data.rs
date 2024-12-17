@@ -3,7 +3,7 @@ use chrono::{Local, Offset};
 use colored::{ColoredString, Colorize};
 use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron_options;
 use cron_descriptor::cronparser::Options;
-use serene_data::build::{BuildInfo, BuildProgress, BuildReason, BuildState};
+use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use std::str::FromStr;
 
 pub trait BuildStateFormatter {

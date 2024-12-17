@@ -10,10 +10,8 @@ use log::{debug, error, info, warn};
 use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use std::collections::HashSet;
 use std::sync::Arc;
-use tokio::runtime::Handle;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{oneshot, RwLock};
-use tokio::task::LocalSet;
 
 pub struct BuildSession<'a> {
     packages: Vec<(Package, BuildSummary, HashSet<String>)>,

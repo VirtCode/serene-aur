@@ -25,7 +25,6 @@ use std::env::consts::ARCH;
 use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
-use std::sync::mpsc;
 
 /// waits for a package to build and then installs it
 fn wait_and_install(c: &Config, base: &str, quiet: bool, just_listen: bool) {

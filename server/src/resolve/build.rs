@@ -1,16 +1,10 @@
 use crate::build::BuildSummary;
 use crate::database::Database;
 use crate::package::Package;
-use crate::resolve::sync::create_and_sync;
 use crate::resolve::AurResolver;
 use crate::web::broadcast::Broadcast;
-use alpm::Alpm;
-use anyhow::Context;
-use aur_depends::{Flags, PkgbuildRepo, Resolver};
-use log::{debug, warn};
-use raur::ArcPackage;
+use log::debug;
 use serene_data::build::{BuildProgress, BuildReason, BuildState};
-use srcinfo::Srcinfo;
 use std::collections::HashSet;
 use std::sync::Arc;
 

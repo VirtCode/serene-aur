@@ -11,10 +11,8 @@ mod resolve;
 mod web;
 
 use crate::build::schedule::BuildScheduler;
-use crate::build::session::BuildSession;
 use crate::build::Builder;
 use crate::config::CONFIG;
-use crate::database::Database;
 use crate::package::Package;
 use crate::repository::PackageRepository;
 use crate::runner::update::ImageScheduler;
@@ -24,9 +22,7 @@ use actix_web::web::Data;
 use actix_web::{App, HttpServer};
 use anyhow::Context;
 use config::INFO;
-use lazy_static::lazy_static;
 use log::{error, info};
-use serene_data::build::BuildReason;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

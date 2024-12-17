@@ -12,6 +12,7 @@
 - [ ] show webhooks feature in infos
 - [ ] fix cli PKGBUILD so version doesn't have a v- prefix
 - [ ] Wait for build on multiple packages
+- [ ] Add troubleshooting section to docs (e.g. for when build lock is set but failed beyond fatally)
 
 #### Cleanness
 
@@ -42,7 +43,7 @@
 - [X] Add itself as a source to build container, so we have rudimentary aur dependency support
 - [ ] Import server public key through cli
 - [ ] add `serene manage key` to retrieve the server key
-- [ ] Add build reason to build struct (https://github.com/VirtCode/serene-aur/issues/10)
+- [X] Add build reason to build struct (https://github.com/VirtCode/serene-aur/issues/10)
 - [ ] Purge logs after a certain age
 
 #### Must haves

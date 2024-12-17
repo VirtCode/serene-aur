@@ -15,10 +15,9 @@ use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound}
 use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{delete, get, post, Responder};
 use auth::{create_webhook_secret, AuthWebhook};
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use cron::Schedule;
 use hyper::StatusCode;
-use log::error;
 use serde::Deserialize;
 use serene_data::build::BuildReason;
 use serene_data::package::{
