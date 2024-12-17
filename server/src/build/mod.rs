@@ -5,11 +5,11 @@ use crate::runner::archive::{begin_read, read_srcinfo};
 use crate::runner::{ContainerId, RunStatus, Runner};
 use crate::web::broadcast::Broadcast;
 use chrono::{DateTime, Utc};
-use log::warn;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use serene_data::build::BuildProgress::{Build, Clean, Publish, Update};
 use serene_data::build::BuildState::{Failure, Fatal, Running, Success};
-use serene_data::build::{BuildReason, BuildState};
+use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -53,6 +53,27 @@ impl BuildSummary {
         self.state = state;
         self.ended = Some(Utc::now());
     }
+}
+
+/// cleans up builds which are pending or working, but serene exited in the
+/// meantime, or some beyond fatal error happened
+pub async fn cleanup_unfinished(db: &Database) -> anyhow::Result<()> {
+    info!("checking for unfinished builds");
+
+    let active = BuildSummary::find_active(db).await?;
+
+    for mut summary in active {
+        warn!("cleaning build for {}, as it is still active", summary.package);
+
+        summary.end(Fatal(
+            "build was not finished or failed beyond fatally, then serene was restarted - check your logs!".to_owned(), 
+            if let Running(state) = &summary.state { *state } else { BuildProgress::Resolve }
+        ));
+
+        summary.change(db).await?;
+    }
+
+    Ok(())
 }
 
 pub struct Builder {
