@@ -11,7 +11,7 @@ mod resolve;
 mod web;
 
 use crate::build::schedule::BuildScheduler;
-use crate::build::Builder;
+use crate::build::{cleanup_unfinished, Builder};
 use crate::config::CONFIG;
 use crate::package::Package;
 use crate::repository::PackageRepository;
@@ -65,6 +65,11 @@ async fn main() -> anyhow::Result<()> {
     // creating image scheduler
     let image_scheduler = ImageScheduler::new(runner.clone());
 
+    // cleanup unfinished builds
+    if let Err(e) = cleanup_unfinished(&db).await {
+        error!("failed to cleanup unfinished builds: {e:#}")
+    }
+
     // schedule packages
     for package in Package::find_all(&db).await? {
         schedule
@@ -79,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
 
     if config::CONFIG.build_cli {
         if let Err(e) = package::try_add_cli(&db, &mut schedule).await {
-            error!("Failed to add cli package: {e:#}")
+            error!("failed to add cli package: {e:#}")
         }
     }
 
