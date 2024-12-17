@@ -7,7 +7,6 @@ use serene_data::package::{
     PackageSettingsRequest,
 };
 use serene_data::SereneInfo;
-use std::str::FromStr;
 
 pub fn get_info(c: &Config) -> Result<SereneInfo> {
     get::<SereneInfo>(c, "")
