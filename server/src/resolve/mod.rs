@@ -34,15 +34,17 @@ pub struct AurResolver {
 impl AurResolver {
     /// create a new resolver with packages in their current states, unless they
     /// are contained in the iterator next
-    pub async fn next<'a, T>(db: &Database, mut next: T) -> anyhow::Result<Self>
+    pub async fn next<'a, T>(db: &Database, next: T) -> anyhow::Result<Self>
     where
         T: Iterator<Item = &'a Package>,
     {
         let all = Package::find_all(db).await?;
         let mut added = vec![];
 
+        let next = next.map(|p| p.base.clone()).collect::<Vec<_>>();
+
         for pkg in all {
-            if next.any(|o| o.base == pkg.base) {
+            if next.contains(&pkg.base) {
                 match pkg.get_next_srcinfo().await {
                     Ok(srcinfo) => added.push(srcinfo.into()),
                     Err(e) => {

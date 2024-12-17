@@ -26,6 +26,7 @@ impl Package {
             enabled: self.enabled,
             clean: self.clean,
             schedule: self.get_schedule(),
+            schedule_changed: self.schedule.is_some(),
             added: self.added,
             prepare_commands: self.prepare.clone(),
             makepkg_flags: self.flags.clone(),

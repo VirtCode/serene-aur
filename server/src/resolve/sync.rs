@@ -7,7 +7,7 @@ use log::{debug, info};
 use crate::config::CONFIG;
 
 /// databases that are used by stock pacman
-const STOCK_DATABASES: [&str; 2] = ["core", "extra"];
+const STOCK_DATABASES: [&str; 3] = ["core", "extra", "multilib"];
 
 const SYNC_FOLDER: &str = "sync";
 
