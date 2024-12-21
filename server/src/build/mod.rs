@@ -70,6 +70,9 @@ pub async fn cleanup_unfinished(db: &Database) -> anyhow::Result<()> {
             if let Running(state) = &summary.state { *state } else { BuildProgress::Resolve }
         ));
 
+        // we set the time to zero so we don't have stupidly long time durations
+        summary.ended = Some(summary.started);
+
         summary.change(db).await?;
     }
 
