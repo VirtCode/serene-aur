@@ -79,6 +79,14 @@
 - [ ] A provider list, a list of packages which should be chosen if possible (also install deps explicitly and not via
   makepkg --syncdeps)
 
+##### Fixes
+- [X] Cleanup Runtime to Zero
+- [X] Why are disabled packages being built?
+- [X] `--resolve` arg description is misleading
+- [X] add aborted and pending on `manage info`
+- [ ] self-referencing dependencies?
+- [ ] channel closed issue ?!?!?
+
 ## Roadmap
 
 - [ ] v0.4.0 - Dependency Resolving

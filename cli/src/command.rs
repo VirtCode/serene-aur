@@ -75,7 +75,7 @@ pub enum Action {
         #[clap(short, long)]
         clean: bool,
 
-        /// also build dependencies before it
+        /// resolve dependency between queued packages and build in order
         #[clap(short, long)]
         resolve: bool,
 

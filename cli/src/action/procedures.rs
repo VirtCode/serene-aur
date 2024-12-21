@@ -713,13 +713,18 @@ pub fn check_version_mismatch(c: &Config) {
         if let (Ok(server), Ok(client)) = (Version::parse(server), Version::parse(client)) {
             match server.cmp(&client) {
                 std::cmp::Ordering::Less => Log::warning(&format!(
-                    "server ({server}) is behind your cli ({client}), please update your server"
+                    "server ({server}) is behind your cli ({client}), update your server"
                 )),
                 std::cmp::Ordering::Greater => Log::warning(&format!(
-                    "cli ({client}) is behind your server ({server}), please update your cli"
+                    "cli ({client}) is behind your server ({server}), update your cli"
                 )),
 
                 std::cmp::Ordering::Equal => {} // everything is good
+            }
+
+            // upgrade from 0.3.x to 0.4.x (the CLI usually updates automatically)
+            if server.minor == 3 && client.minor == 4 {
+                Log::warning("please read #15 on GitHub before blindly updating your server");
             }
         } else {
             Log::warning("invalid cli or server version, please check for updates")
@@ -755,10 +760,11 @@ pub fn server_info(c: &Config) {
     let mut devel = 0;
     let mut enabled = 0;
 
-    // TODO: add states for pending and cancelled?
-    let mut passing = 0;
+    let mut pending = 0;
     let mut working = 0;
+    let mut passing = 0;
     let mut failing = 0;
+    let mut cancelled = 0;
     let mut fatal = 0;
 
     for package in packages {
@@ -771,11 +777,11 @@ pub fn server_info(c: &Config) {
 
         if let Some(b) = package.build {
             match b.state {
-                BuildState::Pending => working += 1,
+                BuildState::Pending => pending += 1,
                 BuildState::Running(_) => working += 1,
                 BuildState::Success => passing += 1,
                 BuildState::Failure => failing += 1,
-                BuildState::Cancelled(_) => failing += 1,
+                BuildState::Cancelled(_) => cancelled += 1,
                 BuildState::Fatal(_, _) => fatal += 1,
             }
         }
@@ -816,11 +822,13 @@ pub fn server_info(c: &Config) {
 
     println!("  {:<8} {total} ({members} members available)", "amount:");
     println!(
-        "  {:<8} {}/{}/{}/{}",
+        "  {:<8} {}/{}/{}/{}/{}/{}",
         "status:",
         passing.to_string().green(),
         working.to_string().blue(),
         failing.to_string().red(),
+        cancelled.to_string().yellow(),
+        pending.to_string().dimmed(),
         fatal.to_string().bright_red()
     );
     println!("  {:<8} {} of {total}", "enabled:", enabled.to_string().yellow());

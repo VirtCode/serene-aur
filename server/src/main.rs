@@ -70,10 +70,10 @@ async fn main() -> anyhow::Result<()> {
         error!("failed to cleanup unfinished builds: {e:#}")
     }
 
-    // schedule packages
-    for package in Package::find_all(&db).await? {
+    // schedule packages (which are enabled)
+    for package in Package::find_all(&db).await?.iter().filter(|p| p.enabled) {
         schedule
-            .schedule(&package)
+            .schedule(package)
             .await
             .context(format!("failed to start schedule for package {}", &package.base))?;
     }
