@@ -50,6 +50,63 @@ fn get_local_keypair() -> anyhow::Result<crypto::KeyPair> {
     key.into_keypair().context("failed to create keypair")
 }
 
+struct CHVStatus {
+    chv1_cached: bool,
+    chvmaxlen: [u32; 3],
+    chvretry: [u32; 3],
+}
+
+impl CHVStatus {
+    fn from_string(s: &str) -> anyhow::Result<Self> {
+        fn unescape<S: AsRef<str>>(s: S) -> anyhow::Result<String> {
+            let mut r = String::with_capacity(s.as_ref().len());
+            let mut chars = s.as_ref().chars();
+            while let Some(c) = chars.next() {
+                if c == '%' {
+                    let n = chars.next().context("unexpected end of string")?;
+                    let m = chars.next().context("unexpected end of string")?;
+                    let n = u8::from_str_radix(&format!("{}{}", n, m), 16)
+                        .context("failed to parse hex value")?;
+                    r.push(n as char);
+                } else if c == '+' {
+                    r.push(' ');
+                } else {
+                    r.push(c);
+                }
+            }
+            Ok(r)
+        }
+
+        // split and parse as integers
+        let parts = unescape(s)
+            .context("failed to unescape CHVStatus")?
+            .split_ascii_whitespace()
+            .map(|part| u32::from_str_radix(part, 10))
+            .collect::<Result<Vec<_>, _>>()
+            .context("failed to parse CHVStatus")?;
+
+        if parts.len() < 7 {
+            return Err(anyhow::anyhow!("CHVStatus has too few parts"));
+        }
+
+        Ok(Self {
+            chv1_cached: parts[0] == 1,
+            chvmaxlen: [parts[1], parts[2], parts[3]],
+            chvretry: [parts[4], parts[5], parts[6]],
+        })
+    }
+
+    fn from_card_info(card_info: &gpg_agent::cardinfo::CardInfo) -> anyhow::Result<Option<Self>> {
+        card_info
+            .raw()
+            .find_map(|(keyword, value)| match keyword.as_str() {
+                "CHV-STATUS" => Some(Self::from_string(&value)),
+                _ => None,
+            })
+            .transpose()
+    }
+}
+
 async fn get_agent_keypair() -> anyhow::Result<gpg_agent::KeyPair> {
     let cert = Cert::from_file(KEY_FILE).context("Failed to read public key file")?;
     let policy = StandardPolicy::new();
@@ -59,9 +116,13 @@ async fn get_agent_keypair() -> anyhow::Result<gpg_agent::KeyPair> {
         .context("Failed to connect to gpg-agent")?
         .suppress_pinentry();
 
-    if let Err(e) = agent.card_info().await {
-        warn!("Failed to get card info: {e}");
-    }
+    let card_info = match (agent.card_info().await) {
+        Ok(info) => Some(info),
+        Err(e) => {
+            warn!("Failed to get card info: {e}");
+            None
+        }
+    };
 
     let keys = agent.list_keys().await.context("Failed to list keys")?;
 
@@ -85,6 +146,26 @@ async fn get_agent_keypair() -> anyhow::Result<gpg_agent::KeyPair> {
             None
         })
         .context("No suitable key found in gpg-agent")?;
+
+    if let Some(ci) = card_info {
+        // check if the key we are using is on the card
+        if ci.keys_keygrips().any(|kg| &kg == agent_key.keygrip()) {
+            let chv_status = CHVStatus::from_card_info(&ci).context("Failed to parse CHVStatus")?;
+
+            // check the remaining retries for the user PIN
+            match chv_status {
+                Some(chv_status) if chv_status.chvretry[0] > 1 => Ok(()),
+                Some(chv_status) if chv_status.chvretry[0] == 1 => Err(anyhow::anyhow!(
+                    "user PIN has one retry left, refusing to use it to avoid lockout"
+                )),
+                Some(chv_status) => Err(anyhow::anyhow!("card is locked")),
+                None => {
+                    warn!("Failed to get CHVStatus from card info");
+                    Ok(())
+                }
+            }?;
+        }
+    }
 
     let keypair = agent.keypair(&key).context("Failed to create keypair")?;
 
