@@ -43,7 +43,7 @@ services:
 ```
 
 #### Using `gpg-agent`
-If you want to store your private key in a more secure way, for example in a hardware device, you can use the `gpg-agent` as your keystore and let the server find the key from there.
+If you want to store your private key in a more secure way, for example in a hardware device, you can use the `gpg-agent` as your keystore and let the server use the key from there.
 
 To use this, you'll need to have a `gpg-agent` running and accessible to the server. The agent will then be exposed to the server inside the container via a bind mount to its socket. It is recommended to start your gpg-agent via your init system or something similar.
 
@@ -88,10 +88,10 @@ sudo GNUPGHOME=/etc/serene/gnupg gpg-connect-agent "LEARN --sendinfo" /bye
 ```
 </details>
 
-The serene server needs to know which secret key to use from the agent. For that, you'll need to provide the server with the public key for the key you want to use. The server will then search for the corresponding private key.
+The `gpg-agent` only handles the secret key and the actual signing process. You still need to provide the server with the public key that matches the private key you intend to use. The server will then search for the corresponding private key in the agent. If there are multiple suitable keypairs, the first one found will be used.
 
->[!WARNING]
-> If your key is password/pin protected, but you specify the wrong password, the server might make many failed attempts to unlock your key. Be wary of this if your hardware device automatically destroys the key after too many failed attempts.
+>[!NOTE]
+> If using a PIN-protected hardware device, the server will refuse to use if only one PIN attempt remains. This is to prevent accidental lockouts or key destruction. If you encounter this, perform some action that requires a PIN (e.g., sign something manually with GPG) to reset the PIN retry counter or reset it using the admin PIN.
 
 Now, when [deploying](#deployment) you'll have to mount the socket and public key in the `docker-compose.yml`. We assume the `gpg-agent` socket is in `/etc/serene/gnupg/S.gpg-agent`:
 ```yml
@@ -105,7 +105,7 @@ services:
       - /etc/serene/gnupg/S.gpg-agent:/app/S.gpg-agent
       # ... other volumes
     environment:
-      # if your key requires a password, add the following to your envs
+      # if your key requires a pin/password, add the following to your envs
       - SIGN_KEY_PASSWORD: <key-password>
       # ... remaining config
 ```
