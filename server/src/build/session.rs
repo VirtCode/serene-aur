@@ -114,7 +114,8 @@ impl<'a> BuildSession<'a> {
 
         loop {
             // run ready packages
-            let buildable = self.packages.extract_if(|(_, _, d)| d.is_empty()).collect::<Vec<_>>();
+            let buildable =
+                self.packages.extract_if(.., |(_, _, d)| d.is_empty()).collect::<Vec<_>>();
             for (package, summary, _) in buildable {
                 self.build_package(package, summary, tx.clone()).await?;
             }
@@ -141,7 +142,9 @@ impl<'a> BuildSession<'a> {
                     deps.remove(&built);
                 }
             } else {
-                for (pkg, mut sum, _) in self.packages.extract_if(|(_, _, d)| d.contains(&built)) {
+                for (pkg, mut sum, _) in
+                    self.packages.extract_if(.., |(_, _, d)| d.contains(&built))
+                {
                     sum.end(BuildState::Cancelled(format!(
                         "failed to build dependency {built} successfully"
                     )));

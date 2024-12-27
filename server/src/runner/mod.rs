@@ -15,7 +15,7 @@ use bollard::{Docker, API_DEFAULT_VERSION};
 use chrono::{DateTime, Utc};
 use futures_util::{AsyncRead, StreamExt, TryStreamExt};
 use hyper::body::HttpBody;
-use log::{info, warn};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::vec;
@@ -53,7 +53,7 @@ impl Runner {
                 Docker::connect_with_http(url, 120, API_DEFAULT_VERSION)
             } else {
                 if !url.starts_with("unix://") {
-                    warn!("missing docker url scheme, assuming path to unix socket");
+                    debug!("missing docker url scheme, assuming path to unix socket");
                 }
 
                 info!("using docker via unix socket at '{url}'");

@@ -116,7 +116,7 @@ async fn get_agent_keypair() -> anyhow::Result<gpg_agent::KeyPair> {
         .context("Failed to connect to gpg-agent")?
         .suppress_pinentry();
 
-    let card_info = match (agent.card_info().await) {
+    let card_info = match agent.card_info().await {
         Ok(info) => Some(info),
         Err(e) => {
             warn!("Failed to get card info: {e}");
