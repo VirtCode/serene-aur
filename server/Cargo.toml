@@ -56,3 +56,4 @@ lazy_static = "1.4.0"
 
 # crypto
 sequoia-openpgp = { version = "1.21.1" }
+sequoia-gpg-agent = { version = "0.4.2" }
