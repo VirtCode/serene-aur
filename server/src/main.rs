@@ -13,7 +13,7 @@ mod web;
 use crate::build::schedule::BuildScheduler;
 use crate::build::{cleanup_unfinished, Builder};
 use crate::config::CONFIG;
-use crate::package::Package;
+use crate::package::{migrate_build_state, Package};
 use crate::repository::PackageRepository;
 use crate::runner::update::ImageScheduler;
 use crate::runner::Runner;
@@ -68,6 +68,11 @@ async fn main() -> anyhow::Result<()> {
     // cleanup unfinished builds
     if let Err(e) = cleanup_unfinished(&db).await {
         error!("failed to cleanup unfinished builds: {e:#}")
+    }
+
+    // migrations
+    if let Err(e) = migrate_build_state(&db).await {
+        error!("failed apply heuristics to migrate to built_state: {e:#}")
     }
 
     // schedule packages (which are enabled)

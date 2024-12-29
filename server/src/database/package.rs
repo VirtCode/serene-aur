@@ -120,6 +120,22 @@ impl Package {
         records.into_iter().map(Package::from_record).collect()
     }
 
+    /// Find all packages from the database which were freshly migrated to built
+    /// states
+    pub async fn find_migrated_built_state(db: &Database) -> Result<Vec<Self>> {
+        let records = query_as!(
+            PackageRecord,
+            r#"
+            SELECT * FROM package WHERE built_state == $1
+        "#,
+            "migrated"
+        )
+        .fetch_all(db)
+        .await?;
+
+        records.into_iter().map(Package::from_record).collect()
+    }
+
     /// Saves the package to the database for a first time
     pub async fn save(&self, db: &Database) -> Result<()> {
         let record = self.create_record()?;

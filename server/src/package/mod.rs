@@ -1,4 +1,5 @@
 use crate::build::schedule::{BuildMeta, BuildScheduler};
+use crate::build::BuildSummary;
 use crate::config::{CLI_PACKAGE_NAME, CONFIG};
 use crate::database::Database;
 use crate::package::source::cli::SereneCliSource;
@@ -11,8 +12,8 @@ use crate::runner::archive;
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use hyper::Body;
-use log::{info, warn};
-use serene_data::build::BuildReason;
+use log::{debug, info, warn};
+use serene_data::build::{BuildReason, BuildState};
 use serene_data::package::MakepkgFlag;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -384,4 +385,24 @@ fn select_arch(available: &Vec<String>) -> String {
     } else {
         "any".to_string()
     }
+}
+
+/// performs heuristics to migrate packages to the new built_state
+/// will check whether the latest build was a success and if so will assume the
+/// source has not changed
+pub async fn migrate_build_state(db: &Database) -> anyhow::Result<()> {
+    for mut package in Package::find_migrated_built_state(db).await? {
+        debug!("trying to migrate package {} to built_state", package.base);
+        let Some(summary) = BuildSummary::find_latest_for_package(&package.base, db).await? else {
+            continue;
+        };
+
+        if let BuildState::Success = summary.state {
+            info!("migrating package {} to built_state, assuming up-to-date", package.base);
+
+            package.built_state = package.source.get_state();
+            package.change_sources(db).await?;
+        }
+    }
+    Ok(())
 }
