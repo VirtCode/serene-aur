@@ -260,6 +260,10 @@ RESOLVE_BUILD_SEQUENCE=true
 # if false, a package build will be aborted if dependencies fail to build
 RESOLVE_IGNORE_FAILED=false
 
+# maximal amount of packages which can build concurrently
+# this is a limit on a per-session basis, i.e. per schedule target or manual trigger
+CONCURRENT_BUILDS=5
+
 # DEBUG the unix or tcp url to docker with a prefix (e.g. tcp://127.0.0.1:2375)
 #       the runner containers will be spun up on this docker instance
 DOCKER_URL=unix:///var/run/docker.sock

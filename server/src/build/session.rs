@@ -113,9 +113,16 @@ impl<'a> BuildSession<'a> {
         let (tx, mut rx) = tokio::sync::mpsc::channel(1);
 
         loop {
+            // amount of packages we are currently allowed to start
+            let free = CONFIG.concurrent_builds - self.building.len();
+
             // run ready packages
-            let buildable =
-                self.packages.extract_if(.., |(_, _, d)| d.is_empty()).collect::<Vec<_>>();
+            let buildable = self
+                .packages
+                .extract_if(.., |(_, _, d)| d.is_empty())
+                .take(free)
+                .collect::<Vec<_>>();
+
             for (package, summary, _) in buildable {
                 self.build_package(package, summary, tx.clone()).await?;
             }
@@ -123,7 +130,6 @@ impl<'a> BuildSession<'a> {
             // check if empty
             if self.building.is_empty() {
                 info!("finished building successfully");
-
                 break;
             }
 

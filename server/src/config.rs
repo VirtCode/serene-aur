@@ -64,6 +64,8 @@ pub struct Config {
     pub resolve_build_sequence: bool,
     /// still build depending packages even if dependency failed
     pub resolve_ignore_failed: bool,
+    /// maximal amount of concurrent builds allowed PER SESSION
+    pub concurrent_builds: usize,
 }
 
 impl Default for Config {
@@ -93,6 +95,7 @@ impl Default for Config {
 
             resolve_build_sequence: true,
             resolve_ignore_failed: false,
+            concurrent_builds: 5,
 
             sync_mirror: "https://mirror.init7.net/archlinux/{repo}/os/{arch}".to_string(),
         }
@@ -112,7 +115,20 @@ impl Config {
         env::var(name)
             .ok()
             .and_then(|s| {
-                u16::from_str(&s).map_err(|_| warn!("failed to parse {name}, using default")).ok()
+                u16::from_str(&s)
+                    .map_err(|_| warn!("failed to parse {name} as u16, using default {default}"))
+                    .ok()
+            })
+            .unwrap_or(default)
+    }
+
+    fn env_usize(name: &str, default: usize) -> usize {
+        env::var(name)
+            .ok()
+            .and_then(|s| {
+                usize::from_str(&s)
+                    .map_err(|_| warn!("failed to parse {name} as usize, using default {default}"))
+                    .ok()
             })
             .unwrap_or(default)
     }
@@ -121,7 +137,9 @@ impl Config {
         env::var(name)
             .ok()
             .and_then(|s| {
-                bool::from_str(&s).map_err(|_| warn!("failed to parse {name}, using default")).ok()
+                bool::from_str(&s)
+                    .map_err(|_| warn!("failed to parse {name} as bool, using default {default}"))
+                    .ok()
             })
             .unwrap_or(default)
     }
@@ -153,6 +171,7 @@ impl Config {
 
             resolve_build_sequence: Self::env_bool("RESOLVE_BUILD_SEQUENCE", default.resolve_build_sequence),
             resolve_ignore_failed: Self::env_bool("RESOLVE_IGNORE_FAILED", default.resolve_ignore_failed),
+            concurrent_builds: Self::env_usize("CONCURRENT_BUILDS", default.concurrent_builds),
 
             webhook_secret: Self::env_string_option("WEBHOOK_SECRET", default.webhook_secret),
 
