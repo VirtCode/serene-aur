@@ -89,11 +89,17 @@ impl AurResolver {
 
         let own = PkgbuildRepo { name: "serene", pkgs: self.local.iter().collect() };
 
-        Resolver::new(&self.repos, &mut self.aur_cache, &self.aur, Flags::new()) // TODO: what can we change with these flags?
+        let mut actions = Resolver::new(&self.repos, &mut self.aur_cache, &self.aur, Flags::new()) // TODO: what can we change with these flags?
             .pkgbuild_repos(vec![own])
             .resolve_targets(&[package])
             .await
-            .context("failed to resolve deps for package")
+            .context("failed to resolve deps for package")?;
+
+        // we have to remove the package itself base from missing, as it is listed under
+        // missing on split packages which don't contain a member of the same name
+        actions.missing.retain(|missing| missing.dep != package);
+
+        Ok(actions)
     }
 
     /// resolve the dependencies for one package

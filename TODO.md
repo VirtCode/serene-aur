@@ -13,6 +13,7 @@
 - [ ] fix cli PKGBUILD so version doesn't have a v- prefix
 - [ ] Wait for build on multiple packages
 - [ ] Add troubleshooting section to docs (e.g. for when build lock is set but failed beyond fatally)
+- [ ] clap binary name is off in help cmd
 
 #### Cleanness
 
@@ -86,6 +87,7 @@
 - [X] add aborted and pending on `manage info`
 - [ ] self-referencing dependencies?
 - [ ] channel closed issue ?!?!?
+- [ ] automatically imply --resolve when multiple packages (i.e. change to no resolve)
 
 ## Roadmap
 
