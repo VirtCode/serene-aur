@@ -32,16 +32,29 @@ pub enum PackageSettingsRequest {
     Flags(Vec<MakepkgFlag>),
 }
 
+/// parameters for requesting package builds
 #[derive(Serialize, Deserialize)]
 pub struct PackageBuildRequest {
     /// packages to build
     pub packages: Vec<String>,
     /// perform a clean build
     pub clean: bool,
-    /// also build all dependencies
-    pub dependencies: bool,
+    /// resolve dependencies between packages when building
+    pub resolve: bool,
     /// force rebuild
     pub force: bool,
+}
+
+impl PackageBuildRequest {
+    /// create a build request for an all build
+    pub fn all(clean: bool, resolve: bool, force: bool) -> Self {
+        Self { packages: vec![], clean, resolve, force }
+    }
+
+    /// create a build request for a specific build
+    pub fn specific(packages: Vec<String>, clean: bool, resolve: bool, force: bool) -> Self {
+        Self { packages, clean, resolve, force }
+    }
 }
 
 /// All supported makepkg flags which make sense to supply. Name the enum

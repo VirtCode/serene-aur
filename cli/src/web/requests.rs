@@ -28,8 +28,8 @@ pub fn build_package(c: &Config, request: PackageBuildRequest) -> Result<()> {
 }
 
 /// build all packages immediately
-pub fn build_all_packages(c: &Config) -> Result<()> {
-    post_empty(c, "build/all")
+pub fn build_all_packages(c: &Config, request: PackageBuildRequest) -> Result<()> {
+    post_simple(c, "build/all", request)
 }
 
 /// changes a setting of a package

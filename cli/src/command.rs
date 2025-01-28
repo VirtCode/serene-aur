@@ -2,7 +2,7 @@ use clap::{ArgAction, Parser, Subcommand};
 
 #[derive(Parser)]
 #[clap(version = option_env!("TAG").unwrap_or("unknown"), about)]
-#[command(disable_help_subcommand = true)]
+#[command(disable_help_subcommand = true, bin_name = "serene")]
 pub struct Args {
     #[clap(subcommand)]
     pub command: Action,
@@ -75,9 +75,9 @@ pub enum Action {
         #[clap(short, long)]
         clean: bool,
 
-        /// resolve dependency between queued packages and build in order
+        /// do not resolve dependency order to build in
         #[clap(short, long)]
-        resolve: bool,
+        noresolve: bool,
 
         /// do not build if the package is up-to-date
         #[clap(short, long)]
@@ -95,9 +95,13 @@ pub enum Action {
         #[clap(short, long, requires = "logs", help_heading = "Installing")]
         quiet: bool,
 
-        /// build all packages of the repository instead
-        #[clap(short, long, conflicts_with_all = ["names", "logs", "clean", "resolve", "gentle"], help_heading = "All")]
+        /// build all packages of the repository instead, implies `--gentle`
+        #[clap(short, long, conflicts_with_all = ["names", "logs", "gentle"], help_heading = "All")]
         all: bool,
+
+        /// force the build of all packages, including up-to-date
+        #[clap(short, long, requires = "all", help_heading = "All")]
+        force: bool,
     },
 
     /// get and set info about a package
@@ -116,7 +120,7 @@ pub enum Action {
 
     /// prints the current secret
     Secret {
-        /// print the secret in a machine readable way
+        /// print the secret in a machine-readable way
         #[clap(short, long)]
         machine: bool,
     },
@@ -174,7 +178,7 @@ pub enum ManageSubcommand {
         /// name of the package
         name: String,
 
-        /// print the secret in a machine readable way
+        /// print the secret in a machine-readable way
         #[clap(short, long)]
         machine: bool,
     },

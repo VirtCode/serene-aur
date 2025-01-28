@@ -195,6 +195,7 @@ pub async fn get_all_builds(
 pub async fn build_all(
     _: AuthWrite,
     db: Data<Database>,
+    body: Json<PackageBuildRequest>,
     scheduler: BuildSchedulerData,
 ) -> actix_web::Result<impl Responder> {
     let packages = Package::find_all(&db)
@@ -207,7 +208,7 @@ pub async fn build_all(
     scheduler
         .write()
         .await
-        .run(packages, BuildMeta::normal(BuildReason::Manual))
+        .run(packages, BuildMeta::new(BuildReason::Manual, body.resolve, body.clean, body.force))
         .await
         .internal()?;
 
@@ -238,10 +239,7 @@ pub async fn build(
     scheduler
         .write()
         .await
-        .run(
-            packages,
-            BuildMeta::new(BuildReason::Manual, body.dependencies, body.clean, body.force),
-        )
+        .run(packages, BuildMeta::new(BuildReason::Manual, body.resolve, body.clean, body.force))
         .await
         .internal()?;
 

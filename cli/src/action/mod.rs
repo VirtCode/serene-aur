@@ -56,11 +56,11 @@ pub fn run(config: &Config, action: Action) {
         Action::Remove { name } => {
             remove(config, &name);
         }
-        Action::Build { names, clean, resolve, gentle, install, listen, quiet, all } => {
+        Action::Build { names, clean, noresolve, gentle, install, listen, quiet, all, force } => {
             if all {
-                build_all(config);
+                build_all(config, force, !noresolve, clean);
             } else {
-                build(config, names, clean, resolve, install || listen, quiet, !gentle, listen);
+                build(config, names, clean, !noresolve, install || listen, quiet, !gentle, listen);
             }
         }
         Action::List => {

@@ -227,10 +227,10 @@ pub fn remove(c: &Config, package: &str) {
     }
 }
 
-pub fn build_all(c: &Config) {
+pub fn build_all(c: &Config, force: bool, resolve: bool, clean: bool) {
     let log = Log::start("requesting build for all packages");
 
-    if let Err(e) = build_all_packages(c) {
+    if let Err(e) = build_all_packages(c, PackageBuildRequest::all(clean, resolve, force)) {
         log.fail(&e.msg());
     } else {
         log.succeed("queued build for every package successfully")
@@ -254,10 +254,9 @@ pub fn build(
         packages.join(", ").italic()
     ));
 
-    if let Err(e) = build_package(
-        c,
-        PackageBuildRequest { clean, dependencies: resolve, force, packages: packages.clone() },
-    ) {
+    if let Err(e) =
+        build_package(c, PackageBuildRequest::specific(packages.clone(), clean, resolve, force))
+    {
         log.fail(&e.msg());
         return;
     }

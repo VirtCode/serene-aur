@@ -13,7 +13,7 @@
 - [ ] fix cli PKGBUILD so version doesn't have a v- prefix
 - [ ] Wait for build on multiple packages
 - [ ] Add troubleshooting section to docs (e.g. for when build lock is set but failed beyond fatally)
-- [ ] clap binary name is off in help cmd
+- [X] clap binary name is off in help cmd
 
 #### Cleanness
 

@@ -37,7 +37,7 @@ impl<'a> BuildSession<'a> {
         broadcast: Arc<Broadcast>,
         meta: BuildMeta,
     ) -> Result<Self> {
-        let result = if meta.resolve && CONFIG.resolve_build_sequence {
+        let result = if meta.resolve && CONFIG.resolve_build_sequence && packages.len() > 1 {
             Self::resolve(packages, meta.reason, db, broadcast.clone()).await?
         } else {
             let mut result = vec![];
