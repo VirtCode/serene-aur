@@ -1,15 +1,19 @@
-use crate::build::schedule::BuildScheduler;
+use crate::build::schedule::{BuildMeta, BuildScheduler};
+use crate::build::BuildSummary;
 use crate::config::{CLI_PACKAGE_NAME, CONFIG};
 use crate::database::Database;
 use crate::package::source::cli::SereneCliSource;
+use crate::package::source::devel::DevelGitSource;
+use crate::package::source::normal::NormalSource;
 use crate::package::source::{Source, SrcinfoWrapper};
+use crate::resolve::AurResolver;
 use crate::runner;
 use crate::runner::archive;
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use hyper::Body;
-use log::info;
-use serene_data::build::BuildReason;
+use log::{debug, info, warn};
+use serene_data::build::{BuildReason, BuildState};
 use serene_data::package::MakepkgFlag;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -23,94 +27,135 @@ const SOURCE_FOLDER: &str = "sources";
 
 const PACKAGE_EXTENSION: &str = ".pkg.tar.zst"; // see /etc/makepkg.conf
 
-fn get_folder_tmp() -> PathBuf {
+pub async fn add_source(
+    db: &Database,
+    source: Box<dyn Source + Sync + Send>,
+    replace: bool,
+) -> anyhow::Result<Option<Vec<Package>>> {
+    let temp = get_temp();
+
+    let result = add(db, source, &temp, replace).await;
+
+    if let Err(e) = fs::remove_dir_all(&temp).await {
+        warn!("failed to remove temp for checkout: {e:#}");
+    }
+
+    result
+}
+
+/// get transaction name for temporary folders
+fn get_temp() -> PathBuf {
     Path::new(SOURCE_FOLDER)
         .join("tmp")
         .join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string())
 }
 
-/// adds a source to the package store as a package, returns none if base is
-/// already present, otherwise the base is returned this is able to replace a
-/// source of a given package if it already exists
-pub async fn add_source(
-    db: &Database,
-    mut source: Box<dyn Source + Sync + Send>,
-    replace: bool,
-) -> anyhow::Result<Option<Package>> {
-    let folder = get_folder_tmp();
+/// get temporary folder to check out source
+fn get_temp_package(temp: &Path) -> PathBuf {
+    temp.join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string())
+}
+
+async fn checkout(
+    source: &mut Box<dyn Source + Sync + Send>,
+    temp: &Path,
+) -> anyhow::Result<(PathBuf, SrcinfoWrapper)> {
+    let folder = get_temp_package(temp);
     fs::create_dir_all(&folder).await?;
 
-    let result = 'create: {
-        // pull source
-        if let Err(e) = source.create(&folder).await {
-            break 'create Err(anyhow!("failed to check out source: {e:?}"));
-        }
+    source.create(&folder).await.context("failed to checkout source")?;
 
-        // get srcinfo
-        let srcinfo = match source.get_srcinfo(&folder).await {
-            Ok(s) => s,
-            Err(e) => break 'create Err(e),
+    let srcinfo = source.get_srcinfo(&folder).await?;
+
+    Ok((folder, srcinfo))
+}
+
+async fn add(
+    db: &Database,
+    mut source: Box<dyn Source + Sync + Send>,
+    temp: &Path,
+    replace: bool,
+) -> anyhow::Result<Option<Vec<Package>>> {
+    // checkout target
+    let (path, srcinfo) = checkout(&mut source, temp).await?;
+    let target = srcinfo.base.pkgbase.clone();
+    info!("adding new package {target}");
+
+    if Package::find(&srcinfo.base.pkgbase, db).await?.is_some() && !replace {
+        return Ok(None);
+    }
+
+    // resolve deps - this already resolves transitive deps
+    let mut resolver = AurResolver::with(db, &srcinfo).await?;
+    let actions = resolver.resolve_package_raw(&srcinfo.base.pkgbase).await?;
+
+    if !actions.missing.is_empty() {
+        return Err(anyhow!(
+            "failed to satisfy all dependencies for {}, missing are {}",
+            srcinfo.base.pkgbase,
+            actions.missing.iter().map(|a| a.dep.clone()).collect::<Vec<_>>().join(", ")
+        ));
+    }
+
+    // checkout other packages
+    let mut packages = vec![(path, srcinfo, source, replace)];
+
+    for dep in actions.iter_aur_pkgs().map(|p| &p.pkg) {
+        let mut source: Box<dyn Source + Sync + Send> = if aur::is_devel(dep) {
+            Box::new(DevelGitSource::empty(&aur::to_git(dep)))
+        } else {
+            Box::new(NormalSource::empty(&aur::to_git(dep)))
         };
 
+        let (path, srcinfo) = checkout(&mut source, temp)
+            .await
+            .context("failed to checkout source for dependency")?;
+
+        info!("adding new dependency {}", srcinfo.base.pkgbase);
+
+        packages.push((path, srcinfo, source, false));
+    }
+
+    // finish up packages
+    let mut result = vec![];
+
+    for (path, srcinfo, source, replace) in packages {
         // check other packages
         let (package, new) =
             if let Some(mut package) = Package::find(&srcinfo.base.pkgbase, db).await? {
                 // only proceed if replacing enabled
                 if !replace {
-                    break 'create Ok(None);
-                }
-
-                if let Err(e) = package.self_destruct().await {
-                    break 'create Err(anyhow!("failed to remove old source: {e:#}"));
+                    warn!("aur-resolve suggested package that was already added: {}", package.base);
+                    continue;
                 }
 
                 package.source = source;
-
                 (package, false)
             } else {
-                // create package
-                (
-                    Package {
-                        base: srcinfo.base.pkgbase.clone(),
-                        added: Utc::now(),
+                let dependency = srcinfo.base.pkgbase != target;
 
-                        clean: !source.is_devel(),
-                        enabled: true,
-                        schedule: None,
-                        prepare: None,
-                        flags: vec![],
-
-                        version: None,
-                        srcinfo: None,
-                        pkgbuild: None,
-
-                        source,
-                    },
-                    true,
-                )
+                (Package::new(srcinfo, source, dependency), true)
             };
 
         // move package
-        if let Err(e) = fs::rename(&folder, package.get_folder()).await {
-            break 'create Err(anyhow!("failed to copy source: {e:#}"));
+        if package.get_folder().exists() {
+            fs::remove_dir_all(package.get_folder())
+                .await
+                .context("failed to remove previous source")?;
         }
 
-        Ok(Some((package, new)))
-    };
+        fs::rename(path, package.get_folder()).await.context("failed to move source")?;
 
-    if let Ok(Some((p, new))) = &result {
-        // store on success
-        if *new {
-            p.save(db).await?
+        if new {
+            package.save(db).await?
         } else {
-            p.change_sources(db).await?
+            package.change_sources(db).await?
         }
-    } else {
-        // cleanup when failed
-        fs::remove_dir_all(folder).await?;
+
+        info!("successfully added package {}", &package.base);
+        result.push(package);
     }
 
-    result.map(|o| o.map(|(p, _)| p))
+    Ok(Some(result))
 }
 
 /// adds the cli to the current packages
@@ -120,12 +165,19 @@ pub async fn try_add_cli(db: &Database, scheduler: &mut BuildScheduler) -> anyho
     }
 
     info!("adding and building serene-cli");
-    if let Some(mut package) = add_source(db, Box::new(SereneCliSource::new()), false).await? {
+    if let Some(all) = add_source(db, Box::new(SereneCliSource::new()), false).await? {
+        // TODO: cleanify with support for deps
+        let Some(mut package) = all.into_iter().next() else {
+            return Err(anyhow!("failed to add serene-cli, not in added pkgs"));
+        };
+
         package.clean = true;
         package.change_settings(db).await?;
 
         scheduler.schedule(&package).await?;
-        scheduler.run(&package, true, BuildReason::Initial).await?;
+
+        let packages = vec![package];
+        scheduler.run(packages, BuildMeta::normal(BuildReason::Initial)).await?;
 
         info!("successfully added serene-cli");
     }
@@ -149,11 +201,14 @@ pub struct Package {
     /// srcinfo of the current build, reported from the package for devel
     /// packages
     pub srcinfo: Option<SrcinfoWrapper>,
-    /// DEPRECATED: version of the current build of the package
-    pub version: Option<String>,
+    /// state of the source that is built, can be used to check if the source
+    /// has new stuff
+    pub built_state: String,
 
     /// whether package is enabled, meaning it is built automatically
     pub enabled: bool,
+    /// whether the package was added as a dependency
+    pub dependency: bool,
     /// whether package should be cleaned after building
     pub clean: bool,
     /// potential custom cron schedule string
@@ -166,6 +221,31 @@ pub struct Package {
 }
 
 impl Package {
+    /// creates a new package with default values
+    fn new(
+        srcinfo: SrcinfoWrapper,
+        source: Box<dyn Source + Sync + Send>,
+        dependency: bool,
+    ) -> Self {
+        Self {
+            base: srcinfo.base.pkgbase.clone(),
+            added: Utc::now(),
+
+            dependency,
+            clean: !source.is_devel(),
+            enabled: true,
+            schedule: None,
+            prepare: None,
+            flags: vec![],
+
+            srcinfo: None,
+            pkgbuild: None,
+            built_state: "init".to_owned(),
+
+            source,
+        }
+    }
+
     /// gets the current folder for the source for the package
     fn get_folder(&self) -> PathBuf {
         Path::new(SOURCE_FOLDER).join(&self.base)
@@ -185,8 +265,9 @@ impl Package {
             .clone()
     }
 
-    pub async fn updatable(&self) -> anyhow::Result<bool> {
-        self.source.update_available().await
+    /// is the newest version of the package already built and in the repos
+    pub fn newest_built(&self) -> bool {
+        self.built_state == self.source.get_state()
     }
 
     pub async fn update(&mut self) -> anyhow::Result<()> {
@@ -198,6 +279,7 @@ impl Package {
     pub async fn upgrade(&mut self, reported: SrcinfoWrapper) -> anyhow::Result<()> {
         let mut srcinfo = self.source.get_srcinfo(&self.get_folder()).await?;
         let pkgbuild = self.source.get_pkgbuild(&self.get_folder()).await?;
+        let state = self.source.get_state();
 
         if self.source.is_devel() {
             // upgrade devel package srcinfo to reflect version and rel
@@ -212,11 +294,21 @@ impl Package {
             ));
         }
 
-        self.version = Some(srcinfo.base.pkgver.clone());
         self.srcinfo = Some(srcinfo);
         self.pkgbuild = Some(pkgbuild);
+        self.built_state = state;
 
         Ok(())
+    }
+
+    /// returns the next srcinfo that will be built
+    pub async fn get_next_srcinfo(&self) -> anyhow::Result<SrcinfoWrapper> {
+        self.source.get_srcinfo(&self.get_folder()).await
+    }
+
+    /// returns the currently built version of the package
+    pub fn get_version(&self) -> Option<String> {
+        self.srcinfo.as_ref().map(|s| s.base.pkgver.clone())
     }
 
     /// returns the expected built files
@@ -293,4 +385,24 @@ fn select_arch(available: &Vec<String>) -> String {
     } else {
         "any".to_string()
     }
+}
+
+/// performs heuristics to migrate packages to the new built_state
+/// will check whether the latest build was a success and if so will assume the
+/// source has not changed
+pub async fn migrate_build_state(db: &Database) -> anyhow::Result<()> {
+    for mut package in Package::find_migrated_built_state(db).await? {
+        debug!("trying to migrate package {} to built_state", package.base);
+        let Some(summary) = BuildSummary::find_latest_for_package(&package.base, db).await? else {
+            continue;
+        };
+
+        if let BuildState::Success = summary.state {
+            info!("migrating package {} to built_state, assuming up-to-date", package.base);
+
+            package.built_state = package.source.get_state();
+            package.change_sources(db).await?;
+        }
+    }
+    Ok(())
 }

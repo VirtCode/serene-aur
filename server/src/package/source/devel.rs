@@ -70,6 +70,16 @@ impl Source for DevelGitSource {
         Ok(())
     }
 
+    fn get_state(&self) -> String {
+        let mut string = self.last_commit.clone();
+
+        for commit in self.last_source_commits.values() {
+            string.push_str(commit);
+        }
+
+        string
+    }
+
     fn is_devel(&self) -> bool {
         true
     }

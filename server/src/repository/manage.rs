@@ -53,7 +53,7 @@ pub async fn add(name: &str, packages: &Vec<String>, dir: &Path) -> anyhow::Resu
         }
         Ok(())
     } else {
-        Err(anyhow!("failed to use repo-add: {}", String::from_utf8_lossy(&output.stderr)))
+        Err(anyhow!("failed to use repo-add: {}", String::from_utf8_lossy(&output.stderr).trim()))
     }
 }
 
@@ -71,7 +71,10 @@ pub async fn remove(name: &str, packages: &Vec<String>, dir: &Path) -> anyhow::R
         }
         Ok(())
     } else {
-        Err(anyhow!("failed to use repo-remove: {}", String::from_utf8_lossy(&output.stderr)))
+        Err(anyhow!(
+            "failed to use repo-remove: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
     }
 }
 

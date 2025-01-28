@@ -28,16 +28,17 @@ pub async fn find(name: &str) -> anyhow::Result<Option<AurInfo>> {
     if let Some(info) = pkg.first() {
         Ok(Some(AurInfo {
             base: info.package_base.clone(),
-            repository: to_aur_git(&info.package_base),
-            devel: info.package_base.ends_with("-git"),
+            repository: to_git(info),
+            devel: is_devel(info),
         }))
     } else {
         Ok(None)
     }
 }
 
-fn to_aur_git(base: &str) -> String {
-    format!("https://aur.archlinux.org/{base}.git")
+/// converts aur package to git url
+pub fn to_git(package: &raur::Package) -> String {
+    format!("https://aur.archlinux.org/{}.git", &package.package_base)
 }
 
 /// Returns the srcinfo string for a pkgbuild located in the given directory
@@ -83,6 +84,14 @@ pub async fn generate_srcinfo_string(pkgbuild: &str) -> anyhow::Result<String> {
     }
 }
 
+/// checks whether a package is a devel package based on its name
+pub fn is_devel(pkg: &raur::Package) -> bool {
+    pkg.package_base.ends_with("-git") // currently only -git devel packages are
+                                       // supported
+}
+
+/// Finds all latest commits for the sources of a srcinfo.
+/// This is used to determine whether a devel package has to be updated.
 pub async fn source_latest_version(
     srcinfo: &SrcinfoWrapper,
 ) -> anyhow::Result<HashMap<String, String>> {

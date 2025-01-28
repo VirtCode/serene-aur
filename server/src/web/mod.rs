@@ -1,4 +1,4 @@
-use crate::build::schedule::BuildScheduler;
+use crate::build::schedule::{BuildMeta, BuildScheduler};
 use crate::build::{BuildSummary, Builder};
 use crate::config::{CONFIG, INFO};
 use crate::database::Database;
@@ -16,6 +16,7 @@ use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{delete, get, post, Responder};
 use auth::{create_webhook_secret, AuthWebhook};
 use chrono::DateTime;
+use cron::Schedule;
 use hyper::StatusCode;
 use serde::Deserialize;
 use serene_data::build::BuildReason;
@@ -51,7 +52,7 @@ fn empty_response() -> impl Responder {
 pub async fn info() -> actix_web::Result<impl Responder> {
     Ok(Json(SereneInfo {
         version: INFO.version.clone(),
-        started: INFO.start_time.clone(),
+        started: INFO.start_time,
         name: CONFIG.repository_name.clone(),
         architecture: CONFIG.architecture.clone(),
         readable: CONFIG.allow_reads,
@@ -93,19 +94,32 @@ pub async fn add(
     };
 
     // create package
-    let package = package::add_source(&db, source, body.0.replace)
+    let packages = package::add_source(&db, source, body.replace)
         .await
         .internal()?
         .ok_or_else(|| ErrorBadRequest("package with the same base is already added"))?;
 
+    let mut response = vec![];
+    for package in &packages {
+        let count = BuildSummary::count_for_package(&package.base, &db).await.internal()?;
+        response.push(package.to_info(count));
+    }
+
     {
         // scheduling package
         let mut scheduler = scheduler.write().await;
-        scheduler.schedule(&package).await.internal()?;
-        scheduler.run(&package, true, BuildReason::Initial).await.internal()?;
+
+        for p in &packages {
+            scheduler.schedule(p).await.internal()?;
+        }
+
+        scheduler
+            .run(packages, BuildMeta::new(BuildReason::Initial, body.resolve, true, false))
+            .await
+            .internal()?;
     }
 
-    Ok(Json(package.to_info()))
+    Ok(Json(response))
 }
 
 #[get("/package/list")]
@@ -135,7 +149,9 @@ pub async fn status(
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    Ok(Json(package.to_info()))
+    let count = BuildSummary::count_for_package(&package.base, &db).await.internal()?;
+
+    Ok(Json(package.to_info(count)))
 }
 
 #[get("/package/{name}/pkgbuild")]
@@ -175,23 +191,55 @@ pub async fn get_all_builds(
     Ok(Json(builds.iter().map(|b| b.as_info()).collect::<Vec<_>>()))
 }
 
-#[post("/package/{name}/build")]
-pub async fn build(
+#[post("/build/all")]
+pub async fn build_all(
     _: AuthWrite,
-    package: Path<String>,
     db: Data<Database>,
     body: Json<PackageBuildRequest>,
     scheduler: BuildSchedulerData,
 ) -> actix_web::Result<impl Responder> {
-    let package = Package::find(&package, &db)
+    let packages = Package::find_all(&db)
         .await
         .internal()?
-        .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
+        .into_iter()
+        .filter(|p| p.enabled)
+        .collect::<Vec<_>>();
 
     scheduler
         .write()
         .await
-        .run(&package, body.into_inner().clean, BuildReason::Manual)
+        .run(packages, BuildMeta::new(BuildReason::Manual, body.resolve, body.clean, body.force))
+        .await
+        .internal()?;
+
+    Ok(empty_response())
+}
+
+#[post("/build")]
+pub async fn build(
+    _: AuthWrite,
+    db: Data<Database>,
+    body: Json<PackageBuildRequest>,
+    scheduler: BuildSchedulerData,
+) -> actix_web::Result<impl Responder> {
+    let mut packages = vec![];
+
+    for package in &body.packages {
+        packages.push(
+            Package::find(package, &db).await.internal()?.ok_or_else(|| {
+                ErrorNotFound(format!("package with base {} is not added", package))
+            })?,
+        )
+    }
+
+    if packages.is_empty() {
+        return Ok(empty_response());
+    }
+
+    scheduler
+        .write()
+        .await
+        .run(packages, BuildMeta::new(BuildReason::Manual, body.resolve, body.clean, body.force))
         .await
         .internal()?;
 
@@ -203,17 +251,16 @@ async fn get_build_for(
     time: &str,
     db: &Database,
 ) -> actix_web::Result<Option<BuildSummary>> {
-    match time {
-        "latest" => BuildSummary::find_latest_for_package(base, &db).await.internal(),
-        t => BuildSummary::find(
-            &DateTime::from_str(t).map_err(|_| {
-                ErrorBadRequest(format!("expected valid date or 'latest', not '{time}'"))
-            })?,
-            base,
-            &db,
-        )
-        .await
-        .internal(),
+    if time == "latest" {
+        BuildSummary::find_latest_for_package(base, db).await.internal()
+    } else if let Ok(n) = u32::from_str(time) {
+        BuildSummary::find_nth_for_package(n, base, db).await.internal()
+    } else if let Ok(date) = DateTime::from_str(time) {
+        BuildSummary::find(&date, base, db).await.internal()
+    } else {
+        Err(ErrorBadRequest(format!(
+            "expected valid date, valid index number, or 'latest', not '{time}'"
+        )))
     }
 }
 
@@ -299,28 +346,35 @@ pub async fn settings(
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
     // get repo and devel tag
-    let reschedule = match &body.0 {
+    let reschedule = match body.0 {
         PackageSettingsRequest::Clean(b) => {
-            package.clean = *b;
+            package.clean = b;
             false
         }
         PackageSettingsRequest::Enabled(b) => {
-            package.enabled = *b;
+            package.enabled = b;
             true
         }
+        PackageSettingsRequest::Dependency(b) => {
+            package.dependency = b;
+            false
+        }
         PackageSettingsRequest::Schedule(s) => {
-            package.schedule = if s.trim().is_empty() { None } else { Some(s.clone()) };
+            if s.as_ref().and_then(|c| Schedule::from_str(c).err()).is_some() {
+                return Err(ErrorBadRequest(
+                    "cannot parse cron expression (you probably forgot the seconds)",
+                ));
+            }
 
+            package.schedule = s;
             true
         }
         PackageSettingsRequest::Prepare(s) => {
-            package.prepare = if s.trim().is_empty() { None } else { Some(s.clone()) };
-
+            package.prepare = s;
             false
         }
         PackageSettingsRequest::Flags(f) => {
-            package.flags = f.clone();
-
+            package.flags = f;
             false
         }
     };
@@ -370,7 +424,12 @@ pub async fn build_webhook(
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    scheduler.write().await.run(&package, false, BuildReason::Webhook).await.internal()?;
+    scheduler
+        .write()
+        .await
+        .run(vec![package], BuildMeta::normal(BuildReason::Webhook))
+        .await
+        .internal()?;
 
     Ok(empty_response())
 }

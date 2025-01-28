@@ -3,9 +3,11 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
 /// reports the progress of a running build
-#[derive(Clone, Serialize, Deserialize, EnumString, Display)]
+#[derive(Clone, Serialize, Deserialize, EnumString, Display, Copy)]
 #[strum(serialize_all = "lowercase")]
 pub enum BuildProgress {
+    /// the build is resolving dependencies
+    Resolve,
     /// the build is updating the sources
     Update,
     /// the build is building the package in the container
@@ -19,6 +21,10 @@ pub enum BuildProgress {
 /// reports the state of the current build
 #[derive(Clone, Serialize, Deserialize)]
 pub enum BuildState {
+    /// the build is pending, i.e. waiting for dependencies
+    Pending,
+    /// the build was not started because of issues found before the build
+    Cancelled(String),
     /// the build is running
     Running(BuildProgress),
     /// the build succeeded
@@ -27,6 +33,18 @@ pub enum BuildState {
     Failure,
     /// a fatal error occurred in a given step of the build
     Fatal(String, BuildProgress),
+}
+
+impl BuildState {
+    pub fn done(&self) -> bool {
+        match self {
+            BuildState::Pending | BuildState::Running(_) => false,
+            BuildState::Cancelled(_)
+            | BuildState::Success
+            | BuildState::Failure
+            | BuildState::Fatal(_, _) => true,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -46,7 +64,7 @@ pub struct BuildInfo {
     pub ended: Option<DateTime<Utc>>,
 }
 
-#[derive(Serialize, Deserialize, EnumString, Display, Clone)]
+#[derive(Serialize, Deserialize, EnumString, Display, Clone, Copy)]
 #[strum(serialize_all = "lowercase")]
 pub enum BuildReason {
     /// build was triggered by a webhook

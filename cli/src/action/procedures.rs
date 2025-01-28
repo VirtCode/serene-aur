@@ -5,13 +5,12 @@ use crate::config::Config;
 use crate::log::Log;
 use crate::table::{ago, table, Column};
 use crate::web::data::{
-    describe_cron_timezone_hack, get_build_id, BuildProgressFormatter, BuildReasonFormatter,
-    BuildStateFormatter,
+    describe_cron_timezone_hack, BuildProgressFormatter, BuildReasonFormatter, BuildStateFormatter,
 };
 use crate::web::requests::{
-    add_package, build_package, get_build, get_build_logs, get_builds, get_info, get_package,
-    get_package_pkgbuild, get_packages, get_webhook_secret, remove_package, set_package_setting,
-    subscribe_events,
+    add_package, build_all_packages, build_package, get_build, get_build_logs, get_builds,
+    get_info, get_package, get_package_pkgbuild, get_packages, get_webhook_secret, remove_package,
+    set_package_setting, subscribe_events,
 };
 use chrono::{Local, Utc};
 use colored::{ColoredString, Colorize};
@@ -28,33 +27,44 @@ use std::io::Read;
 use std::str::FromStr;
 
 /// waits for a package to build and then installs it
-fn wait_and_install(c: &Config, base: &str, quiet: bool) {
-    let log = RefCell::new(Some(Log::start("subscribing to logs")));
+fn wait_and_install(c: &Config, base: &str, quiet: bool, just_listen: bool) {
+    let log = RefCell::new(Some(Log::start("subscribing to package build events")));
     let mut started = false;
 
     // waiting for build to finish
-    let mut log = match subscribe_events(c, base, |e, data| {
-        match e {
-            BroadcastEvent::BuildStart | BroadcastEvent::Log => {
-                if !started {
-                    if !quiet {
-                        if let Some(log) = log.replace(None) {
-                            log.succeed("subscribed to logs successfully")
-                        }
-                    } else if let Some(log) = log.borrow_mut().as_mut() {
-                        log.next("waiting for build to finish")
+    let mut log = match subscribe_events(c, base, |_package, event| {
+        match event {
+            BroadcastEvent::Log(msg) => {
+                if !started && !quiet {
+                    if let Some(log) = log.replace(None) {
+                        log.succeed("package build started successfully")
                     }
                 }
 
                 if !quiet {
-                    print!("{data}");
+                    print!("{msg}");
                 }
 
                 started = true;
             }
-            BroadcastEvent::BuildEnd => {
-                return true;
-            }
+            BroadcastEvent::Change(event) => match event {
+                BuildState::Pending => {
+                    if let Some(log) = log.borrow_mut().as_mut() {
+                        log.next("waiting for resolving and dependencies to build")
+                    }
+                }
+                BuildState::Running(_) => {
+                    if let Some(log) = log.borrow_mut().as_mut() {
+                        log.next("waiting for package to build")
+                    }
+                }
+                BuildState::Cancelled(_)
+                | BuildState::Success
+                | BuildState::Failure
+                | BuildState::Fatal(_, _) => {
+                    return true;
+                }
+            },
             BroadcastEvent::Ping => {}
         }
 
@@ -100,7 +110,7 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
     // build must be successful
     match build.state {
         BuildState::Running(progress) => {
-            log.fail(&format!("build somehow not finished, but at {progress}"));
+            log.fail(&format!("build somehow not finished, but at {progress}? bug this"));
             return;
         }
         BuildState::Failure => {
@@ -111,6 +121,14 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
             log.fail(&format!("fatal failure occurred at {progress}: {message}"));
             return;
         }
+        BuildState::Pending => {
+            log.fail("build didn't actually start, is still pending? bug this");
+            return;
+        }
+        BuildState::Cancelled(message) => {
+            log.fail(&format!("build was cancelled due to: {message}"));
+            return;
+        }
 
         // successful
         BuildState::Success => {
@@ -119,10 +137,12 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool) {
     }
 
     // install via pacman
-    if pacman::install(c, package.members) {
-        Log::success("successfully installed packages");
-    } else {
-        Log::failure("failed to install packages");
+    if !just_listen {
+        if pacman::install(c, package.members) {
+            Log::success("successfully installed packages");
+        } else {
+            Log::failure("failed to install packages");
+        }
     }
 }
 
@@ -131,12 +151,14 @@ pub fn add(
     c: &Config,
     what: &str,
     replace: bool,
+    noresolve: bool,
     file: bool,
     custom: bool,
     pkgbuild: bool,
     devel: bool,
     install: bool,
     quiet: bool,
+    listen: bool,
 ) {
     let mut log = Log::start("initializing package adding");
 
@@ -176,7 +198,7 @@ pub fn add(
     };
 
     // add package on server
-    let info = match add_package(c, PackageAddRequest { replace, source }) {
+    let info = match add_package(c, PackageAddRequest { replace, source, resolve: !noresolve }) {
         Ok(info) => info,
         Err(e) => {
             log.fail(&e.msg());
@@ -184,11 +206,14 @@ pub fn add(
         }
     };
 
-    log.succeed(&format!("successfully added package {}", info.base.bold()));
+    log.succeed(&format!(
+        "successfully added packages {}",
+        info.iter().map(|i| i.base.as_str()).collect::<Vec<_>>().join(", ")
+    ));
 
     // install if requested
     if install {
-        wait_and_install(c, &info.base, quiet);
+        wait_and_install(c, &info.first().expect("added no package?").base, quiet, listen);
     }
 }
 
@@ -202,11 +227,36 @@ pub fn remove(c: &Config, package: &str) {
     }
 }
 
-/// builds a package right now
-pub fn build(c: &Config, package: &str, clean: bool, install: bool, quiet: bool) {
-    let log = Log::start(&format!("requesting immediate build for package {}", package.italic()));
+pub fn build_all(c: &Config, force: bool, resolve: bool, clean: bool) {
+    let log = Log::start("requesting build for all packages");
 
-    if let Err(e) = build_package(c, package, PackageBuildRequest { clean }) {
+    if let Err(e) = build_all_packages(c, PackageBuildRequest::all(clean, resolve, force)) {
+        log.fail(&e.msg());
+    } else {
+        log.succeed("queued build for every package successfully")
+    }
+}
+
+/// builds packages right now
+pub fn build(
+    c: &Config,
+    packages: Vec<String>,
+    clean: bool,
+    resolve: bool,
+    install: bool,
+    quiet: bool,
+    force: bool,
+    listen: bool,
+) {
+    let log = Log::start(&format!(
+        "requesting immediate build for package{} {}",
+        if packages.len() > 1 { "s" } else { "" },
+        packages.join(", ").italic()
+    ));
+
+    if let Err(e) =
+        build_package(c, PackageBuildRequest::specific(packages.clone(), clean, resolve, force))
+    {
         log.fail(&e.msg());
         return;
     }
@@ -215,7 +265,11 @@ pub fn build(c: &Config, package: &str, clean: bool, install: bool, quiet: bool)
 
     // install if requested
     if install {
-        wait_and_install(c, package, quiet);
+        if packages.len() > 1 {
+            Log::warning("waiting for multiple packages to build is not yet supported");
+        } else {
+            wait_and_install(c, packages.first().expect("no first argument?"), quiet, listen);
+        }
     }
 }
 
@@ -243,7 +297,7 @@ pub fn list(c: &Config) {
                 Column::new("time ago").force(),
             ];
 
-            let rows = list
+            let rows: Vec<[ColoredString; 6]> = list
                 .iter()
                 .map(|peek| {
                     [
@@ -251,7 +305,7 @@ pub fn list(c: &Config) {
                         peek.version
                             .as_ref()
                             .map(|s| s.normal())
-                            .unwrap_or_else(|| "unknown".dimmed()),
+                            .unwrap_or_else(|| "never built".dimmed()),
                         if peek.devel { "X".dimmed() } else { "".dimmed() },
                         if peek.enabled { "X".yellow() } else { "".dimmed() },
                         peek.build
@@ -275,7 +329,11 @@ pub fn list(c: &Config) {
                 })
                 .collect();
 
-            table(columns, rows, "  ");
+            if rows.is_empty() {
+                println!("{}\n", "no packages added yet".dimmed())
+            } else {
+                table(columns, rows, "  ");
+            }
         }
         Err(e) => log.fail(&e.msg()),
     }
@@ -326,6 +384,9 @@ pub fn info(c: &Config, package: &str, all: bool) {
     if info.devel {
         tags.push("devel".dimmed())
     }
+    if info.dependency {
+        tags.push("dependency".purple())
+    }
 
     println!(
         "{:<9} {}",
@@ -334,10 +395,11 @@ pub fn info(c: &Config, package: &str, all: bool) {
     );
 
     println!(
-        "{:<9} {}",
+        "{:<9} {}{}",
         "schedule:",
         describe_cron_timezone_hack(&info.schedule)
-            .unwrap_or_else(|_| "could not parse cron".to_owned())
+            .unwrap_or_else(|_| "could not parse cron".to_owned()),
+        if info.schedule_changed { " *".red() } else { "".normal() }
     );
 
     println!(
@@ -349,6 +411,8 @@ pub fn info(c: &Config, package: &str, all: bool) {
             info.makepkg_flags.iter().map(|f| format!("--{f} ")).collect::<String>().normal()
         }
     );
+
+    println!("{:<9} {}", "builds:", info.builds);
 
     if let Some(prepare) = &info.prepare_commands {
         println!();
@@ -370,9 +434,10 @@ pub fn info(c: &Config, package: &str, all: bool) {
 
     let rows = builds
         .iter()
-        .map(|peek| {
+        .enumerate()
+        .map(|(i, peek)| {
             [
-                get_build_id(peek).dimmed(),
+                format!("{:0>4}", info.builds - i as u32 - 1).dimmed(),
                 peek.version.as_ref().map(|s| s.normal()).unwrap_or_else(|| "unknown".dimmed()),
                 peek.state.colored_substantive(),
                 peek.reason.colored(),
@@ -398,7 +463,7 @@ pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
         Ok(b) => {
             log.succeed("found build successfully");
 
-            println!("{} {}", "build".bold(), get_build_id(&b).bold());
+            println!("build for {}", package.bold());
             println!("{:<8} {}", "started:", b.started.with_timezone(&Local).format("%x %X"));
             println!(
                 "{:<8} {}",
@@ -431,6 +496,9 @@ pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
                     println!("{:<8} {}", "message:", "see logs for error messages".italic())
                 }
                 BuildState::Fatal(msg, _) => {
+                    println!("{:<8} {}", "message:", msg)
+                }
+                BuildState::Cancelled(msg) => {
                     println!("{:<8} {}", "message:", msg)
                 }
                 _ => {}
@@ -485,23 +553,24 @@ pub fn subscribe_build_logs(c: &Config, package: &str, explicit: bool, linger: b
     // we have to use a rc ref cell here because of the closure later down
     let log = RefCell::new(Some(Log::start("looking for existing builds")));
 
-    let mut first_build_finished = false;
-
     // skip if explicit subscription
     if !explicit {
         // we ignore failure here, as we just want to check
-        if let Ok(latest) = get_build_logs(c, package, "latest") {
+        if let (Ok(latest), Ok(info)) =
+            (get_build_logs(c, package, "latest"), get_build(c, package, "latest"))
+        {
             if let Some(s) = log.replace(None) {
                 s.succeed("found existing build successfully")
             }
 
             if linger {
                 println!(
-                    "{}\n\n{latest}\n{}",
-                    "### package build started".italic().dimmed(),
-                    "### package build finished".italic().dimmed()
+                    "{} {}\n{latest}{} {}",
+                    "### package build is".italic().dimmed(),
+                    BuildState::Pending.colored_passive(),
+                    "### package build is".italic().dimmed(),
+                    info.state.colored_passive(),
                 );
-                first_build_finished = true;
             } else {
                 print!("{latest}"); // already has newline at end
 
@@ -514,7 +583,7 @@ pub fn subscribe_build_logs(c: &Config, package: &str, explicit: bool, linger: b
         s.next("subscribing to live logs and waiting")
     }
 
-    if let Err(err) = subscribe_events(c, package, |event, data| {
+    if let Err(err) = subscribe_events(c, package, |_package, event| {
         if let Some(s) = log.replace(None) {
             s.succeed("subscription was successful")
         }
@@ -522,21 +591,10 @@ pub fn subscribe_build_logs(c: &Config, package: &str, explicit: bool, linger: b
         // ignore unknown events
         match event {
             BroadcastEvent::Ping => {}
-            BroadcastEvent::BuildStart => {
-                if linger && first_build_finished {
-                    println!("{}\n", "### package build started".italic().dimmed())
-                }
+            BroadcastEvent::Change(state) => {
+                println!("{} {}", "### package build is".italic().dimmed(), state.colored_passive())
             }
-            BroadcastEvent::BuildEnd => {
-                first_build_finished = true;
-
-                if linger {
-                    println!("\n{}", "### package build finished".italic().dimmed())
-                } else {
-                    return true; // exit
-                }
-            }
-            BroadcastEvent::Log => print!("{}", data),
+            BroadcastEvent::Log(data) => print!("{}", data),
         }
 
         false // stay attached
@@ -568,18 +626,40 @@ pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
             ));
             PackageSettingsRequest::Enabled(enabled)
         }
+        SettingsSubcommand::Dependency { set } => {
+            log.next(&format!(
+                "{} dependency flag for {package}",
+                if set { "setting" } else { "removing" }
+            ));
+            PackageSettingsRequest::Dependency(set)
+        }
         SettingsSubcommand::Schedule { cron } => {
-            let Ok(description) = describe_cron_timezone_hack(&cron) else {
+            let sched = if cron.trim().is_empty() {
+                log.next(&format!("reverting to default schedule for package {package}"));
+                None
+            } else if let Ok(description) = describe_cron_timezone_hack(&cron) {
+                log.next(&format!(
+                    "setting custom schedule '{}' for package {package}",
+                    description
+                ));
+                Some(cron)
+            } else {
                 log.fail("invalid cron string provided");
                 return;
             };
 
-            log.next(&format!("setting custom schedule '{}' for package {package}", description));
-            PackageSettingsRequest::Schedule(cron)
+            PackageSettingsRequest::Schedule(sched)
         }
         SettingsSubcommand::Prepare { command } => {
-            log.next(&format!("setting prepare command for package {package}"));
-            PackageSettingsRequest::Prepare(command)
+            let cmd = if command.trim().is_empty() {
+                log.next(&format!("removing prepare command for package {package}"));
+                None
+            } else {
+                log.next(&format!("setting prepare command for package {package}"));
+                Some(command)
+            };
+
+            PackageSettingsRequest::Prepare(cmd)
         }
         SettingsSubcommand::Flags { flags } => {
             let flags = flags
@@ -632,13 +712,18 @@ pub fn check_version_mismatch(c: &Config) {
         if let (Ok(server), Ok(client)) = (Version::parse(server), Version::parse(client)) {
             match server.cmp(&client) {
                 std::cmp::Ordering::Less => Log::warning(&format!(
-                    "server ({server}) is behind your cli ({client}), please update your server"
+                    "server ({server}) is behind your cli ({client}), update your server"
                 )),
                 std::cmp::Ordering::Greater => Log::warning(&format!(
-                    "cli ({client}) is behind your server ({server}), please update your cli"
+                    "cli ({client}) is behind your server ({server}), update your cli"
                 )),
 
                 std::cmp::Ordering::Equal => {} // everything is good
+            }
+
+            // upgrade from 0.3.x to 0.4.x (the CLI usually updates automatically)
+            if server.minor == 3 && client.minor == 4 {
+                Log::warning("please read #15 on GitHub before blindly updating your server");
             }
         } else {
             Log::warning("invalid cli or server version, please check for updates")
@@ -673,9 +758,12 @@ pub fn server_info(c: &Config) {
     let mut members = 0;
     let mut devel = 0;
     let mut enabled = 0;
-    let mut passing = 0;
+
+    let mut pending = 0;
     let mut working = 0;
+    let mut passing = 0;
     let mut failing = 0;
+    let mut cancelled = 0;
     let mut fatal = 0;
 
     for package in packages {
@@ -688,9 +776,11 @@ pub fn server_info(c: &Config) {
 
         if let Some(b) = package.build {
             match b.state {
+                BuildState::Pending => pending += 1,
                 BuildState::Running(_) => working += 1,
                 BuildState::Success => passing += 1,
                 BuildState::Failure => failing += 1,
+                BuildState::Cancelled(_) => cancelled += 1,
                 BuildState::Fatal(_, _) => fatal += 1,
             }
         }
@@ -731,11 +821,13 @@ pub fn server_info(c: &Config) {
 
     println!("  {:<8} {total} ({members} members available)", "amount:");
     println!(
-        "  {:<8} {}/{}/{}/{}",
+        "  {:<8} {}/{}/{}/{}/{}/{}",
         "status:",
         passing.to_string().green(),
         working.to_string().blue(),
         failing.to_string().red(),
+        cancelled.to_string().yellow(),
+        pending.to_string().dimmed(),
         fatal.to_string().bright_red()
     );
     println!("  {:<8} {} of {total}", "enabled:", enabled.to_string().yellow());

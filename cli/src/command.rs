@@ -2,7 +2,7 @@ use clap::{ArgAction, Parser, Subcommand};
 
 #[derive(Parser)]
 #[clap(version = option_env!("TAG").unwrap_or("unknown"), about)]
-#[command(disable_help_subcommand = true)]
+#[command(disable_help_subcommand = true, bin_name = "serene")]
 pub struct Args {
     #[clap(subcommand)]
     pub command: Action,
@@ -38,16 +38,24 @@ pub enum Action {
         #[clap(short, long)]
         replace: bool,
 
+        /// do not resolve dependencies for the package
+        #[clap(short, long)]
+        noresolve: bool,
+
         /// read the contents for <WHAT> from a file
         #[clap(short, long)]
         file: bool,
 
-        /// install package with `pacman` after build
-        #[clap(short, long, help_heading = "Installing")]
+        /// install package with `pacman` after successful build
+        #[clap(short, long, group = "logs", help_heading = "Installing")]
         install: bool,
 
-        /// do not print logs when installing
-        #[clap(short, long, requires = "install", help_heading = "Installing")]
+        /// just listen, don't install after the build is finished
+        #[clap(short, long, group = "logs", help_heading = "Installing")]
+        listen: bool,
+
+        /// do not print logs during the build
+        #[clap(short, long, requires = "logs", help_heading = "Installing")]
         quiet: bool,
     },
 
@@ -57,22 +65,43 @@ pub enum Action {
         name: String,
     },
 
-    /// schedules an immediate build for a package
+    /// schedule immediate builds for packages
     Build {
-        /// base name of the package
-        name: String,
+        /// names of the package bases to build
+        #[clap(required_unless_present = "all")]
+        names: Vec<String>,
 
         /// force clean before the next build
         #[clap(short, long)]
         clean: bool,
 
-        /// install package with `pacman` after build
-        #[clap(short, long, help_heading = "Installing")]
+        /// do not resolve dependency order to build in
+        #[clap(short, long)]
+        noresolve: bool,
+
+        /// do not build if the package is up-to-date
+        #[clap(short, long)]
+        gentle: bool,
+
+        /// install package with `pacman` after successful build
+        #[clap(short, long, group = "logs", help_heading = "Installing")]
         install: bool,
 
-        /// do not print logs when installing
-        #[clap(short, long, requires = "install", help_heading = "Installing")]
+        /// just listen, don't install after the build is finished
+        #[clap(short, long, group = "logs", help_heading = "Installing")]
+        listen: bool,
+
+        /// do not print logs during the build
+        #[clap(short, long, requires = "logs", help_heading = "Installing")]
         quiet: bool,
+
+        /// build all packages of the repository instead, implies `--gentle`
+        #[clap(short, long, conflicts_with_all = ["names", "logs", "gentle"], help_heading = "All")]
+        all: bool,
+
+        /// force the build of all packages, including up-to-date
+        #[clap(short, long, requires = "all", help_heading = "All")]
+        force: bool,
     },
 
     /// get and set info about a package
@@ -91,7 +120,7 @@ pub enum Action {
 
     /// prints the current secret
     Secret {
-        /// print the secret in a machine readable way
+        /// print the secret in a machine-readable way
         #[clap(short, long)]
         machine: bool,
     },
@@ -149,7 +178,7 @@ pub enum ManageSubcommand {
         /// name of the package
         name: String,
 
-        /// print the secret in a machine readable way
+        /// print the secret in a machine-readable way
         #[clap(short, long)]
         machine: bool,
     },
@@ -169,6 +198,13 @@ pub enum SettingsSubcommand {
         /// enable automatic building
         #[arg(action = ArgAction::Set)]
         enabled: bool,
+    },
+
+    /// set the dependency mark of the package
+    Dependency {
+        /// the package was added as a dependency
+        #[arg(action = ArgAction::Set)]
+        set: bool,
     },
 
     /// set custom schedule

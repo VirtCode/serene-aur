@@ -1,10 +1,12 @@
-FROM rust:alpine3.20 as builder
+FROM rustlang/rust:nightly-alpine3.20 as builder
 
 WORKDIR /app
 
 RUN apk add --no-cache musl-dev
 # install nettle for signing
 RUN apk add --no-cache nettle-dev clang clang-libclang pkgconfig
+# install pacman for libalpm
+RUN apk add --no-cache pacman-dev --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community
 # install git for dynamic version
 RUN apk add --no-cache git
 
@@ -29,7 +31,9 @@ WORKDIR /app
 COPY --from=builder /app/target/release/serene /usr/bin/serene
 
 # install required utilities and libraries
-RUN apk add git pacman binutils nettle
+# FIXME: update alpine for pacman 7.x.x
+RUN apk add --no-cache pacman --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community
+RUN apk add --no-cache git binutils nettle
 
 # create local user
 RUN adduser -D --uid 1000 user

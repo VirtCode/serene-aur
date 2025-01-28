@@ -2,7 +2,7 @@ pub mod pacman;
 mod procedures;
 
 use crate::action::procedures::{
-    add, build, build_info, build_logs, info, list, pkgbuild, remove, set_setting,
+    add, build, build_all, build_info, build_logs, info, list, pkgbuild, remove, set_setting,
     subscribe_build_logs, webhook_secret,
 };
 use crate::command::{Action, InfoCommand, ManageSubcommand};
@@ -27,14 +27,41 @@ pub fn run(config: &Config, action: Action) {
             }
         }
 
-        Action::Add { what, pkgbuild, custom, devel, replace, install, quiet, file } => {
-            add(config, &what, replace, file, custom, pkgbuild, devel, install, quiet);
+        Action::Add {
+            what,
+            pkgbuild,
+            custom,
+            noresolve,
+            devel,
+            replace,
+            install,
+            listen,
+            quiet,
+            file,
+        } => {
+            add(
+                config,
+                &what,
+                replace,
+                noresolve,
+                file,
+                custom,
+                pkgbuild,
+                devel,
+                install || listen,
+                quiet,
+                listen,
+            );
         }
         Action::Remove { name } => {
             remove(config, &name);
         }
-        Action::Build { name, clean, install, quiet } => {
-            build(config, &name, clean, install, quiet);
+        Action::Build { names, clean, noresolve, gentle, install, listen, quiet, all, force } => {
+            if all {
+                build_all(config, force, !noresolve, clean);
+            } else {
+                build(config, names, clean, !noresolve, install || listen, quiet, !gentle, listen);
+            }
         }
         Action::List => {
             list(config);
@@ -53,7 +80,7 @@ pub fn run(config: &Config, action: Action) {
                 if id.is_some() {
                     build_logs(config, &name, &id);
                 } else {
-                    subscribe_build_logs(config, &name, linger, subscribe);
+                    subscribe_build_logs(config, &name, subscribe, linger);
                 }
             }
             Some(InfoCommand::Set { property }) => set_setting(config, &name, property),

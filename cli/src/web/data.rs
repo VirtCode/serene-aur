@@ -3,7 +3,7 @@ use chrono::{Local, Offset};
 use colored::{ColoredString, Colorize};
 use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron_options;
 use cron_descriptor::cronparser::Options;
-use serene_data::build::{BuildInfo, BuildProgress, BuildReason, BuildState};
+use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use std::str::FromStr;
 
 pub trait BuildStateFormatter {
@@ -14,6 +14,8 @@ pub trait BuildStateFormatter {
 impl BuildStateFormatter for BuildState {
     fn colored_passive(&self) -> ColoredString {
         match self {
+            BuildState::Pending => "pending".dimmed(),
+            BuildState::Cancelled(_) => "aborted".bright_yellow(),
             BuildState::Running(_) => "working".blue(),
             BuildState::Success => "passing".green(),
             BuildState::Failure => "failing".red(),
@@ -23,6 +25,8 @@ impl BuildStateFormatter for BuildState {
 
     fn colored_substantive(&self) -> ColoredString {
         match self {
+            BuildState::Pending => "pending".dimmed(),
+            BuildState::Cancelled(_) => "aborted".bright_yellow(),
             BuildState::Running(_) => "working".blue(),
             BuildState::Success => "success".green(),
             BuildState::Failure => "failure".red(),
@@ -54,6 +58,7 @@ pub trait BuildProgressFormatter {
 impl BuildProgressFormatter for BuildProgress {
     fn printable_string(&self) -> String {
         match self {
+            BuildProgress::Resolve => "resolving dependencies",
             BuildProgress::Update => "updating sources",
             BuildProgress::Build => "building package",
             BuildProgress::Publish => "publishing repository",
@@ -61,11 +66,6 @@ impl BuildProgressFormatter for BuildProgress {
         }
         .to_string()
     }
-}
-
-pub fn get_build_id(summary: &BuildInfo) -> String {
-    let string = format!("{:x}", summary.started.timestamp());
-    string[(string.len() - 4)..string.len()].to_owned()
 }
 
 /// this converts a cron string from utc to local time

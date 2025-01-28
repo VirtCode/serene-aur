@@ -1,3 +1,5 @@
+#![feature(extract_if)]
+
 pub mod package;
 pub mod runner;
 
@@ -5,13 +7,15 @@ mod build;
 pub mod config;
 mod database;
 mod repository;
+mod resolve;
 mod web;
 
-use crate::build::schedule::{BuildScheduler, ImageScheduler};
-use crate::build::Builder;
+use crate::build::schedule::BuildScheduler;
+use crate::build::{cleanup_unfinished, Builder};
 use crate::config::CONFIG;
-use crate::package::Package;
+use crate::package::{migrate_build_state, Package};
 use crate::repository::PackageRepository;
+use crate::runner::update::ImageScheduler;
 use crate::runner::Runner;
 use crate::web::broadcast::Broadcast;
 use actix_web::web::Data;
@@ -54,30 +58,38 @@ async fn main() -> anyhow::Result<()> {
     )));
 
     // creating scheduler
-    let mut schedule =
-        BuildScheduler::new(builder.clone()).await.context("failed to start package scheduler")?;
+    let mut schedule = BuildScheduler::new(builder.clone(), db.clone(), broadcast.clone())
+        .await
+        .context("failed to start package scheduler")?;
 
     // creating image scheduler
-    let image_scheduler =
-        ImageScheduler::new(runner.clone()).await.context("failed to start image scheduler")?;
+    let image_scheduler = ImageScheduler::new(runner.clone());
 
-    // schedule packages
-    for package in Package::find_all(&db).await? {
+    // cleanup unfinished builds
+    if let Err(e) = cleanup_unfinished(&db).await {
+        error!("failed to cleanup unfinished builds: {e:#}")
+    }
+
+    // migrations
+    if let Err(e) = migrate_build_state(&db).await {
+        error!("failed apply heuristics to migrate to built_state: {e:#}")
+    }
+
+    // schedule packages (which are enabled)
+    for package in Package::find_all(&db).await?.iter().filter(|p| p.enabled) {
         schedule
-            .schedule(&package)
+            .schedule(package)
             .await
             .context(format!("failed to start schedule for package {}", &package.base))?;
     }
 
-    // pull image before cli build
-    if let Err(e) = runner.read().await.update_image().await {
-        error!("failed to update runner image on startup: {e:#}");
-    }
+    // yes, this will wait before starting the api, because after updates stuff
+    // can't be built without a new image
+    image_scheduler.run_sync().await;
 
-    // add cli if enabled
     if config::CONFIG.build_cli {
         if let Err(e) = package::try_add_cli(&db, &mut schedule).await {
-            error!("Failed to add cli package: {e:#}")
+            error!("failed to add cli package: {e:#}")
         }
     }
 
@@ -100,6 +112,7 @@ async fn main() -> anyhow::Result<()> {
             .service(web::list)
             .service(web::status)
             .service(web::remove)
+            .service(web::build_all)
             .service(web::build)
             .service(web::get_all_builds)
             .service(web::get_build)

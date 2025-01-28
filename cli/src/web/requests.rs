@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::web::{delete_empty, eventsource, get, post, post_simple, Result};
+use crate::web::{delete_empty, eventsource, get, post, post_empty, post_simple, Result};
 use reqwest_eventsource::Event;
 use serene_data::build::BuildInfo;
 use serene_data::package::{
@@ -7,15 +7,14 @@ use serene_data::package::{
     PackageSettingsRequest,
 };
 use serene_data::SereneInfo;
-use std::str::FromStr;
 
 pub fn get_info(c: &Config) -> Result<SereneInfo> {
     get::<SereneInfo>(c, "")
 }
 
 /// add a package
-pub fn add_package(c: &Config, request: PackageAddRequest) -> Result<PackagePeek> {
-    post::<PackageAddRequest, PackagePeek>(c, "package/add", request)
+pub fn add_package(c: &Config, request: PackageAddRequest) -> Result<Vec<PackageInfo>> {
+    post::<PackageAddRequest, Vec<PackageInfo>>(c, "package/add", request)
 }
 
 /// remove a package
@@ -24,8 +23,13 @@ pub fn remove_package(c: &Config, package: &str) -> Result<()> {
 }
 
 /// build a package immediately
-pub fn build_package(c: &Config, package: &str, request: PackageBuildRequest) -> Result<()> {
-    post_simple(c, &format!("package/{package}/build"), request)
+pub fn build_package(c: &Config, request: PackageBuildRequest) -> Result<()> {
+    post_simple(c, "build", request)
+}
+
+/// build all packages immediately
+pub fn build_all_packages(c: &Config, request: PackageBuildRequest) -> Result<()> {
+    post_simple(c, "build/all", request)
 }
 
 /// changes a setting of a package
@@ -72,13 +76,13 @@ pub fn get_packages(c: &Config) -> Result<Vec<PackagePeek>> {
 /// subscribe to build events and logs
 pub fn subscribe_events<F>(c: &Config, package: &str, mut callback: F) -> Result<()>
 where
-    F: FnMut(BroadcastEvent, String) -> bool,
+    F: FnMut(String, BroadcastEvent) -> bool,
 {
     eventsource(c, &format!("package/{package}/build/logs/subscribe"), |event| {
         if let Event::Message(event) = event {
             // ignore unknown events
-            if let Ok(brd) = BroadcastEvent::from_str(&event.event) {
-                return callback(brd, event.data);
+            if let Ok(brd) = serde_json::from_str(&event.data) {
+                return callback(event.event, brd);
             }
         }
 

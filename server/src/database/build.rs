@@ -7,6 +7,13 @@ use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use sqlx::{query, query_as};
 use std::str::FromStr;
 
+const STATE_PENDING: &str = "pending";
+const STATE_CANCELLED: &str = "cancelled";
+const STATE_RUNNING: &str = "running";
+const STATE_SUCCESS: &str = "success";
+const STATE_FAILURE: &str = "failure";
+const STATE_FATAL: &str = "fatal";
+
 /// See migrations:
 /// server/migrations/20240210164401_build.sql
 /// server/migrations/20240917122808_build_reason.sql
@@ -34,10 +41,14 @@ struct BuildRecord {
 impl DatabaseConversion<BuildRecord> for BuildSummary {
     fn create_record(&self) -> Result<BuildRecord> {
         let (state, progress, fatal) = match &self.state {
-            BuildState::Running(p) => ("running".to_owned(), Some(p.to_string()), None),
-            BuildState::Success => ("success".to_owned(), None, None),
-            BuildState::Failure => ("failure".to_owned(), None, None),
-            BuildState::Fatal(m, p) => ("fatal".to_owned(), Some(p.to_string()), Some(m.clone())),
+            BuildState::Pending => (STATE_PENDING.to_owned(), None, None),
+            BuildState::Cancelled(m) => (STATE_CANCELLED.to_owned(), None, Some(m.clone())),
+            BuildState::Running(p) => (STATE_RUNNING.to_owned(), Some(p.to_string()), None),
+            BuildState::Success => (STATE_SUCCESS.to_owned(), None, None),
+            BuildState::Failure => (STATE_FAILURE.to_owned(), None, None),
+            BuildState::Fatal(m, p) => {
+                (STATE_FATAL.to_owned(), Some(p.to_string()), Some(m.clone()))
+            }
         };
 
         Ok(BuildRecord {
@@ -62,12 +73,14 @@ impl DatabaseConversion<BuildRecord> for BuildSummary {
         Self: Sized,
     {
         let state = match (other.state.as_str(), other.progress, other.fatal) {
-            ("success", None, None) => BuildState::Success,
-            ("failure", None, None) => BuildState::Failure,
-            ("running", Some(p), None) => BuildState::Running(
+            (STATE_SUCCESS, None, None) => BuildState::Success,
+            (STATE_FAILURE, None, None) => BuildState::Failure,
+            (STATE_PENDING, None, None) => BuildState::Pending,
+            (STATE_CANCELLED, None, Some(m)) => BuildState::Cancelled(m),
+            (STATE_RUNNING, Some(p), None) => BuildState::Running(
                 BuildProgress::from_str(&p).map_err(|_| anyhow!("no correct progress"))?,
             ),
-            ("fatal", Some(p), Some(m)) => BuildState::Fatal(
+            (STATE_FATAL, Some(p), Some(m)) => BuildState::Fatal(
                 m,
                 BuildProgress::from_str(&p).map_err(|_| anyhow!("no correct progress"))?,
             ),
@@ -112,6 +125,35 @@ impl BuildSummary {
         record.map(BuildSummary::from_record).transpose()
     }
 
+    pub async fn find_nth_for_package(n: u32, base: &str, db: &Database) -> Result<Option<Self>> {
+        let record = query_as!(
+            BuildRecord,
+            r#"
+            SELECT * FROM build WHERE package = $1 ORDER BY started ASC LIMIT $2, 1
+        "#,
+            base,
+            n
+        )
+        .fetch_optional(db)
+        .await?;
+
+        record.map(BuildSummary::from_record).transpose()
+    }
+
+    pub async fn count_for_package(base: &str, db: &Database) -> Result<u32> {
+        let count = query!(
+            r#"
+            SELECT COUNT(1) as count FROM build WHERE package = $1
+        "#,
+            base,
+        )
+        .fetch_one(db)
+        .await?
+        .count;
+
+        Ok(count as u32)
+    }
+
     pub async fn find_all_for_package(base: &str, db: &Database) -> Result<Vec<Self>> {
         let records = query_as!(
             BuildRecord,
@@ -148,6 +190,21 @@ impl BuildSummary {
         "#,
             base,
             n
+        )
+        .fetch_all(db)
+        .await?;
+
+        record.into_iter().map(BuildSummary::from_record).collect()
+    }
+
+    pub async fn find_active(db: &Database) -> Result<Vec<Self>> {
+        let record = query_as!(
+            BuildRecord,
+            r#"
+            SELECT * FROM build WHERE state = $1 OR state = $2
+        "#,
+            STATE_PENDING,
+            STATE_RUNNING
         )
         .fetch_all(db)
         .await?;

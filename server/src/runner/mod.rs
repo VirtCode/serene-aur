@@ -1,8 +1,9 @@
 pub mod archive;
+pub mod update;
 
 use crate::config::{CONFIG, INFO};
 use crate::package::Package;
-use crate::web::broadcast::{Broadcast, Event};
+use crate::web::broadcast::Broadcast;
 use anyhow::Context;
 use async_tar::Archive;
 use bollard::container::{
@@ -14,7 +15,7 @@ use bollard::{Docker, API_DEFAULT_VERSION};
 use chrono::{DateTime, Utc};
 use futures_util::{AsyncRead, StreamExt, TryStreamExt};
 use hyper::body::HttpBody;
-use log::{info, warn};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::vec;
@@ -52,7 +53,7 @@ impl Runner {
                 Docker::connect_with_http(url, 120, API_DEFAULT_VERSION)
             } else {
                 if !url.starts_with("unix://") {
-                    warn!("missing docker url scheme, assuming path to unix socket");
+                    debug!("missing docker url scheme, assuming path to unix socket");
                 }
 
                 info!("using docker via unix socket at '{url}'");
@@ -96,8 +97,9 @@ impl Runner {
             while let Some(next) = stream.next().await {
                 if let Ok(log) = next {
                     let value = log.to_string();
+
                     logs.push(value.clone());
-                    broadcast.notify(&base, Event::Log(value)).await;
+                    broadcast.log(&base, value).await;
                 }
             }
             logs.join("")

@@ -7,6 +7,7 @@ use async_tar::Builder;
 use async_trait::async_trait;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
+use serene_data::secret;
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
@@ -30,13 +31,13 @@ impl SingleSource {
 #[async_trait]
 #[typetag::serde]
 impl Source for SingleSource {
-    async fn create(&mut self, _folder: &Path) -> anyhow::Result<()> {
+    async fn create(&mut self, folder: &Path) -> anyhow::Result<()> {
         info!("generating .SRCINFO for static package");
         self.srcinfo = generate_srcinfo_string(&self.pkgbuild)
             .await
             .context("failed to generate .SRCINFO for package")?;
 
-        self.update(_folder).await
+        self.update(folder).await
     }
 
     async fn update_available(&self) -> anyhow::Result<bool> {
@@ -54,10 +55,10 @@ impl Source for SingleSource {
         Ok(false)
     }
 
-    async fn update(&mut self, _folder: &Path) -> anyhow::Result<()> {
+    async fn update(&mut self, folder: &Path) -> anyhow::Result<()> {
         if self.devel {
             self.last_source_commits =
-                aur::source_latest_version(&self.get_srcinfo(_folder).await?).await?
+                aur::source_latest_version(&self.get_srcinfo(folder).await?).await?
         }
 
         Ok(())
@@ -77,6 +78,19 @@ impl Source for SingleSource {
         archive: &mut Builder<Vec<u8>>,
     ) -> anyhow::Result<()> {
         archive::write_file(self.pkgbuild.clone(), PKGBUILD, true, archive).await
+    }
+
+    fn get_state(&self) -> String {
+        // yes, this is technically for secrets
+        let mut string = secret::hash(&self.pkgbuild);
+
+        if self.devel {
+            for commit in self.last_source_commits.values() {
+                string.push_str(commit);
+            }
+        }
+
+        string
     }
 
     fn is_devel(&self) -> bool {

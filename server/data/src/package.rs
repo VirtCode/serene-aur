@@ -1,11 +1,15 @@
-use crate::build::BuildInfo;
+use crate::build::{BuildInfo, BuildState};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
 #[derive(Serialize, Deserialize)]
 pub struct PackageAddRequest {
+    /// replace package of the same name
     pub replace: bool,
+    /// resolve dependencies while adding
+    pub resolve: bool,
+    /// source of the package
     pub source: PackageAddSource,
 }
 
@@ -22,14 +26,35 @@ pub enum PackageAddSource {
 pub enum PackageSettingsRequest {
     Clean(bool),
     Enabled(bool),
-    Schedule(String),
-    Prepare(String),
+    Dependency(bool),
+    Schedule(Option<String>),
+    Prepare(Option<String>),
     Flags(Vec<MakepkgFlag>),
 }
 
+/// parameters for requesting package builds
 #[derive(Serialize, Deserialize)]
 pub struct PackageBuildRequest {
+    /// packages to build
+    pub packages: Vec<String>,
+    /// perform a clean build
     pub clean: bool,
+    /// resolve dependencies between packages when building
+    pub resolve: bool,
+    /// force rebuild
+    pub force: bool,
+}
+
+impl PackageBuildRequest {
+    /// create a build request for an all build
+    pub fn all(clean: bool, resolve: bool, force: bool) -> Self {
+        Self { packages: vec![], clean, resolve, force }
+    }
+
+    /// create a build request for a specific build
+    pub fn specific(packages: Vec<String>, clean: bool, resolve: bool, force: bool) -> Self {
+        Self { packages, clean, resolve, force }
+    }
 }
 
 /// All supported makepkg flags which make sense to supply. Name the enum
@@ -96,6 +121,8 @@ pub struct PackageInfo {
     pub base: String,
     /// members of the package
     pub members: Vec<String>,
+    /// total count of builds
+    pub builds: u32,
 
     /// version of the package
     pub version: Option<String>,
@@ -106,8 +133,12 @@ pub struct PackageInfo {
     pub enabled: bool,
     /// does clean-build
     pub clean: bool,
+    /// is added as a dependency
+    pub dependency: bool,
     /// schedule of the package
     pub schedule: String,
+    /// schedule of the package was changed
+    pub schedule_changed: bool,
     /// prepare commands ran before build
     pub prepare_commands: Option<String>,
     /// makepkg flags
@@ -118,16 +149,13 @@ pub struct PackageInfo {
 }
 
 /// All events which can be emitted by the broadcast for a package
-#[derive(Serialize, Deserialize, EnumString, Display, Clone)]
-#[strum(serialize_all = "lowercase")]
+#[derive(Serialize, Deserialize, Display, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum BroadcastEvent {
-    /// A build job for the package was started
-    BuildStart,
-    /// A build job for the package finished
-    BuildEnd,
+    /// Change in the package build state
+    Change(BuildState),
     /// Log message for the package build
-    Log,
+    Log(String),
     /// Ping to the event subscriber
     Ping,
 }

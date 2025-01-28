@@ -58,6 +58,14 @@ pub struct Config {
     pub own_repository_url: Option<String>,
     /// secret used to sign webhook tokens
     pub webhook_secret: Option<String>,
+    /// mirror used to synchronize package dbs
+    pub sync_mirror: String,
+    /// build the packages in the sequence they depend on each other
+    pub resolve_build_sequence: bool,
+    /// still build depending packages even if dependency failed
+    pub resolve_ignore_failed: bool,
+    /// maximal amount of concurrent builds allowed PER SESSION
+    pub concurrent_builds: usize,
 }
 
 impl Default for Config {
@@ -84,64 +92,90 @@ impl Default for Config {
             own_repository_url: None,
 
             webhook_secret: None,
+
+            resolve_build_sequence: true,
+            resolve_ignore_failed: false,
+            concurrent_builds: 5,
+
+            sync_mirror: "https://mirror.init7.net/archlinux/{repo}/os/{arch}".to_string(),
         }
     }
 }
 
 impl Config {
+    fn env_string_option(name: &str, default: Option<String>) -> Option<String> {
+        env::var(name).ok().or(default)
+    }
+
+    fn env_string(name: &str, default: String) -> String {
+        env::var(name).unwrap_or(default)
+    }
+
+    fn env_u16(name: &str, default: u16) -> u16 {
+        env::var(name)
+            .ok()
+            .and_then(|s| {
+                u16::from_str(&s)
+                    .map_err(|_| warn!("failed to parse {name} as u16, using default {default}"))
+                    .ok()
+            })
+            .unwrap_or(default)
+    }
+
+    fn env_usize(name: &str, default: usize) -> usize {
+        env::var(name)
+            .ok()
+            .and_then(|s| {
+                usize::from_str(&s)
+                    .map_err(|_| warn!("failed to parse {name} as usize, using default {default}"))
+                    .ok()
+            })
+            .unwrap_or(default)
+    }
+
+    fn env_bool(name: &str, default: bool) -> bool {
+        env::var(name)
+            .ok()
+            .and_then(|s| {
+                bool::from_str(&s)
+                    .map_err(|_| warn!("failed to parse {name} as bool, using default {default}"))
+                    .ok()
+            })
+            .unwrap_or(default)
+    }
+
+    #[rustfmt::skip]
     fn env() -> Self {
         let default = Self::default();
 
         Self {
-            allow_reads: env::var("ALLOW_READS")
-                .ok()
-                .and_then(|s| {
-                    bool::from_str(&s)
-                        .map_err(|_| warn!("failed to parse ALLOW_READS, using default"))
-                        .ok()
-                })
-                .unwrap_or(default.allow_reads),
+            allow_reads: Self::env_bool("ALLOW_READS", default.allow_reads),
 
-            architecture: env::var("ARCH").unwrap_or(default.architecture),
-            repository_name: env::var("NAME").unwrap_or(default.repository_name),
-            sign_key_password: env::var("SIGN_KEY_PASSWORD").ok().or(default.sign_key_password),
-            own_repository_url: env::var("OWN_REPOSITORY_URL").ok().or(default.own_repository_url),
+            architecture: Self::env_string("ARCH", default.architecture),
+            repository_name: Self::env_string("NAME", default.repository_name),
+            sign_key_password: Self::env_string_option("SIGN_KEY_PASSWORD", default.sign_key_password),
 
-            schedule_image: env::var("SCHEUDLE_IMAGE").unwrap_or(default.schedule_image),
-            schedule_devel: env::var("SCHEDULE_DEVEL")
-                .or(env::var("SCHEUDLE"))
-                .unwrap_or(default.schedule_devel.clone()),
-            schedule_default: env::var("SCHEUDLE").unwrap_or(default.schedule_default),
+            schedule_image: Self::env_string("SCHEDULE_IMAGE", default.schedule_image),
+            schedule_devel: Self::env_string( "SCHEDULE_DEVEL", Self::env_string("SCHEDULE", default.schedule_devel)),
+            schedule_default: Self::env_string("SCHEDULE", default.schedule_default),
 
-            container_prefix: env::var("RUNNER_PREFIX").unwrap_or(default.container_prefix),
-            runner_image: env::var("RUNNER_IMAGE").unwrap_or(default.runner_image),
-            prune_images: env::var("PRUNE_IMAGES")
-                .ok()
-                .and_then(|s| {
-                    bool::from_str(&s)
-                        .map_err(|_| warn!("failed to parse PRUNE_IMAGES, using default"))
-                        .ok()
-                })
-                .unwrap_or(default.prune_images),
+            container_prefix: Self::env_string("RUNNER_PREFIX", default.container_prefix),
+            runner_image: Self::env_string("RUNNER_IMAGE", default.runner_image),
+            prune_images: Self::env_bool("PRUNE_IMAGES", default.prune_images),
 
-            docker_url: env::var("DOCKER_URL").ok().or(default.docker_url),
+            docker_url: Self::env_string_option("DOCKER_URL", default.docker_url),
 
-            port: env::var("PORT")
-                .ok()
-                .and_then(|s| {
-                    u16::from_str(&s).map_err(|_| warn!("failed to parse PORT, using default")).ok()
-                })
-                .unwrap_or(default.port),
-            build_cli: env::var("BUILD_CLI")
-                .ok()
-                .and_then(|s| {
-                    bool::from_str(&s)
-                        .map_err(|_| warn!("failed to parse BUILD_CLI, using default"))
-                        .ok()
-                })
-                .unwrap_or(default.build_cli),
+            port: Self::env_u16("PORT", default.port),
+            build_cli: Self::env_bool("BUILD_CLI", default.build_cli),
+            own_repository_url: Self::env_string_option("OWN_REPOSITORY_URL", default.own_repository_url),
 
-            webhook_secret: env::var("WEBHOOK_SECRET").ok().or(default.webhook_secret),
+            resolve_build_sequence: Self::env_bool("RESOLVE_BUILD_SEQUENCE", default.resolve_build_sequence),
+            resolve_ignore_failed: Self::env_bool("RESOLVE_IGNORE_FAILED", default.resolve_ignore_failed),
+            concurrent_builds: Self::env_usize("CONCURRENT_BUILDS", default.concurrent_builds),
+
+            webhook_secret: Self::env_string_option("WEBHOOK_SECRET", default.webhook_secret),
+
+            sync_mirror: Self::env_string("SYNC_MIRROR", default.sync_mirror),
         }
     }
 }

@@ -35,11 +35,14 @@ serene remove my-package
 
 **Build package now:** To build a package now, run this subcommand with the package base:
 ```shell
-# Builds `my-package` now.
-serene build my-package
+# Builds `my-package` and `my-other-package` simultaneously now.
+serene build my-package my-other-package
 
 # Builds `my-package` in a clean container and install it now.
 serene build --clean --install my-package
+
+# Build all added packages now, if not up-to-date.
+serene build --all
 ```
 
 **See package information:** To see all information for a package, you can use the info command and its various subcommands:
@@ -73,6 +76,9 @@ serene info my-package set prepare "echo 'i am run before the makepkg'"
 
 # Set additional flags which are passed to makepkg when building. See `makepkg --help` for more information. Note that only some options are supported.
 serene info my-package set flags "nocheck" "holdver"
+
+# Change whether the package is purely added as a dependency
+serene info my-package set dependency false
 ```
 
 **Manage the server**: To manage some server properties, you can use the manage subcommand:

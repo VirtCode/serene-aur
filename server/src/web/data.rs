@@ -9,25 +9,28 @@ impl Package {
             base: self.base.clone(),
             enabled: self.enabled,
             devel: self.source.is_devel(),
-            version: self.version.clone(),
+            version: self.get_version(),
             added: self.added,
             members: self.get_packages(),
             build: build.map(|b| b.as_info()),
         }
     }
 
-    pub fn to_info(&self) -> PackageInfo {
+    pub fn to_info(&self, build_count: u32) -> PackageInfo {
         PackageInfo {
             base: self.base.clone(),
             members: self.get_packages(),
-            version: self.version.clone(),
+            version: self.get_version(),
             devel: self.source.is_devel(),
+            dependency: self.dependency,
             enabled: self.enabled,
             clean: self.clean,
             schedule: self.get_schedule(),
+            schedule_changed: self.schedule.is_some(),
             added: self.added,
             prepare_commands: self.prepare.clone(),
             makepkg_flags: self.flags.clone(),
+            builds: build_count,
         }
     }
 }
@@ -39,7 +42,7 @@ impl BuildSummary {
             state: self.state.clone(),
             started: self.started,
             ended: self.ended,
-            reason: self.reason.clone(),
+            reason: self.reason,
         }
     }
 }
