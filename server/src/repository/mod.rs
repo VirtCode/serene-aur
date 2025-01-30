@@ -23,7 +23,6 @@ const GPG_AGENT_SOCKET: &str = "S.gpg-agent";
 /// see https://github.com/VirtCode/serene-aur/pull/18
 pub async fn remove_orphan_signature() {
     let Ok(dir) = std::fs::read_dir(REPO_DIR) else {
-        warn!("REPOSITORY DIRECTORY DOES NOT EXIST??");
         // repository directory does not yet exist -> no orphan signatures can exist
         return;
     };
