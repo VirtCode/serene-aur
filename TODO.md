@@ -10,7 +10,7 @@
 - [X] Clear versioning
 - [X] Shell completions with dynamic packages
 - [ ] show webhooks feature in infos
-- [ ] fix cli PKGBUILD so version doesn't have a v- prefix
+- [X] fix cli PKGBUILD so version doesn't have a v- prefix
 - [ ] Wait for build on multiple packages
 - [ ] Add troubleshooting section to docs (e.g. for when build lock is set but failed beyond fatally)
 - [X] clap binary name is off in help cmd
@@ -46,6 +46,7 @@
 - [ ] add `serene manage key` to retrieve the server key
 - [X] Add build reason to build struct (https://github.com/VirtCode/serene-aur/issues/10)
 - [ ] Purge logs after a certain age
+- [ ] Create `manage purge` command which removes all deps that are no longer needed
 
 #### Must haves
 
@@ -68,28 +69,9 @@
 
 - [X] Handle in-aur dependencies
 - [X] Allow attachment at build process to view logs real-time
-- [ ] Web frontend to view package status
+- [ ] Web frontend to view package status - **out of scope, can easily be achieved as an external thing**
 - [ ] Support other vcs than git for devel packages
 
-#### Dependency Support
-
-- [X] Add dependencies to repo if adding new package
-    - resolve these deps from srcinfo, cause we also have non-aur packages
-- [X] Build in waves, based on topological sorting of MAKE-AND-NORMAL-deps graph
-- [ ] Add reason for adding to package, create `manage purge` command which removes all deps that are no longer needed
-- [ ] A provider list, a list of packages which should be chosen if possible (also install deps explicitly and not via
-  makepkg --syncdeps)
-
-##### Fixes
-- [X] Cleanup Runtime to Zero
-- [X] Why are disabled packages being built?
-- [X] `--resolve` arg description is misleading
-- [X] add aborted and pending on `manage info`
-- [ ] self-referencing dependencies?
-- [ ] channel closed issue ?!?!?
-- [ ] automatically imply --resolve when multiple packages (i.e. change to no resolve)
-
 ## Roadmap
-
-- [ ] v0.4.0 - Dependency Resolving
+- [X] v0.4.0 - Dependency Resolving
 - [ ] v0.4.1 - Cleaner sources, less aur git usage
