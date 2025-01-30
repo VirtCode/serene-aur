@@ -8,7 +8,7 @@ fn db_file(name: &str) -> String {
     format!("{name}.db.tar.gz")
 }
 
-fn sig_path(path: &Path) -> PathBuf {
+pub(crate) fn sig_path(path: &Path) -> PathBuf {
     path.with_file_name(format!(
         "{}.sig",
         path.file_name().unwrap_or_default().to_str().unwrap_or_default()

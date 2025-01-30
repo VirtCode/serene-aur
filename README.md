@@ -39,7 +39,7 @@ Many more commands are found on the documentation for the CLI:
 **[<kbd>&ensp;<br>&ensp;CLI Documentation&ensp;<br>&ensp;</kbd>](./cli/README.md)**
 
 ## State
-This project is still in its early stages, but already usable on a daily basis. There are also a couple of improvements and optimizations that still need to be implemented. 
+This project is still in its early stages, but already usable on a daily basis. There are also a couple of improvements and optimizations that still need to be implemented.
 Big, recently implemented features include:
 - [X] Entirely custom PKGBUILDs without a git repository
 - [X] Package signing
@@ -51,8 +51,8 @@ Refer to the [TODO File](TODO.md) for more features, tasks and enhancements and 
 Installing serene involves two things, deploying the server, and installing a local CLI to conveniently interact with the server.
 
 ### Deploying
-Here is a quick overview of hosting a serene server, based on the main branch. The server is just a single docker container, making it straightforward: 
-1. First, **create an empty file** called `authorized_secrets` in your directory. 
+Here is a quick overview of hosting a serene server, based on the main branch. The server is just a single docker container, making it straightforward:
+1. First, **create an empty file** called `authorized_secrets` in your directory.
 2. Set up a reverse proxy for docker (e.g. traefik) to use SSL/TLS.
 3. Add the following service to your docker compose in the same directory:
 ```yaml
@@ -94,7 +94,7 @@ If you want to use the repository without instructions from the cli, also quite 
 SigLevel = Optional TrustAll
 Server = https://your-host/x86_64
 ```
-*Signatures are not validated, as this is not yet supported. This shouldn't be an issue as we're using https and don't have any mirrors.*
+*The SigLevel should only be set to `Optional TrustAll` when [package signing](./server/README.md#package-signing) is disabled for the repository*
 
 ## Architecture
 Here's a *very* quick word about the architecture of *serene*:
@@ -103,7 +103,7 @@ Here's a *very* quick word about the architecture of *serene*:
 - **Local CLI:** Interacts with said API to add and manipulate added packages. Requires authentication via secret.
 
 ## Disclaimer
-When hosting a repository with this project, this repository is **your** responsibility! 
+When hosting a repository with this project, this repository is **your** responsibility!
 
 This means that it is your job to check `PKGBUILDs` before adding a package to the repository, as building the packages on an isolated environment does **in no way protect you from malware** if you install the package on your system. So make sure you trust the **software and AUR package maintainers** before adding it into the repository. This is especially important as the server will **automatically build new versions** without any actions from your side.
 

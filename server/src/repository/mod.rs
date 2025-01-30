@@ -102,8 +102,19 @@ impl PackageRepository {
 
             // delete package files
             for entry in entries {
-                if let Err(e) = fs::remove_file(Path::new(REPO_DIR).join(&entry.file)).await {
+                let package_path = Path::new(REPO_DIR).join(&entry.file);
+                if let Err(e) = fs::remove_file(&package_path).await {
                     warn!("failed to delete file from repository ({e}): {}", entry.file);
+                }
+
+                let signature_path = manage::sig_path(&package_path);
+                if signature_path.exists() {
+                    if let Err(e) = fs::remove_file(&signature_path).await {
+                        warn!(
+                            "failed to delete signature file from repository ({e}): {}.sig",
+                            entry.file
+                        );
+                    }
                 }
             }
         }
