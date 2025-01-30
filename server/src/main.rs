@@ -75,6 +75,8 @@ async fn main() -> anyhow::Result<()> {
         error!("failed apply heuristics to migrate to built_state: {e:#}")
     }
 
+    repository::remove_orphan_signature().await;
+
     // schedule packages (which are enabled)
     for package in Package::find_all(&db).await?.iter().filter(|p| p.enabled) {
         schedule
