@@ -1,12 +1,12 @@
 use crate::config::CONFIG;
-use crate::package::Package;
+use crate::package::{Package, PACKAGE_EXTENSION};
 use crate::runner::archive;
 use actix_files::Files;
 use anyhow::{anyhow, Context};
 use async_tar::Entries;
 use futures_util::AsyncRead;
 use hyper::body::HttpBody;
-use log::warn;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -19,6 +19,41 @@ const REPO_DIR: &str = "repository";
 const REPO_SERENE: &str = "bases.json";
 const KEY_FILE: &str = "sign_key.asc";
 const GPG_AGENT_SOCKET: &str = "S.gpg-agent";
+
+/// see https://github.com/VirtCode/serene-aur/pull/18
+pub async fn remove_orphan_signature() {
+    let Ok(dir) = std::fs::read_dir(REPO_DIR) else {
+        // repository directory does not yet exist -> no orphan signatures can exist
+        return;
+    };
+
+    let mut deleted = 0;
+
+    dir.into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path().is_file()
+                && e.path().to_string_lossy().ends_with(format!("{PACKAGE_EXTENSION}.sig").as_str())
+        })
+        .for_each(|entry| {
+            if let Some(path) = entry.path().file_stem() {
+                if !Path::new(REPO_DIR).join(path).exists() {
+                    if let Err(e) = std::fs::remove_file(entry.path()) {
+                        warn!(
+                            "failed to delete orphan signature file from repository ({e}): {}",
+                            entry.path().to_string_lossy()
+                        );
+                    } else {
+                        deleted += 1;
+                    }
+                }
+            }
+        });
+
+    if deleted > 0 {
+        info!("pruned {deleted} orphan signature file(s) from repository");
+    }
+}
 
 /// returns the webservice which exposes the repository
 pub fn webservice() -> Files {
@@ -102,8 +137,19 @@ impl PackageRepository {
 
             // delete package files
             for entry in entries {
-                if let Err(e) = fs::remove_file(Path::new(REPO_DIR).join(&entry.file)).await {
+                let package_path = Path::new(REPO_DIR).join(&entry.file);
+                if let Err(e) = fs::remove_file(&package_path).await {
                     warn!("failed to delete file from repository ({e}): {}", entry.file);
+                }
+
+                let signature_path = manage::sig_path(&package_path);
+                if signature_path.exists() {
+                    if let Err(e) = fs::remove_file(&signature_path).await {
+                        warn!(
+                            "failed to delete signature file from repository ({e}): {}.sig",
+                            entry.file
+                        );
+                    }
                 }
             }
         }

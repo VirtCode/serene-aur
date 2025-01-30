@@ -89,7 +89,7 @@ impl Config {
         println!();
         println!("3. To now use the repository with your pacman, add the following to your pacman configuration:");
         println!("[serene]                        # or something else if you've changed that");
-        println!("SigLevel = Optional TrustAll    # signatures are not yet supported");
+        println!("SigLevel = Optional TrustAll    # needed when package signing is disabled");
         println!("Server = {}/{}", &config.url, env::consts::ARCH);
 
         println!();

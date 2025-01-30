@@ -25,7 +25,7 @@ pub mod source;
 
 const SOURCE_FOLDER: &str = "sources";
 
-const PACKAGE_EXTENSION: &str = ".pkg.tar.zst"; // see /etc/makepkg.conf
+pub(crate) const PACKAGE_EXTENSION: &str = ".pkg.tar.zst"; // see /etc/makepkg.conf
 
 pub async fn add_source(
     db: &Database,
