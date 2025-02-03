@@ -76,6 +76,9 @@ impl PackageRepository {
     pub async fn new() -> anyhow::Result<Self> {
         let mut s = Self { name: CONFIG.repository_name.to_owned(), bases: HashMap::new() };
 
+        // create directory here as many member functions require it to be present
+        fs::create_dir_all(REPO_DIR).await.context("failed to create folder for repository")?;
+
         s.load().await?;
 
         Ok(s)
@@ -115,8 +118,6 @@ impl PackageRepository {
         package: &Package,
         mut output: Entries<impl AsyncRead + Unpin + Sized>,
     ) -> anyhow::Result<()> {
-        fs::create_dir_all(REPO_DIR).await.context("failed to create folder for repository")?;
-
         let files = package
             .expected_files()
             .await

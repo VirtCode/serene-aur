@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::web::{delete_empty, eventsource, get, post, post_empty, post_simple, Result};
+use crate::web::{delete_empty, eventsource, get, post, post_simple, Result};
 use reqwest_eventsource::Event;
 use serene_data::build::BuildInfo;
 use serene_data::package::{

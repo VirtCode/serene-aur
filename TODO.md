@@ -47,6 +47,7 @@
 - [X] Add build reason to build struct (https://github.com/VirtCode/serene-aur/issues/10)
 - [ ] Purge logs after a certain age
 - [ ] Create `manage purge` command which removes all deps that are no longer needed
+- [ ] Add a `srcinfo-gen` setting to packages which will tell serene to generate a srcinfo before each build to fix bad packages, see #21
 
 #### Must haves
 

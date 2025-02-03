@@ -326,11 +326,15 @@ impl Package {
             .as_ref()
             .map(|s| format!("{}:", s))
             .unwrap_or_else(|| "".to_string());
-        let arch = select_arch(&srcinfo.pkg.arch);
 
         Ok(srcinfo
-            .names()
-            .map(|s| format!("{s}-{epoch}{version}-{rel}-{arch}{PACKAGE_EXTENSION}"))
+            .pkgs
+            .iter()
+            .map(|pkg| {
+                let arch = select_arch(&pkg.arch);
+
+                format!("{}-{epoch}{version}-{rel}-{arch}{PACKAGE_EXTENSION}", pkg.pkgname)
+            })
             .collect())
     }
 
