@@ -2,6 +2,7 @@ use crate::package::aur::generate_srcinfo_string;
 use crate::package::source::{Source, SrcinfoWrapper, PKGBUILD};
 use crate::package::{aur, git};
 use crate::runner::archive;
+use crate::runner::archive::InputArchive;
 use anyhow::Context;
 use async_tar::Builder;
 use async_trait::async_trait;
@@ -75,9 +76,9 @@ impl Source for SingleSource {
     async fn load_build_files(
         &self,
         _folder: &Path,
-        archive: &mut Builder<Vec<u8>>,
+        archive: &mut InputArchive,
     ) -> anyhow::Result<()> {
-        archive::write_file(self.pkgbuild.clone(), PKGBUILD, true, archive).await
+        archive.write_file(&self.pkgbuild, Path::new(PKGBUILD), true).await
     }
 
     fn get_state(&self) -> String {

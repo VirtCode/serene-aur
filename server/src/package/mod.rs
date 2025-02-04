@@ -9,6 +9,7 @@ use crate::package::source::{Source, SrcinfoWrapper};
 use crate::resolve::AurResolver;
 use crate::runner;
 use crate::runner::archive;
+use crate::runner::archive::InputArchive;
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use hyper::Body;
@@ -339,33 +340,33 @@ impl Package {
     }
 
     pub async fn build_files(&self) -> anyhow::Result<Body> {
-        let mut archive = archive::begin_write();
+        let mut archive = InputArchive::new();
 
         // upload sources
         self.source.load_build_files(&self.get_folder(), &mut archive).await?;
 
         // upload repository file
-        archive::write_file(runner::repository_file(), "custom-repo", false, &mut archive).await?;
+        archive.write_file(&runner::repository_file(), Path::new("custom-repo"), false).await?;
 
         // upload prepare script
-        archive::write_file(
-            self.prepare.clone().unwrap_or_default(),
-            "serene-prepare.sh",
-            false,
-            &mut archive,
-        )
-        .await?;
+        archive
+            .write_file(
+                &self.prepare.clone().unwrap_or_default(),
+                Path::new("serene-prepare.sh"),
+                false,
+            )
+            .await?;
 
         // upload makepkg flags
-        archive::write_file(
-            self.flags.iter().map(|f| format!("--{f} ")).collect::<String>(),
-            "makepkg-flags",
-            false,
-            &mut archive,
-        )
-        .await?;
+        archive
+            .write_file(
+                &self.flags.iter().map(|f| format!("--{f} ")).collect::<String>(),
+                Path::new("makepkg-flags"),
+                false,
+            )
+            .await?;
 
-        archive::end_write(archive).await
+        archive.finish().await
     }
 
     /// removes the source files of the source

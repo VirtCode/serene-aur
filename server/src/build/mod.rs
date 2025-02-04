@@ -1,7 +1,6 @@
 use crate::database::Database;
 use crate::package::Package;
 use crate::repository::PackageRepository;
-use crate::runner::archive::{begin_read, read_srcinfo};
 use crate::runner::{ContainerId, RunStatus, Runner};
 use crate::web::broadcast::Broadcast;
 use chrono::{DateTime, Utc};
@@ -238,13 +237,12 @@ impl Builder {
 
     /// publishes a given package to the repository
     async fn publish(&self, package: &mut Package, container: &ContainerId) -> anyhow::Result<()> {
-        let stream = self.runner.read().await.download_packages(&container).await?;
-        let mut archive = begin_read(stream)?;
+        let mut output = self.runner.read().await.download_packages(&container).await?;
 
-        let version = read_srcinfo(&mut archive).await?;
-        package.upgrade(version).await?;
+        let srcinfo = output.srcinfo().await?;
+        package.upgrade(srcinfo).await?;
 
-        self.repository.write().await.publish(package, archive).await
+        self.repository.write().await.publish(package, output).await
     }
 
     /// cleans a given container

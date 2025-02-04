@@ -3,8 +3,8 @@ pub mod devel;
 pub mod normal;
 pub mod single;
 
+use crate::runner::archive::InputArchive;
 use anyhow::Context;
-use async_tar::Builder;
 use async_trait::async_trait;
 use dyn_clone::{clone_trait_object, DynClone};
 use srcinfo::Srcinfo;
@@ -47,9 +47,12 @@ pub trait Source: Sync + Send + DynClone {
     async fn load_build_files(
         &self,
         folder: &Path,
-        archive: &mut Builder<Vec<u8>>,
+        archive: &mut InputArchive,
     ) -> anyhow::Result<()> {
-        archive.append_dir_all("", folder).await.context("failed to load sources into tar")
+        archive
+            .append_directory(folder, Path::new(""))
+            .await
+            .context("failed to load sources into tar")
     }
 
     /// returns internal state of the source, used for checking whether the

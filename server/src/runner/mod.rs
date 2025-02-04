@@ -3,6 +3,7 @@ pub mod update;
 
 use crate::config::{CONFIG, INFO};
 use crate::package::Package;
+use crate::runner::archive::OutputArchive;
 use crate::web::broadcast::Broadcast;
 use anyhow::Context;
 use async_tar::Archive;
@@ -131,7 +132,7 @@ impl Runner {
     pub async fn download_packages(
         &self,
         container: &ContainerId,
-    ) -> anyhow::Result<Archive<impl AsyncRead + Unpin>> {
+    ) -> anyhow::Result<OutputArchive<impl AsyncRead + Unpin>> {
         let options = DownloadFromContainerOptions { path: RUNNER_IMAGE_BUILD_OUT };
 
         let stream = self
@@ -140,9 +141,7 @@ impl Runner {
             .map(|b| b.map_err(std::io::Error::other));
         let reader = StreamReader::new(stream);
 
-        let archive = Archive::new(reader.compat());
-
-        Ok(archive)
+        OutputArchive::new(reader.compat())
     }
 
     /// uploads files to the build directory in a container

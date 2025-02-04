@@ -1,6 +1,7 @@
 use crate::config::CONFIG;
 use crate::package::{Package, PACKAGE_EXTENSION};
 use crate::runner::archive;
+use crate::runner::archive::OutputArchive;
 use actix_files::Files;
 use anyhow::{anyhow, Context};
 use async_tar::Entries;
@@ -116,7 +117,7 @@ impl PackageRepository {
     pub async fn publish(
         &mut self,
         package: &Package,
-        mut output: Entries<impl AsyncRead + Unpin + Sized>,
+        mut output: OutputArchive<impl AsyncRead + Unpin>,
     ) -> anyhow::Result<()> {
         let files = package
             .expected_files()
@@ -156,7 +157,8 @@ impl PackageRepository {
         }
 
         // extract package files
-        archive::extract_files(&mut output, &files, Path::new(REPO_DIR))
+        output
+            .extract(&files, Path::new(REPO_DIR))
             .await
             .context("failed to extract all packages from build container")?;
 

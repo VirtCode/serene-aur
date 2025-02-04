@@ -2,6 +2,7 @@ use crate::config;
 use crate::package::aur::generate_srcinfo_string;
 use crate::package::git;
 use crate::package::source::{Source, SrcinfoWrapper, PKGBUILD};
+use crate::runner::archive::InputArchive;
 use anyhow::Context;
 use async_tar::Builder;
 use async_trait::async_trait;
@@ -67,14 +68,9 @@ impl Source for SereneCliSource {
     async fn load_build_files(
         &self,
         folder: &Path,
-        archive: &mut Builder<Vec<u8>>,
+        archive: &mut InputArchive,
     ) -> anyhow::Result<()> {
-        // using async_std here because of our archive crate
-        let mut file = async_std::fs::File::open(folder.join("cli").join(PKGBUILD))
-            .await
-            .context("failed to open pkgbuild for upload")?;
-
-        archive.append_file("PKGBUILD", &mut file).await.context("failed to load sources into tar")
+        archive.append_file(&folder.join("cli").join(PKGBUILD), Path::new(PKGBUILD)).await
     }
 
     fn get_state(&self) -> String {

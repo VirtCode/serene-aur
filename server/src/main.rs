@@ -1,4 +1,5 @@
 #![feature(extract_if)]
+#![feature(type_alias_impl_trait)]
 
 pub mod package;
 pub mod runner;
