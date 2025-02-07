@@ -44,6 +44,8 @@ pub struct Config {
     pub schedule_image: String,
     /// container name prefix xxxxx-my-package
     pub container_prefix: String,
+    /// name of the container used for srcinfo generation
+    pub container_srcinfo_name: String,
     /// runner docker image
     pub runner_image: String,
     /// prune old images on server
@@ -82,6 +84,7 @@ impl Default for Config {
             schedule_image: "0 0 0 * * *".to_string(),
 
             container_prefix: "serene-aur-runner-".to_string(),
+            container_srcinfo_name: "serene-aur-srcinfo-generation".to_string(),
             runner_image: RUNNER_CONTAINER_NAME.to_string(),
             prune_images: true,
 
@@ -160,6 +163,7 @@ impl Config {
             schedule_default: Self::env_string("SCHEDULE", default.schedule_default),
 
             container_prefix: Self::env_string("RUNNER_PREFIX", default.container_prefix),
+            container_srcinfo_name: Self::env_string("RUNNER_SRCINFO_NAME", default.container_srcinfo_name),
             runner_image: Self::env_string("RUNNER_IMAGE", default.runner_image),
             prune_images: Self::env_bool("PRUNE_IMAGES", default.prune_images),
 

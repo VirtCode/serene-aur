@@ -339,7 +339,7 @@ impl Package {
             .collect())
     }
 
-    pub async fn build_files(&self) -> anyhow::Result<Body> {
+    pub async fn build_files(&self) -> anyhow::Result<InputArchive> {
         let mut archive = InputArchive::new();
 
         // upload sources
@@ -366,7 +366,7 @@ impl Package {
             )
             .await?;
 
-        archive.finish().await
+        Ok(archive)
     }
 
     /// removes the source files of the source

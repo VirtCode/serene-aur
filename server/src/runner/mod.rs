@@ -3,7 +3,7 @@ pub mod update;
 
 use crate::config::{CONFIG, INFO};
 use crate::package::Package;
-use crate::runner::archive::OutputArchive;
+use crate::runner::archive::{InputArchive, OutputArchive};
 use crate::web::broadcast::Broadcast;
 use anyhow::Context;
 use async_tar::Archive;
@@ -18,6 +18,7 @@ use futures_util::{AsyncRead, StreamExt, TryStreamExt};
 use hyper::body::HttpBody;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
+use std::future::Future;
 use std::sync::Arc;
 use std::vec;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -25,6 +26,9 @@ use tokio_util::io::StreamReader;
 
 const RUNNER_IMAGE_BUILD_IN: &str = "/app/build";
 const RUNNER_IMAGE_BUILD_OUT: &str = "/app/target";
+
+const RUNNER_IMAGE_BULID_ENTRY: &str = "./build.sh";
+const RUNNER_IMAGE_SRCINFO_ENTRY: &str = "./srcinfo.sh";
 
 /// this is the status of a build run through the runner
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,11 +72,11 @@ impl Runner {
         Ok(Self { docker: docker.context("failed to initialize docker")?, broadcast })
     }
 
-    /// builds the package inside a container
-    pub async fn build(
+    /// runs the container
+    pub async fn run(
         &self,
         container: &ContainerId,
-        package: &Package,
+        broadcast_target: Option<String>,
     ) -> anyhow::Result<RunStatus> {
         let start = Utc::now();
 
@@ -89,10 +93,11 @@ impl Runner {
         };
 
         let mut stream = self.docker.logs::<String>(container, Some(log_options));
-        let base = package.base.clone();
+
         let broadcast = self.broadcast.clone();
         let log_collector = tokio::spawn(async move {
             let mut logs = vec![];
+
             // collect logs from stream until the container exits (and the log stream
             // closes)
             while let Some(next) = stream.next().await {
@@ -100,7 +105,9 @@ impl Runner {
                     let value = log.to_string();
 
                     logs.push(value.clone());
-                    broadcast.log(&base, value).await;
+                    if let Some(base) = &broadcast_target {
+                        broadcast.log(base, value).await;
+                    }
                 }
             }
             logs.join("")
@@ -126,10 +133,8 @@ impl Runner {
         })
     }
 
-    /// downloads the built directory from the container, in a stream.
-    /// the files are in a tar archive, all in the `serene-build` folder. See
-    /// RUNNER_IMAGE_BUILD_OUT
-    pub async fn download_packages(
+    /// downloads the built directory from the container
+    pub async fn download_outputs(
         &self,
         container: &ContainerId,
     ) -> anyhow::Result<OutputArchive<impl AsyncRead + Unpin>> {
@@ -145,54 +150,84 @@ impl Runner {
     }
 
     /// uploads files to the build directory in a container
-    /// the files should be in a tar archive, in a body, where everything is in
-    /// the root
-    pub async fn upload_sources(
+    pub async fn upload_inputs(
         &self,
         container: &ContainerId,
-        package: &Package,
+        files: InputArchive,
     ) -> anyhow::Result<()> {
-        let sources =
-            package.build_files().await.context("could not get sources tar from package")?;
-
         let options = UploadToContainerOptions {
             path: RUNNER_IMAGE_BUILD_IN,
             no_overwrite_dir_non_dir: "false",
         };
 
         self.docker
-            .upload_to_container(container, Some(options), sources)
+            .upload_to_container(container, Some(options), files.finish().await?)
             .await
             .context("could not upload sources to docker container")?;
 
         Ok(())
     }
 
-    /// prepares a container for the build process
-    /// either creates a new one or takes an old one which was already created
-    pub async fn prepare(&self, package: &Package) -> anyhow::Result<ContainerId> {
-        // try recycle old container
-        if let Some(id) = self.find_container(package).await? {
-            let infos = self.docker.inspect_container(&id, None).await?;
+    /// prepares a container for srcinfo generation
+    pub async fn prepare_srcinfo_container(&self, clean: bool) -> anyhow::Result<ContainerId> {
+        self.prepare_container(&CONFIG.container_srcinfo_name, RUNNER_IMAGE_BULID_ENTRY, clean)
+            .await
+    }
 
-            if let Some(image) = infos.config.and_then(|c| c.image) {
-                if image == target_docker_image() {
-                    return Ok(id);
-                } else {
-                    info!("updating container for {}, image was {}", &package.base, &image);
+    /// prepares a container for a package build
+    pub async fn prepare_build_container(
+        &self,
+        package: &Package,
+        clean: bool,
+    ) -> anyhow::Result<ContainerId> {
+        self.prepare_container(&container_name(package), RUNNER_IMAGE_BULID_ENTRY, clean).await
+    }
+
+    /// prepares a container based on the runner image
+    /// either creates a new one or takes an old one which was already created
+    pub async fn prepare_container(
+        &self,
+        name: &str,
+        entrypoint: &str,
+        clean: bool,
+    ) -> anyhow::Result<ContainerId> {
+        // try recycle old container
+        if let Some(id) = self.find_container(name).await? {
+            'check: {
+                if clean {
+                    info!("recreating container {name} because of clean build");
+                    break 'check;
                 }
-            } else {
-                warn!("updating container for {}, because image is unknown", &package.base)
+
+                let Some(config) = self.docker.inspect_container(&id, None).await?.config else {
+                    warn!("updating container {name}, because container is inaccessible");
+                    break 'check;
+                };
+
+                if config.image != Some(target_docker_image()) {
+                    info!("updating container {name}, image was {:?}", config.image);
+                    break 'check;
+                }
+
+                if config.entrypoint != Some(vec![entrypoint.to_owned()]) {
+                    info!(
+                        "updating container {name}, entrypoint was {:?} and not {entrypoint}",
+                        config.entrypoint
+                    );
+                    break 'check;
+                }
+
+                return Ok(id);
             }
 
             self.clean(&id).await.context("could not remove container whilst update")?;
         }
 
-        Ok(self.create_container(package).await?)
+        Ok(self.create_container(name, entrypoint).await?)
     }
 
-    /// finds an already created container for a package
-    pub async fn find_container(&self, package: &Package) -> anyhow::Result<Option<ContainerId>> {
+    /// finds an already created container under a name
+    pub async fn find_container(&self, name: &str) -> anyhow::Result<Option<ContainerId>> {
         let summary = self
             .docker
             .list_containers::<String>(Some(ListContainersOptions {
@@ -202,10 +237,7 @@ impl Runner {
             .await?;
 
         if let Some(s) = summary.iter().find(|s| {
-            s.names
-                .as_ref()
-                .map(|v| v.contains(&format!("/{}", container_name(package))))
-                .unwrap_or_default()
+            s.names.as_ref().map(|v| v.contains(&format!("/{}", name))).unwrap_or_default()
         }) {
             Ok(Some(s.id.clone().context("container does not have id")?))
         } else {
@@ -213,12 +245,15 @@ impl Runner {
         }
     }
 
-    /// creates a new build container for a package
-    async fn create_container(&self, package: &Package) -> anyhow::Result<String> {
-        let config = Config { image: Some(target_docker_image()), ..Default::default() };
+    /// creates a new container given name and entry point
+    async fn create_container(&self, name: &str, entrypoint: &str) -> anyhow::Result<ContainerId> {
+        let config = Config {
+            image: Some(target_docker_image()),
+            entrypoint: Some(vec![entrypoint.to_owned()]),
+            ..Default::default()
+        };
 
-        let options =
-            CreateContainerOptions { name: container_name(&package), ..Default::default() };
+        let options = CreateContainerOptions { name, ..Default::default() };
 
         Ok(self.docker.create_container(Some(options), config).await?.id)
     }
@@ -260,6 +295,15 @@ impl Runner {
             if let Some(amount) = result.space_reclaimed {
                 info!("reclaimed about {:.3} GB by pruning old images", amount as f32 / 10e9)
             }
+        }
+
+        Ok(())
+    }
+
+    /// cleans the container for a given package
+    pub async fn clean_build_container(&self, package: &Package) -> anyhow::Result<()> {
+        if let Some(container) = self.find_container(&container_name(package)).await? {
+            self.clean(&container).await?
         }
 
         Ok(())

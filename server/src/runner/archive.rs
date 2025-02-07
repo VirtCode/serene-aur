@@ -77,7 +77,7 @@ impl<R: AsyncRead + Unpin> OutputArchive<R> {
 }
 
 /// this is an archive you can write to, note however that its content are
-/// directly stored in memory
+/// directly stored in memory (when calling finish)
 pub struct InputArchive {
     builder: Builder<Vec<u8>>,
 }
@@ -125,7 +125,7 @@ impl InputArchive {
             .context("failed to append file to input archive")
     }
 
-    pub async fn finish(mut self) -> anyhow::Result<Body> {
+    pub async fn finish(self) -> anyhow::Result<Body> {
         // this internally finishes the archive
         Ok(Body::from(self.builder.into_inner().await?))
     }
