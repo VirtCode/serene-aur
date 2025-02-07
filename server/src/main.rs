@@ -25,7 +25,7 @@ use anyhow::Context;
 use config::INFO;
 use log::{error, info};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -41,22 +41,16 @@ async fn main() -> anyhow::Result<()> {
     let broadcast = Broadcast::new();
 
     // initializing runner
-    let runner = Arc::new(RwLock::new(
-        Runner::new(broadcast.clone()).context("failed to connect to docker")?,
-    ));
+    let runner = Arc::new(Runner::new(broadcast.clone()).context("failed to connect to docker")?);
 
     // initializing repository
-    let repository = Arc::new(RwLock::new(
+    let repository = Arc::new(Mutex::new(
         PackageRepository::new().await.context("failed to create package repository")?,
     ));
 
     // initializing builder
-    let builder = Arc::new(RwLock::new(Builder::new(
-        db.clone(),
-        runner.clone(),
-        repository.clone(),
-        broadcast.clone(),
-    )));
+    let builder =
+        Arc::new(Builder::new(db.clone(), runner.clone(), repository.clone(), broadcast.clone()));
 
     // creating scheduler
     let mut schedule = BuildScheduler::new(builder.clone(), db.clone(), broadcast.clone())

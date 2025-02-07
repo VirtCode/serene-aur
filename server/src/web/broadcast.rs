@@ -11,6 +11,8 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
 
+pub type BroadcastInstance = Arc<Broadcast>;
+
 pub struct Broadcast {
     subscriptions: Mutex<HashMap<String, Vec<tokio::sync::mpsc::Sender<sse::Event>>>>,
     // cache contains build logs for packages which are currently building

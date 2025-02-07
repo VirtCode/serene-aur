@@ -11,7 +11,9 @@ use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use tokio::fs;
+use tokio::sync::Mutex;
 
 pub mod crypto;
 mod manage;
@@ -60,6 +62,8 @@ pub async fn remove_orphan_signature() {
 pub fn webservice() -> Files {
     Files::new(&CONFIG.architecture, REPO_DIR).show_files_listing()
 }
+
+pub type PackageRepositoryInstance = Arc<Mutex<PackageRepository>>;
 
 pub struct PackageRepository {
     name: String,

@@ -1,8 +1,8 @@
 use crate::database::Database;
 use crate::package::Package;
-use crate::repository::PackageRepository;
-use crate::runner::{ContainerId, RunStatus, Runner};
-use crate::web::broadcast::Broadcast;
+use crate::repository::{PackageRepository, PackageRepositoryInstance};
+use crate::runner::{ContainerId, RunStatus, Runner, RunnerInstance};
+use crate::web::broadcast::{Broadcast, BroadcastInstance};
 use chrono::{DateTime, Utc};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
@@ -78,20 +78,22 @@ pub async fn cleanup_unfinished(db: &Database) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub type BuilderInstance = Arc<Builder>;
+
 pub struct Builder {
     db: Database,
-    runner: Arc<RwLock<Runner>>,
-    broadcast: Arc<Broadcast>,
-    repository: Arc<RwLock<PackageRepository>>,
+    runner: RunnerInstance,
+    broadcast: BroadcastInstance,
+    repository: PackageRepositoryInstance,
 }
 
 impl Builder {
     /// creates a new builder
     pub fn new(
         db: Database,
-        runner: Arc<RwLock<Runner>>,
-        repository: Arc<RwLock<PackageRepository>>,
-        broadcast: Arc<Broadcast>,
+        runner: RunnerInstance,
+        repository: PackageRepositoryInstance,
+        broadcast: BroadcastInstance,
     ) -> Self {
         Self { db, runner, repository, broadcast }
     }
@@ -100,9 +102,9 @@ impl Builder {
     /// repo, and the database
     pub async fn run_remove(&self, package: &Package) -> anyhow::Result<()> {
         // remove container if exists
-        self.runner.read().await.clean_build_container(package).await?;
+        self.runner.clean_build_container(package).await?;
 
-        if let Err(e) = self.repository.write().await.remove(package).await {
+        if let Err(e) = self.repository.lock().await.remove(package).await {
             warn!("removing package: {e:#}");
         }
 
@@ -215,27 +217,27 @@ impl Builder {
         package: &mut Package,
         clean: bool,
     ) -> anyhow::Result<(RunStatus, ContainerId)> {
-        let container = self.runner.read().await.prepare_build_container(package, clean).await?;
+        let container = self.runner.prepare_build_container(package, clean).await?;
 
-        self.runner.read().await.upload_inputs(&container, package.build_files().await?).await?;
+        self.runner.upload_inputs(&container, package.build_files().await?).await?;
 
-        let status = self.runner.read().await.run(&container, Some(package.base.clone())).await?;
+        let status = self.runner.run(&container, Some(package.base.clone())).await?;
 
         Ok((status, container))
     }
 
     /// publishes a given package to the repository
     async fn publish(&self, package: &mut Package, container: &ContainerId) -> anyhow::Result<()> {
-        let mut output = self.runner.read().await.download_outputs(&container).await?;
+        let mut output = self.runner.download_outputs(&container).await?;
 
         let srcinfo = output.srcinfo().await?;
         package.upgrade(srcinfo).await?;
 
-        self.repository.write().await.publish(package, output).await
+        self.repository.lock().await.publish(package, output).await
     }
 
     /// cleans a given container
     async fn clean(&self, container: &ContainerId) -> anyhow::Result<()> {
-        self.runner.read().await.clean(container).await
+        self.runner.clean(container).await
     }
 }

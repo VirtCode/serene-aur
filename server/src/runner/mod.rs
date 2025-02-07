@@ -4,7 +4,7 @@ pub mod update;
 use crate::config::{CONFIG, INFO};
 use crate::package::Package;
 use crate::runner::archive::{InputArchive, OutputArchive};
-use crate::web::broadcast::Broadcast;
+use crate::web::broadcast::{Broadcast, BroadcastInstance};
 use anyhow::Context;
 use async_tar::Archive;
 use bollard::container::{
@@ -41,17 +41,18 @@ pub struct RunStatus {
 }
 
 pub type ContainerId = String;
+pub type RunnerInstance = Arc<Runner>;
 
 /// this is a wrapper for docker which creates and interacts with runner
 /// containers
 pub struct Runner {
     pub docker: Docker,
-    broadcast: Arc<Broadcast>,
+    broadcast: BroadcastInstance,
 }
 
 impl Runner {
     /// creates a new runner by taking the docker from the default socket
-    pub fn new(broadcast: Arc<Broadcast>) -> anyhow::Result<Self> {
+    pub fn new(broadcast: BroadcastInstance) -> anyhow::Result<Self> {
         let docker = if let Some(url) = &CONFIG.docker_url {
             if url.starts_with("tcp://") || url.starts_with("http://") {
                 info!("using docker via tcp at '{url}'");

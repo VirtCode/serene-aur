@@ -1,8 +1,8 @@
 use crate::build::session::BuildSession;
-use crate::build::Builder;
+use crate::build::{Builder, BuilderInstance};
 use crate::database::Database;
 use crate::package::Package;
-use crate::web::broadcast::Broadcast;
+use crate::web::broadcast::{Broadcast, BroadcastInstance};
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
@@ -40,8 +40,8 @@ impl BuildMeta {
 /// this struct schedules builds for all packages
 pub struct BuildScheduler {
     db: Database,
-    builder: Arc<RwLock<Builder>>,
-    broadcast: Arc<Broadcast>,
+    builder: BuilderInstance,
+    broadcast: BroadcastInstance,
 
     signal: Option<Sender<()>>,
     jobs: Arc<Mutex<HashMap<DateTime<Utc>, HashSet<String>>>>,
@@ -51,9 +51,9 @@ pub struct BuildScheduler {
 impl BuildScheduler {
     /// creates a new scheduler
     pub async fn new(
-        builder: Arc<RwLock<Builder>>,
+        builder: BuilderInstance,
         db: Database,
-        broadcast: Arc<Broadcast>,
+        broadcast: BroadcastInstance,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             builder,
@@ -240,10 +240,10 @@ impl BuildScheduler {
     /// runs a build for a set of packages right now
     async fn run_now(
         mut packages: Vec<Package>,
-        builder: Arc<RwLock<Builder>>,
+        builder: BuilderInstance,
         lock: Arc<Mutex<HashSet<String>>>,
         db: Database,
-        broadcast: Arc<Broadcast>,
+        broadcast: BroadcastInstance,
         meta: BuildMeta,
     ) {
         info!(
