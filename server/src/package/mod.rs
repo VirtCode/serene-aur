@@ -23,6 +23,7 @@ use tokio::fs;
 pub mod aur;
 pub mod git;
 pub mod source;
+mod srcinfo;
 
 const SOURCE_FOLDER: &str = "sources";
 
