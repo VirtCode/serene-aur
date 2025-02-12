@@ -1,5 +1,5 @@
 use crate::package::git;
-use crate::package::source::SourceImpl;
+use crate::package::source::{Source, SourceImpl};
 use async_trait::async_trait;
 use log::debug;
 use serde::{Deserialize, Serialize};
@@ -18,6 +18,7 @@ impl GitSource {
     }
 }
 
+#[typetag::serde]
 #[async_trait]
 impl SourceImpl for GitSource {
     async fn initialize(&mut self, folder: &Path) -> anyhow::Result<()> {
@@ -50,4 +51,9 @@ impl SourceImpl for GitSource {
 
         Ok(())
     }
+}
+
+/// create a new git source
+pub fn new(repository: &str, devel: bool) -> Source {
+    Source::new(Box::new(GitSource::new(repository)), devel)
 }

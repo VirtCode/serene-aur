@@ -1,6 +1,6 @@
 use crate::config;
 use crate::package::git;
-use crate::package::source::{SourceImpl, SrcinfoWrapper, PKGBUILD};
+use crate::package::source::{Source, SourceImpl, SrcinfoWrapper, PKGBUILD};
 use crate::runner::archive::InputArchive;
 use anyhow::Context;
 use async_trait::async_trait;
@@ -21,6 +21,7 @@ impl CliSource {
     }
 }
 
+#[typetag::serde]
 #[async_trait]
 impl SourceImpl for CliSource {
     async fn initialize(&mut self, folder: &Path) -> anyhow::Result<()> {
@@ -68,6 +69,11 @@ impl SourceImpl for CliSource {
         archive: &mut InputArchive,
         folder: &Path,
     ) -> anyhow::Result<()> {
-        archive.append_file(&folder.join("cli").join(PKGBUILD), Path::new(PKGBUILD))
+        archive.append_file(&folder.join("cli").join(PKGBUILD), Path::new(PKGBUILD)).await
     }
+}
+
+/// create a new cli souce
+pub fn new() -> Source {
+    Source::new(Box::new(CliSource::new()), true)
 }

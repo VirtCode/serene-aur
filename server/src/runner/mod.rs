@@ -171,7 +171,7 @@ impl Runner {
 
     /// prepares a container for srcinfo generation
     pub async fn prepare_srcinfo_container(&self, clean: bool) -> anyhow::Result<ContainerId> {
-        self.prepare_container(&CONFIG.container_srcinfo_name, RUNNER_IMAGE_BULID_ENTRY, clean)
+        self.prepare_container(&CONFIG.container_srcinfo_name, RUNNER_IMAGE_SRCINFO_ENTRY, clean)
             .await
     }
 

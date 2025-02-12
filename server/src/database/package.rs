@@ -1,5 +1,5 @@
 use crate::database::{Database, DatabaseConversion};
-use crate::package::source::SrcinfoWrapper;
+use crate::package::srcinfo::SrcinfoWrapper;
 use crate::package::Package;
 use anyhow::{Context, Result};
 use chrono::NaiveDateTime;

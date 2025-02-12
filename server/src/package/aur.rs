@@ -13,6 +13,11 @@ pub async fn info(name: &str) -> anyhow::Result<Option<Package>> {
     Ok(pkg.into_iter().next())
 }
 
+/// get whether a package is a devel package
+pub fn get_devel(base: &str) -> bool {
+    base.ends_with("-git")
+}
+
 /// get the url to the git repository
 pub fn get_repository(base: &str) -> String {
     format!("https://aur.archlinux.org/{base}.git")

@@ -1,7 +1,8 @@
-use crate::package::source::SourceImpl;
+use crate::package::source::{Source, SourceImpl};
 use crate::package::{aur, git};
 use async_trait::async_trait;
 use log::{debug, warn};
+use raur::Package;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -33,6 +34,7 @@ impl AurSource {
     }
 }
 
+#[typetag::serde]
 #[async_trait]
 impl SourceImpl for AurSource {
     async fn initialize(&mut self, folder: &Path) -> anyhow::Result<()> {
@@ -69,4 +71,12 @@ impl SourceImpl for AurSource {
 
         Ok(())
     }
+}
+
+/// create a new aur source
+pub fn new(package: &Package, force_devel: bool) -> Source {
+    Source::new(
+        Box::new(AurSource::new(&package.package_base)),
+        aur::get_devel(&package.package_base) || force_devel,
+    )
 }

@@ -1,4 +1,4 @@
-use crate::package::source::SrcinfoWrapper;
+use crate::package::srcinfo::SrcinfoWrapper;
 use anyhow::{anyhow, Context};
 use async_std::io::Read;
 use async_std::path::PathBuf;

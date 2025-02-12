@@ -1,10 +1,13 @@
-use crate::package::source::{SourceImpl, PKGBUILD};
+use crate::package::source::{Source, SourceImpl, PKGBUILD};
 use crate::package::srcinfo::SrcinfoWrapper;
 use crate::runner::archive::InputArchive;
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use serene_data::secret;
 use std::path::Path;
 
 /// this is a source which is based on a raw pkgbuild
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RawSource {
     pkgbuild: String,
 }
@@ -15,6 +18,8 @@ impl RawSource {
     }
 }
 
+#[typetag::serde]
+#[async_trait]
 impl SourceImpl for RawSource {
     async fn initialize(&mut self, _folder: &Path) -> anyhow::Result<()> {
         Ok(())
@@ -33,7 +38,7 @@ impl SourceImpl for RawSource {
         secret::hash(&self.pkgbuild)
     }
 
-    async fn update(&self, _folder: &Path) -> anyhow::Result<()> {
+    async fn update(&mut self, _folder: &Path) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -50,6 +55,11 @@ impl SourceImpl for RawSource {
         archive: &mut InputArchive,
         _folder: &Path,
     ) -> anyhow::Result<()> {
-        archive.write_file(&self.pkgbuild, Path::new(PKGBUILD), true)
+        archive.write_file(&self.pkgbuild, Path::new(PKGBUILD), true).await
     }
+}
+
+/// create a new raw source
+pub fn new(pkgbuild: &str, devel: bool) -> Source {
+    Source::new(Box::new(RawSource::new(pkgbuild)), devel)
 }

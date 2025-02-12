@@ -1,4 +1,5 @@
 use crate::database::Database;
+use crate::package::srcinfo::{SrcinfoGenerator, SrcinfoGeneratorInstance};
 use crate::package::Package;
 use crate::repository::{PackageRepository, PackageRepositoryInstance};
 use crate::runner::{ContainerId, RunStatus, Runner, RunnerInstance};
@@ -85,6 +86,7 @@ pub struct Builder {
     runner: RunnerInstance,
     broadcast: BroadcastInstance,
     repository: PackageRepositoryInstance,
+    srcinfo_generator: SrcinfoGeneratorInstance,
 }
 
 impl Builder {
@@ -94,8 +96,9 @@ impl Builder {
         runner: RunnerInstance,
         repository: PackageRepositoryInstance,
         broadcast: BroadcastInstance,
+        srcinfo_generator: SrcinfoGeneratorInstance,
     ) -> Self {
-        Self { db, runner, repository, broadcast }
+        Self { db, runner, repository, broadcast, srcinfo_generator }
     }
 
     /// Removes a package from the system, by removing the container, from the
@@ -208,7 +211,7 @@ impl Builder {
 
     /// updates the sources of a given package
     async fn update(&self, package: &mut Package) -> anyhow::Result<()> {
-        package.update().await
+        package.update(&self.srcinfo_generator).await
     }
 
     /// builds a given package

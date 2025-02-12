@@ -14,6 +14,7 @@ mod web;
 use crate::build::schedule::BuildScheduler;
 use crate::build::{cleanup_unfinished, Builder};
 use crate::config::CONFIG;
+use crate::package::srcinfo::SrcinfoGenerator;
 use crate::package::{migrate_build_state, Package};
 use crate::repository::PackageRepository;
 use crate::runner::update::ImageScheduler;
@@ -48,14 +49,27 @@ async fn main() -> anyhow::Result<()> {
         PackageRepository::new().await.context("failed to create package repository")?,
     ));
 
+    // initializing srcinfo generator
+    let srcinfo_generator = Arc::new(Mutex::new(SrcinfoGenerator::new(runner.clone())));
+
     // initializing builder
-    let builder =
-        Arc::new(Builder::new(db.clone(), runner.clone(), repository.clone(), broadcast.clone()));
+    let builder = Arc::new(Builder::new(
+        db.clone(),
+        runner.clone(),
+        repository.clone(),
+        broadcast.clone(),
+        srcinfo_generator.clone(),
+    ));
 
     // creating scheduler
-    let mut schedule = BuildScheduler::new(builder.clone(), db.clone(), broadcast.clone())
-        .await
-        .context("failed to start package scheduler")?;
+    let mut schedule = BuildScheduler::new(
+        builder.clone(),
+        db.clone(),
+        broadcast.clone(),
+        srcinfo_generator.clone(),
+    )
+    .await
+    .context("failed to start package scheduler")?;
 
     // creating image scheduler
     let image_scheduler = ImageScheduler::new(runner.clone());
@@ -85,7 +99,7 @@ async fn main() -> anyhow::Result<()> {
     image_scheduler.run_sync().await;
 
     if config::CONFIG.build_cli {
-        if let Err(e) = package::try_add_cli(&db, &mut schedule).await {
+        if let Err(e) = package::try_add_cli(&db, &mut schedule, &srcinfo_generator).await {
             error!("failed to add cli package: {e:#}")
         }
     }
@@ -93,7 +107,7 @@ async fn main() -> anyhow::Result<()> {
     image_scheduler.start().await?;
     schedule.start().await?;
 
-    let schedule = Arc::new(RwLock::new(schedule));
+    let schedule = Arc::new(Mutex::new(schedule));
 
     info!("serene started successfully on port {}!", CONFIG.port);
     // web app
@@ -103,6 +117,7 @@ async fn main() -> anyhow::Result<()> {
             .app_data(Data::from(schedule.clone()))
             .app_data(Data::from(builder.clone()))
             .app_data(Data::from(broadcast.clone()))
+            .app_data(Data::from(srcinfo_generator.clone()))
             .service(repository::webservice())
             .service(web::info)
             .service(web::add)

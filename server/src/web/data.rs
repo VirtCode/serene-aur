@@ -8,7 +8,7 @@ impl Package {
         PackagePeek {
             base: self.base.clone(),
             enabled: self.enabled,
-            devel: self.source.is_devel(),
+            devel: self.source.devel,
             version: self.get_version(),
             added: self.added,
             members: self.get_packages(),
@@ -21,7 +21,7 @@ impl Package {
             base: self.base.clone(),
             members: self.get_packages(),
             version: self.get_version(),
-            devel: self.source.is_devel(),
+            devel: self.source.devel,
             dependency: self.dependency,
             enabled: self.enabled,
             clean: self.clean,
