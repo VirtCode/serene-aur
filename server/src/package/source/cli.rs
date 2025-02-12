@@ -19,6 +19,10 @@ impl CliSource {
     pub fn new() -> Self {
         Self { last_commit: "".to_owned() }
     }
+
+    pub fn migrated(last_commit: String) -> Self {
+        Self { last_commit }
+    }
 }
 
 #[typetag::serde]

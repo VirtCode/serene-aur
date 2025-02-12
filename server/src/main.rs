@@ -14,6 +14,7 @@ mod web;
 use crate::build::schedule::BuildScheduler;
 use crate::build::{cleanup_unfinished, Builder};
 use crate::config::CONFIG;
+use crate::database::package::migrate_sources;
 use crate::package::srcinfo::SrcinfoGenerator;
 use crate::package::{migrate_build_state, Package};
 use crate::repository::PackageRepository;
@@ -83,6 +84,8 @@ async fn main() -> anyhow::Result<()> {
     if let Err(e) = migrate_build_state(&db).await {
         error!("failed apply heuristics to migrate to built_state: {e:#}")
     }
+
+    migrate_sources(&db, &srcinfo_generator).await?; // we should panic if it fails
 
     repository::remove_orphan_signature().await;
 

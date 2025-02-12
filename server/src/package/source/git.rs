@@ -16,6 +16,10 @@ impl GitSource {
     pub fn new(repository: &str) -> Self {
         Self { repository: repository.to_owned(), last_commit: "".to_owned() }
     }
+
+    pub fn migrated(repository: String, last_commit: String) -> Self {
+        Self { repository, last_commit }
+    }
 }
 
 #[typetag::serde]

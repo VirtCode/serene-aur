@@ -18,6 +18,10 @@ impl AurSource {
         Self { base: base.to_owned(), version: "".to_owned() }
     }
 
+    pub fn migrated(base: String, version: String) -> Self {
+        Self { base, version }
+    }
+
     pub async fn get_version(&self) -> anyhow::Result<String> {
         let package = aur::info(&self.base).await?;
 

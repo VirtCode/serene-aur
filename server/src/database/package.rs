@@ -1,9 +1,14 @@
 use crate::database::{Database, DatabaseConversion};
-use crate::package::srcinfo::SrcinfoWrapper;
-use crate::package::Package;
+use crate::package::source::legacy::LegacySource;
+use crate::package::srcinfo::{SrcinfoGeneratorInstance, SrcinfoWrapper};
+use crate::package::{Package, SOURCE_FOLDER};
+use actix_web_lab::sse::Data;
 use anyhow::{Context, Result};
 use chrono::NaiveDateTime;
+use log::info;
+use serde_json::Value;
 use sqlx::{query, query_as};
+use std::path::Path;
 use std::str::FromStr;
 
 /// See migrations:
@@ -212,4 +217,51 @@ impl Package {
 
         Ok(())
     }
+}
+
+pub async fn migrate_sources(
+    db: &Database,
+    srcinfo_generator: &SrcinfoGeneratorInstance,
+) -> Result<()> {
+    let records = query_as!(
+        PackageRecord,
+        r#"
+            SELECT * FROM package
+        "#
+    )
+    .fetch_all(db)
+    .await?;
+
+    for mut record in records {
+        let source: Value =
+            serde_json::from_str(&record.source).context("source had invalid json")?;
+
+        // a source is old if it has the key "type"
+        if source["type"] != Value::Null {
+            info!("migrating source of {} to new implementation", &record.base);
+
+            let legacy: LegacySource = serde_json::from_value(source)
+                .context("source has 'type' key but is not legacy")?;
+
+            let legacy_state = legacy.get_state();
+
+            let folder = Path::new(SOURCE_FOLDER).join(&record.base);
+            let modern = legacy.migrate(&folder).await.context("failed to migrate source")?;
+
+            // update source and create package
+            record.source = serde_json::to_string(&modern)?;
+            let mut package = Package::from_record(record)?;
+
+            // package was up-to-date before, so also update the built_state
+            if package.built_state == legacy_state {
+                package.built_state = package.source.get_state();
+            }
+
+            // update the source to generate srcinfos if required and save to db
+            package.update(srcinfo_generator).await?;
+            package.change_sources(db).await?;
+        }
+    }
+
+    Ok(())
 }

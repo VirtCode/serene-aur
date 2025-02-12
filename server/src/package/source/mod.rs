@@ -1,7 +1,7 @@
 pub mod aur;
 pub mod cli;
 pub mod git;
-mod legacy;
+pub mod legacy;
 pub mod raw;
 
 use crate::package;
@@ -106,6 +106,14 @@ impl Source {
             srcinfo: None,
             devel_revisions: HashMap::new(),
         }
+    }
+
+    pub fn migrated(
+        inner: Box<dyn SourceImpl + Sync + Send>,
+        devel: bool,
+        devel_revisions: HashMap<String, String>,
+    ) -> Self {
+        Self { devel, inner, srcinfo_override: false, srcinfo: None, devel_revisions }
     }
 
     /// initializes the source in the folder

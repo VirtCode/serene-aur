@@ -23,7 +23,7 @@ pub mod git;
 pub mod source;
 pub mod srcinfo;
 
-const SOURCE_FOLDER: &str = "sources";
+pub const SOURCE_FOLDER: &str = "sources";
 
 pub(crate) const PACKAGE_EXTENSION: &str = ".pkg.tar.zst"; // see /etc/makepkg.conf
 
