@@ -1,5 +1,6 @@
 use crate::package::source::{Source, SourceImpl};
 use crate::package::{aur, git};
+use anyhow::Context;
 use async_trait::async_trait;
 use log::{debug, warn};
 use raur::Package;
@@ -22,19 +23,21 @@ impl AurSource {
         Self { base, version }
     }
 
-    pub async fn get_version(&self) -> anyhow::Result<String> {
-        let package = aur::info(&self.base).await?;
+    /// reads the version of the package from the AUR RPC
+    pub async fn get_version_aur(&self) -> anyhow::Result<Option<String>> {
+        Ok(aur::info(&self.base).await?.map(|p| p.version))
+    }
 
-        if let Some(package) = package {
-            Ok(package.version)
-        } else {
-            warn!(
-                "could not get version for aur package {}, it seems to be no longer on the AUR",
-                self.base
-            );
+    /// reads the version from the _local_ srcinfo, make sure the repo is
+    /// updated beforehand. this is only used as a fallback if the aur lookup
+    /// fails
+    pub async fn get_version_srcinfo(&self, folder: &Path) -> anyhow::Result<String> {
+        warn!("version lookup over RPC failed for AUR package `{}` using srcinfo", self.base);
 
-            Ok("nonexistent".to_owned())
-        }
+        self.get_srcinfo(folder)
+            .await?
+            .context("official AUR package does not contain a .SRCINFO")
+            .map(|srcinfo| srcinfo.version())
     }
 }
 
@@ -45,7 +48,18 @@ impl SourceImpl for AurSource {
         debug!("initializing aur source for {}", self.base);
 
         git::clone(&aur::get_repository(&self.base), folder).await?;
-        self.version = self.get_version().await?;
+
+        self.version = if let Some(version) = self.get_version_aur().await? {
+            version
+        } else {
+            // some packages do not have a package that has the same base (e.g.
+            // `material-symbols-git`) and the aur rpc interface does not
+            // support looking up a package base, so the above version lookup
+            // will fail, thus we will fall back to using the srcinfo for the
+            // version if required
+
+            self.get_version_srcinfo(folder).await?
+        };
 
         Ok(())
     }
@@ -65,12 +79,19 @@ impl SourceImpl for AurSource {
     async fn update(&mut self, folder: &Path) -> anyhow::Result<()> {
         debug!("updating aur source for {}", self.base);
 
-        let version = self.get_version().await?;
+        if let Some(version) = self.get_version_aur().await? {
+            // only update if version has changed
+            if version != self.version {
+                git::pull(folder).await?;
 
-        // only update if version has changed
-        if version != self.version {
+                self.version = version;
+            }
+        } else {
+            // for packages where the aur version lookup does not work,
+            // see above for context. in these cases, we have to pull anyway
             git::pull(folder).await?;
-            self.version = version;
+
+            self.version = self.get_version_srcinfo(folder).await?;
         }
 
         Ok(())
