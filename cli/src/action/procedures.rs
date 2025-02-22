@@ -316,7 +316,7 @@ pub fn list(c: &Config) {
                             .as_ref()
                             .map(|p| {
                                 let duration = Utc::now() - p.ended.unwrap_or(p.started);
-                                let string = ago::difference(duration);
+                                let string = ago::coarse(duration);
 
                                 if duration.num_weeks() > 0 {
                                     string.dimmed()
@@ -443,7 +443,7 @@ pub fn info(c: &Config, package: &str, all: bool) {
                 peek.reason.colored(),
                 peek.started.with_timezone(&Local).format("%x %X").to_string().normal(),
                 peek.ended
-                    .map(|ended| format!("{}s", (ended - peek.started).num_seconds()))
+                    .map(|ended| ago::fine(ended - peek.started))
                     .map(ColoredString::from)
                     .unwrap_or_else(|| "??".blue()),
             ]
@@ -795,7 +795,7 @@ pub fn server_info(c: &Config) {
     println!("{:<10} {}/{}", "location:", c.url.italic(), info.architecture);
 
     // this might have a prefixed space for the tables
-    let uptime = ago::difference(Utc::now() - info.started);
+    let uptime = ago::coarse(Utc::now() - info.started);
     println!("{:<10} {}", "uptime:", uptime.strip_prefix(" ").unwrap_or(&uptime));
 
     println!("{:<10} {}", "repo name:", info.name.bold());

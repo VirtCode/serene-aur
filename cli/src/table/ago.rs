@@ -1,6 +1,7 @@
 use chrono::Duration;
 
-pub fn difference(d: Duration) -> String {
+/// formats a duration as a coarse string
+pub fn coarse(d: Duration) -> String {
     let (name, amount) = if d.num_weeks() > 52 {
         ("year", d.num_weeks() / 52)
     } else if d.num_weeks() > 4 {
@@ -24,4 +25,32 @@ pub fn difference(d: Duration) -> String {
     } else {
         format!("{amount:2} {name}{}", if amount > 1 { "s" } else { "" })
     }
+}
+
+/// formats a duration as a fine string
+pub fn fine(duration: Duration) -> String {
+    let mut result = vec![];
+
+    let original = duration.num_seconds();
+    let mut seconds = original;
+
+    // hours
+    if original > 60 * 60 {
+        let hours = seconds / (60 * 60);
+        seconds -= hours * (60 * 60);
+
+        result.push(format!("{hours}h"));
+    }
+
+    // minutes
+    if original > 60 {
+        let minutes = seconds / 60;
+        seconds -= minutes * 60;
+
+        result.push(format!("{minutes}m"));
+    }
+
+    result.push(format!("{seconds}s"));
+
+    result.join(" ")
 }
