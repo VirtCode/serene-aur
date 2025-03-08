@@ -21,6 +21,7 @@ impl Package {
             base: self.base.clone(),
             members: self.get_packages(),
             description: self.get_description(),
+            upstream_url: self.get_upstream_url(),
             builds: build_count,
             version: self.get_version(),
             source: self.source.get_type(),

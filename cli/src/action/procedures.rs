@@ -372,6 +372,9 @@ pub fn info(c: &Config, package: &str, all: bool) {
     if let Some(desc) = info.description {
         println!("{}", desc.italic());
     }
+    if let Some(url) = info.upstream_url {
+        println!("{}", url.dimmed());
+    }
 
     println!();
 

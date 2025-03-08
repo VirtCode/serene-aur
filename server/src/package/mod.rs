@@ -384,6 +384,11 @@ impl Package {
     pub fn get_description(&self) -> Option<String> {
         self.srcinfo.as_ref().and_then(|s| s.pkg.pkgdesc.clone())
     }
+
+    /// returns the upstream url from the srcinfo if there is any
+    pub fn get_upstream_url(&self) -> Option<String> {
+        self.srcinfo.as_ref().and_then(|s| s.pkg.url.clone())
+    }
 }
 
 /// selects the built architecture from a list of architectures

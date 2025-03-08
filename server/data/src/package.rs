@@ -125,6 +125,8 @@ pub struct PackageInfo {
     pub members: Vec<String>,
     /// description of the package if present
     pub description: Option<String>,
+    /// upstream url of the package if present
+    pub upstream_url: Option<String>,
 
     /// total count of builds
     pub builds: u32,
