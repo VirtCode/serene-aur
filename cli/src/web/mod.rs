@@ -106,6 +106,13 @@ pub fn get<R: DeserializeOwned>(config: &Config, path: &str) -> Result<R> {
     process_result(result)
 }
 
+pub fn get_raw(config: &Config, path: &str) -> Result<String> {
+    let result =
+        Client::new().get(get_url(config, path)).header("Authorization", &config.secret).send();
+
+    process_errors(result)?.text().map_err(|e| Error::Client { error: e })
+}
+
 pub fn eventsource<F>(config: &Config, path: &str, mut cb: F) -> Result<()>
 where
     F: FnMut(Event) -> bool,

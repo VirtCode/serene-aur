@@ -170,7 +170,7 @@ pub enum InfoCommand {
 
 #[derive(Subcommand)]
 pub enum ManageSubcommand {
-    /// get info about the given server
+    /// get info about the server
     Info,
 
     /// get a personalized webhook secret for a package
@@ -179,6 +179,13 @@ pub enum ManageSubcommand {
         name: String,
 
         /// print the secret in a machine-readable way
+        #[clap(short, long)]
+        machine: bool,
+    },
+
+    /// get the public key of the server
+    Key {
+        /// print the key in a machine-readable way
         #[clap(short, long)]
         machine: bool,
     },
@@ -225,17 +232,19 @@ pub enum SettingsSubcommand {
         flags: Vec<String>,
     },
 
-    /// set whether the package is a devel package and should check for source changes
+    /// set whether the package is a devel package and should check for source
+    /// changes
     Devel {
         /// check sources on update
         #[arg(action = ArgAction::Set)]
-        devel: bool
+        devel: bool,
     },
 
-    /// force serene to generate the .SRCINFO for the package instead of using the provided one
+    /// force serene to generate the .SRCINFO for the package instead of using
+    /// the provided one
     SrcinfoOverride {
         /// force regeneration of .SRCINFO on update
         #[arg(action = ArgAction::Set)]
-        force: bool
+        force: bool,
     },
 }

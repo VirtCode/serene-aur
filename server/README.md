@@ -126,7 +126,7 @@ services:
 
 #### Using the signatures in Pacman
 
-To enable package verification using pacman you'll need to download the public key from the `/key` api endpoint and [import it into your pacman keys](https://wiki.archlinux.org/title/Pacman/Package_signing#Adding_unofficial_keys).
+To enable package verification using pacman you'll need to download the public key. You can do this via `serene manage key` if you have the cli installed, or you can download it directly from the `/key` api endpoint. After that, [import it into your pacman keys](https://wiki.archlinux.org/title/Pacman/Package_signing#Adding_unofficial_keys).
 
 Since the packages are now signed you can remove the `SigLevel = Optional TrustAll` from the [repository definition](../README.md#installing-only-the-repository) in the `pacman.conf`.
 By removing this configuration pacman will fall back to the `SigLevel` defined at the `[options]` level which by default only allows signed packages to be downloaded from a repository.

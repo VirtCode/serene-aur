@@ -9,8 +9,8 @@ use crate::web::data::{
 };
 use crate::web::requests::{
     add_package, build_all_packages, build_package, get_build, get_build_logs, get_builds,
-    get_info, get_package, get_package_pkgbuild, get_packages, get_webhook_secret, remove_package,
-    set_package_setting, subscribe_events,
+    get_info, get_key, get_package, get_package_pkgbuild, get_packages, get_webhook_secret,
+    remove_package, set_package_setting, subscribe_events,
 };
 use chrono::{Local, Utc};
 use colored::{ColoredString, Colorize};
@@ -564,6 +564,34 @@ pub fn webhook_secret(c: &Config, package: &str, machine: bool) {
                     "POST".bold()
                 );
                 println!("{}/webhook/package/{package}/build?secret={secret}", c.url)
+            }
+        }
+        Err(e) => log.fail(&e.msg()),
+    }
+}
+
+/// print the signing key from the server
+pub fn signing_key(c: &Config, machine: bool) {
+    let log = Log::start("getting server public key");
+
+    match get_key(c) {
+        Ok(key) => {
+            log.succeed("successfully got server public key");
+            if machine {
+                println!("{key}")
+            } else {
+                println!(
+                    "Here's the public key that is used to sign the packages on that server.\n\
+                     You can import it into `pacman` to make use of the signatures. Refer to\n{}\n", 
+                    "https://wiki.archlinux.org/title/Pacman/Package_signing#Adding_unofficial_keys".italic()
+                );
+
+                println!(
+                    "You can hide this message with the `-m` flag to pipe the key somewhere,\n\
+                     i.e. `serene manage key -m > serene-key.pub`\n"
+                );
+
+                println!("{key}");
             }
         }
         Err(e) => log.fail(&e.msg()),

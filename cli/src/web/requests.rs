@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::web::{delete_empty, eventsource, get, post, post_simple, Result};
+use crate::web::{delete_empty, eventsource, get, get_raw, post, post_simple, Result};
 use reqwest_eventsource::Event;
 use serene_data::build::BuildInfo;
 use serene_data::package::{
@@ -61,6 +61,11 @@ pub fn get_build_logs(c: &Config, package: &str, id: &str) -> Result<String> {
 /// get the secret for the webhook of a given package
 pub fn get_webhook_secret(c: &Config, package: &str) -> Result<String> {
     get::<String>(c, &format!("webhook/package/{package}/secret"))
+}
+
+/// get the key of the server
+pub fn get_key(c: &Config) -> Result<String> {
+    get_raw(c, "key")
 }
 
 /// get info about a specific package

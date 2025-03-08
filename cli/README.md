@@ -89,6 +89,9 @@ serene manage info
 
 # Request and print the webhook secret for the package `my-package`
 serene manage webhook my-package
+
+# Get the public key of the server easily, in a machine-readable way
+serene manage key --machine
 ```
 
 **Print the local secret of the CLI:** To print the local secret again, run the following:

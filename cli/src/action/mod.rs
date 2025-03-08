@@ -3,7 +3,7 @@ mod procedures;
 
 use crate::action::procedures::{
     add, build, build_all, build_info, build_logs, info, list, pkgbuild, remove, set_setting,
-    subscribe_build_logs, webhook_secret,
+    signing_key, subscribe_build_logs, webhook_secret,
 };
 use crate::command::{Action, InfoCommand, ManageSubcommand};
 use crate::complete::generate_completions;
@@ -90,6 +90,7 @@ pub fn run(config: &Config, action: Action) {
                 webhook_secret(config, &name, machine);
             }
             ManageSubcommand::Info => server_info(config),
+            ManageSubcommand::Key { machine } => signing_key(config, machine),
         },
         Action::Completions => {
             let Some(shell) = Shell::from_env() else {
