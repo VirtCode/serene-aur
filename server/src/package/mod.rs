@@ -2,13 +2,12 @@ use crate::build::schedule::{BuildMeta, BuildScheduler};
 use crate::build::BuildSummary;
 use crate::config::{CLI_PACKAGE_NAME, CONFIG};
 use crate::database::Database;
-use crate::package::source::cli::SereneCliSource;
-use crate::package::source::devel::DevelGitSource;
-use crate::package::source::normal::NormalSource;
-use crate::package::source::{Source, SrcinfoWrapper};
+use crate::package::source::Source;
+use crate::package::srcinfo::{SrcinfoGeneratorInstance, SrcinfoWrapper};
 use crate::resolve::AurResolver;
 use crate::runner;
 use crate::runner::archive;
+use crate::runner::archive::InputArchive;
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use hyper::Body;
@@ -22,19 +21,21 @@ use tokio::fs;
 pub mod aur;
 pub mod git;
 pub mod source;
+pub mod srcinfo;
 
-const SOURCE_FOLDER: &str = "sources";
+pub const SOURCE_FOLDER: &str = "sources";
 
 pub(crate) const PACKAGE_EXTENSION: &str = ".pkg.tar.zst"; // see /etc/makepkg.conf
 
 pub async fn add_source(
     db: &Database,
-    source: Box<dyn Source + Sync + Send>,
+    srcinfo_generator: &SrcinfoGeneratorInstance,
+    source: Source,
     replace: bool,
 ) -> anyhow::Result<Option<Vec<Package>>> {
     let temp = get_temp();
 
-    let result = add(db, source, &temp, replace).await;
+    let result = add(db, srcinfo_generator, source, &temp, replace).await;
 
     if let Err(e) = fs::remove_dir_all(&temp).await {
         warn!("failed to remove temp for checkout: {e:#}");
@@ -56,13 +57,14 @@ fn get_temp_package(temp: &Path) -> PathBuf {
 }
 
 async fn checkout(
-    source: &mut Box<dyn Source + Sync + Send>,
+    source: &mut Source,
     temp: &Path,
+    srcinfo_generator: &SrcinfoGeneratorInstance,
 ) -> anyhow::Result<(PathBuf, SrcinfoWrapper)> {
     let folder = get_temp_package(temp);
     fs::create_dir_all(&folder).await?;
 
-    source.create(&folder).await.context("failed to checkout source")?;
+    source.initialize(srcinfo_generator, &folder).await.context("failed to checkout source")?;
 
     let srcinfo = source.get_srcinfo(&folder).await?;
 
@@ -71,12 +73,13 @@ async fn checkout(
 
 async fn add(
     db: &Database,
-    mut source: Box<dyn Source + Sync + Send>,
+    srcinfo_generator: &SrcinfoGeneratorInstance,
+    mut source: Source,
     temp: &Path,
     replace: bool,
 ) -> anyhow::Result<Option<Vec<Package>>> {
     // checkout target
-    let (path, srcinfo) = checkout(&mut source, temp).await?;
+    let (path, srcinfo) = checkout(&mut source, temp, srcinfo_generator).await?;
     let target = srcinfo.base.pkgbase.clone();
     info!("adding new package {target}");
 
@@ -100,13 +103,9 @@ async fn add(
     let mut packages = vec![(path, srcinfo, source, replace)];
 
     for dep in actions.iter_aur_pkgs().map(|p| &p.pkg) {
-        let mut source: Box<dyn Source + Sync + Send> = if aur::is_devel(dep) {
-            Box::new(DevelGitSource::empty(&aur::to_git(dep)))
-        } else {
-            Box::new(NormalSource::empty(&aur::to_git(dep)))
-        };
+        let mut source = source::aur::new(&dep, false);
 
-        let (path, srcinfo) = checkout(&mut source, temp)
+        let (path, srcinfo) = checkout(&mut source, temp, srcinfo_generator)
             .await
             .context("failed to checkout source for dependency")?;
 
@@ -159,13 +158,17 @@ async fn add(
 }
 
 /// adds the cli to the current packages
-pub async fn try_add_cli(db: &Database, scheduler: &mut BuildScheduler) -> anyhow::Result<()> {
+pub async fn try_add_cli(
+    db: &Database,
+    scheduler: &mut BuildScheduler,
+    srcinfo_generator: &SrcinfoGeneratorInstance,
+) -> anyhow::Result<()> {
     if Package::has(CLI_PACKAGE_NAME, db).await? {
         return Ok(());
     }
 
     info!("adding and building serene-cli");
-    if let Some(all) = add_source(db, Box::new(SereneCliSource::new()), false).await? {
+    if let Some(all) = add_source(db, srcinfo_generator, source::cli::new(), false).await? {
         // TODO: cleanify with support for deps
         let Some(mut package) = all.into_iter().next() else {
             return Err(anyhow!("failed to add serene-cli, not in added pkgs"));
@@ -194,7 +197,7 @@ pub struct Package {
     pub added: DateTime<Utc>,
 
     /// source of the package
-    pub source: Box<dyn Source + Sync + Send>,
+    pub source: Source,
 
     /// pkgbuild string used for the currently passing build for user pleasure
     pub pkgbuild: Option<String>,
@@ -222,17 +225,13 @@ pub struct Package {
 
 impl Package {
     /// creates a new package with default values
-    fn new(
-        srcinfo: SrcinfoWrapper,
-        source: Box<dyn Source + Sync + Send>,
-        dependency: bool,
-    ) -> Self {
+    fn new(srcinfo: SrcinfoWrapper, source: Source, dependency: bool) -> Self {
         Self {
             base: srcinfo.base.pkgbase.clone(),
             added: Utc::now(),
 
             dependency,
-            clean: !source.is_devel(),
+            clean: !source.devel,
             enabled: true,
             schedule: None,
             prepare: None,
@@ -256,7 +255,7 @@ impl Package {
         self.schedule
             .as_ref()
             .unwrap_or_else(|| {
-                if self.source.is_devel() {
+                if self.source.devel {
                     &CONFIG.schedule_devel
                 } else {
                     &CONFIG.schedule_default
@@ -270,8 +269,11 @@ impl Package {
         self.built_state == self.source.get_state()
     }
 
-    pub async fn update(&mut self) -> anyhow::Result<()> {
-        self.source.update(&self.get_folder()).await
+    pub async fn update(
+        &mut self,
+        srcinfo_generator: &SrcinfoGeneratorInstance,
+    ) -> anyhow::Result<()> {
+        self.source.update(srcinfo_generator, &self.get_folder()).await
     }
 
     /// upgrades the version of the package
@@ -281,7 +283,7 @@ impl Package {
         let pkgbuild = self.source.get_pkgbuild(&self.get_folder()).await?;
         let state = self.source.get_state();
 
-        if self.source.is_devel() {
+        if self.source.devel {
             // upgrade devel package srcinfo to reflect version and rel
             srcinfo = reported;
         } else if srcinfo.base.pkgver != reported.base.pkgver {
@@ -338,34 +340,34 @@ impl Package {
             .collect())
     }
 
-    pub async fn build_files(&self) -> anyhow::Result<Body> {
-        let mut archive = archive::begin_write();
+    pub async fn build_files(&self) -> anyhow::Result<InputArchive> {
+        let mut archive = InputArchive::new();
 
         // upload sources
         self.source.load_build_files(&self.get_folder(), &mut archive).await?;
 
         // upload repository file
-        archive::write_file(runner::repository_file(), "custom-repo", false, &mut archive).await?;
+        archive.write_file(&runner::repository_file(), Path::new("custom-repo"), false).await?;
 
         // upload prepare script
-        archive::write_file(
-            self.prepare.clone().unwrap_or_default(),
-            "serene-prepare.sh",
-            false,
-            &mut archive,
-        )
-        .await?;
+        archive
+            .write_file(
+                &self.prepare.clone().unwrap_or_default(),
+                Path::new("serene-prepare.sh"),
+                false,
+            )
+            .await?;
 
         // upload makepkg flags
-        archive::write_file(
-            self.flags.iter().map(|f| format!("--{f} ")).collect::<String>(),
-            "makepkg-flags",
-            false,
-            &mut archive,
-        )
-        .await?;
+        archive
+            .write_file(
+                &self.flags.iter().map(|f| format!("--{f} ")).collect::<String>(),
+                Path::new("makepkg-flags"),
+                false,
+            )
+            .await?;
 
-        archive::end_write(archive).await
+        Ok(archive)
     }
 
     /// removes the source files of the source
@@ -373,11 +375,19 @@ impl Package {
         fs::remove_dir_all(self.get_folder()).await.context("could not delete source directory")
     }
 
+    /// returns all currently-known members of the package
     pub fn get_packages(&self) -> Vec<String> {
-        self.srcinfo
-            .as_ref()
-            .map(|s| s.names().map(|s| s.to_owned()).collect())
-            .unwrap_or_else(|| vec![])
+        self.srcinfo.as_ref().map(|s| s.names().map(|s| s.to_owned()).collect()).unwrap_or_default()
+    }
+
+    /// returns the description of the package from the srcinfo if there is any
+    pub fn get_description(&self) -> Option<String> {
+        self.srcinfo.as_ref().and_then(|s| s.pkg.pkgdesc.clone())
+    }
+
+    /// returns the upstream url from the srcinfo if there is any
+    pub fn get_upstream_url(&self) -> Option<String> {
+        self.srcinfo.as_ref().and_then(|s| s.pkg.url.clone())
     }
 }
 

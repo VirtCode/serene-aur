@@ -188,10 +188,10 @@ pub fn add(
     // parse source
     let source = if pkgbuild {
         log.next("adding package from custom pkgbuild");
-        PackageAddSource::Single { pkgbuild: what.to_owned(), devel }
+        PackageAddSource::Raw { pkgbuild: what.to_owned(), devel }
     } else if custom {
         log.next(&format!("adding package from repository at {}", what.italic()));
-        PackageAddSource::Custom { url: what.to_owned(), devel }
+        PackageAddSource::Git { url: what.to_owned(), devel }
     } else {
         log.next(&format!("adding package {} from the AUR", what.italic()));
         PackageAddSource::Aur { name: what.to_owned() }
@@ -369,8 +369,27 @@ pub fn info(c: &Config, package: &str, all: bool) {
     // output stuff
     println!();
     println!("{}", info.base.bold());
-    println!("{:<9} {}", "members:", info.members.join(" "));
+    if let Some(desc) = info.description {
+        println!("{}", desc.italic());
+    }
+    if let Some(url) = info.upstream_url {
+        println!("{}", url.dimmed());
+    }
+
+    println!();
+
+    println!(
+        "{:<9} {}",
+        "members:",
+        if info.members.is_empty() { "none yet".dimmed() } else { info.members.join(" ").normal() }
+    );
     println!("{:<9} {}", "added:", info.added.with_timezone(&Local).format("%x %X"));
+    println!(
+        "{:<9} {} {}",
+        "source:",
+        info.source,
+        info.source_url.map(|s| format!("({s})")).unwrap_or_default().dimmed()
+    );
 
     let mut tags = vec![];
     if info.enabled {
@@ -383,6 +402,9 @@ pub fn info(c: &Config, package: &str, all: bool) {
     }
     if info.devel {
         tags.push("devel".dimmed())
+    }
+    if info.srcinfo_override {
+        tags.push("srcinfo-override".red())
     }
     if info.dependency {
         tags.push("dependency".purple())
@@ -680,6 +702,20 @@ pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
                     return;
                 }
             }
+        }
+        SettingsSubcommand::Devel { devel } => {
+            log.next(&format!(
+                "making {package} a {} package",
+                if devel { "devel" } else { "non-devel" }
+            ));
+            PackageSettingsRequest::Devel(devel)
+        }
+        SettingsSubcommand::SrcinfoOverride { force } => {
+            log.next(&format!(
+                "{} srcinfo override for {package}",
+                if force { "enabling" } else { "disabling" }
+            ));
+            PackageSettingsRequest::SrcinfoOverride(force)
         }
     };
 

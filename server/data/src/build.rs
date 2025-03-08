@@ -5,6 +5,7 @@ use strum_macros::{Display, EnumString};
 /// reports the progress of a running build
 #[derive(Clone, Serialize, Deserialize, EnumString, Display, Copy)]
 #[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum BuildProgress {
     /// the build is resolving dependencies
     Resolve,
@@ -20,6 +21,7 @@ pub enum BuildProgress {
 
 /// reports the state of the current build
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase", tag = "state", content = "info")]
 pub enum BuildState {
     /// the build is pending, i.e. waiting for dependencies
     Pending,
@@ -66,10 +68,11 @@ pub struct BuildInfo {
 
 #[derive(Serialize, Deserialize, EnumString, Display, Clone, Copy)]
 #[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum BuildReason {
     /// build was triggered by a webhook
     Webhook,
-    /// build was manually triggered by an user
+    /// build was manually triggered by a user
     Manual,
     /// build was triggered in a schedule
     Schedule,

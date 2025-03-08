@@ -1,10 +1,10 @@
 use crate::build::schedule::BuildMeta;
-use crate::build::{BuildSummary, Builder};
+use crate::build::{BuildSummary, Builder, BuilderInstance};
 use crate::config::CONFIG;
 use crate::database::Database;
 use crate::package::Package;
 use crate::resolve::build::BuildResolver;
-use crate::web::broadcast::Broadcast;
+use crate::web::broadcast::{Broadcast, BroadcastInstance};
 use anyhow::{Context, Result};
 use log::{debug, error, info, warn};
 use serene_data::build::{BuildProgress, BuildReason, BuildState};
@@ -18,8 +18,8 @@ pub struct BuildSession<'a> {
     building: HashSet<String>,
     meta: BuildMeta,
 
-    builder: Arc<RwLock<Builder>>,
-    broadcast: Arc<Broadcast>,
+    builder: BuilderInstance,
+    broadcast: BroadcastInstance,
     db: &'a Database,
 }
 
@@ -33,8 +33,8 @@ impl<'a> BuildSession<'a> {
     pub async fn start(
         packages: Vec<Package>,
         db: &'a Database,
-        builder: Arc<RwLock<Builder>>,
-        broadcast: Arc<Broadcast>,
+        builder: BuilderInstance,
+        broadcast: BroadcastInstance,
         meta: BuildMeta,
     ) -> Result<Self> {
         let result = if meta.resolve && CONFIG.resolve_build_sequence && packages.len() > 1 {
@@ -193,8 +193,7 @@ impl<'a> BuildSession<'a> {
         tokio::spawn(async move {
             let base = package.base.clone();
 
-            let success = match builder.read().await.run_build(package, false, clean, summary).await
-            {
+            let success = match builder.run_build(package, false, clean, summary).await {
                 Ok(summary) => {
                     matches!(summary.state, BuildState::Success)
                 }

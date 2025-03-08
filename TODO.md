@@ -1,5 +1,11 @@
 ## TODO
 
+#### Bugs
+
+*unintended behaviour that should be fixed*
+
+- [ ] When using OWN_REPOSITORY on a new instance, without one previously built package, the containers can't udpate themselves
+
 #### Polish
 
 *polish for a better user experience*
@@ -25,6 +31,8 @@
 - [X] Cache more data inside the sources after upgrading, so that we don't have to read the filesystem as often
 - [ ] Create aur-specific normal source, so that we can check for updating without git
 - [ ] Combine devel and non-devel git sources
+- [ ] Show info about source (type, some url) on `serene info`
+- [ ] Move SRCINFO gen to container because the current impl is veery sketchy
 - [X] Be able to view pkgbuild from cli
 - [ ] More efficient queries for the web handlers
 - [ ] Combine DB and Broadcast to one "storage" object

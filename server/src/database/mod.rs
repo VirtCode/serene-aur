@@ -1,5 +1,5 @@
 mod build;
-mod package;
+pub mod package;
 
 use anyhow::Context;
 use anyhow::Result;

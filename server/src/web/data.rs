@@ -8,7 +8,7 @@ impl Package {
         PackagePeek {
             base: self.base.clone(),
             enabled: self.enabled,
-            devel: self.source.is_devel(),
+            devel: self.source.devel,
             version: self.get_version(),
             added: self.added,
             members: self.get_packages(),
@@ -20,17 +20,22 @@ impl Package {
         PackageInfo {
             base: self.base.clone(),
             members: self.get_packages(),
+            description: self.get_description(),
+            upstream_url: self.get_upstream_url(),
+            builds: build_count,
             version: self.get_version(),
-            devel: self.source.is_devel(),
-            dependency: self.dependency,
+            source: self.source.get_type(),
+            source_url: self.source.get_url(),
+            devel: self.source.devel,
+            srcinfo_override: self.source.srcinfo_override,
             enabled: self.enabled,
             clean: self.clean,
+            dependency: self.dependency,
             schedule: self.get_schedule(),
             schedule_changed: self.schedule.is_some(),
-            added: self.added,
             prepare_commands: self.prepare.clone(),
             makepkg_flags: self.flags.clone(),
-            builds: build_count,
+            added: self.added,
         }
     }
 }

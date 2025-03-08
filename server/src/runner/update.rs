@@ -1,5 +1,5 @@
 use crate::config::CONFIG;
-use crate::runner::Runner;
+use crate::runner::{Runner, RunnerInstance};
 use anyhow::Context;
 use chrono::Utc;
 use log::{debug, error, info};
@@ -9,12 +9,12 @@ use tokio::sync::RwLock;
 
 /// Schedules the pulling of the runner image
 pub struct ImageScheduler {
-    runner: Arc<RwLock<Runner>>,
+    runner: RunnerInstance,
 }
 
 impl ImageScheduler {
     /// creates a new image scheduler
-    pub fn new(runner: Arc<RwLock<Runner>>) -> Self {
+    pub fn new(runner: RunnerInstance) -> Self {
         Self { runner }
     }
 
@@ -63,8 +63,8 @@ impl ImageScheduler {
         });
     }
 
-    async fn run_now(runner: &Arc<RwLock<Runner>>) {
-        if let Err(e) = runner.read().await.update_image().await {
+    async fn run_now(runner: &RunnerInstance) {
+        if let Err(e) = runner.update_image().await {
             error!("failed to update runner image: {e:#}");
         } else {
             info!("successfully updated runner image");

@@ -23,11 +23,9 @@ RUN pacman -Suy --noconfirm
 RUN pacman -Sy --noconfirm git
 
 # create build folder and script
-ADD run.sh /app/run.sh
+ADD scripts/* /app
+RUN chmod +x /app/*.sh
 
 # switch to builder user
 USER build
 WORKDIR /app
-
-# run
-CMD sh run.sh

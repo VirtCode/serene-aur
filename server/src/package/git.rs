@@ -32,9 +32,24 @@ pub async fn pull(directory: &Path) -> anyhow::Result<()> {
     }
 }
 
+pub async fn find_local_commit(directory: &Path) -> anyhow::Result<String> {
+    let status = tokio::process::Command::new("git")
+        .arg("rev-parse")
+        .arg("HEAD")
+        .current_dir(directory)
+        .output()
+        .await?;
+
+    if status.status.success() {
+        Ok(String::from_utf8_lossy(&status.stdout).trim().to_owned())
+    } else {
+        Err(anyhow!("failed to pull git repository: {}", String::from_utf8_lossy(&status.stderr)))
+    }
+}
+
 // finds the version of the git remote, given a git url.
 // The url should be in the format described here (without the directory and git+): https://man.archlinux.org/man/PKGBUILD.5#USING_VCS_SOURCES
-pub async fn find_commit(url: &str) -> anyhow::Result<String> {
+pub async fn find_remote_commit(url: &str) -> anyhow::Result<String> {
     let fragment = url.find('#');
     let query = url.find('?');
 

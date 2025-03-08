@@ -3,11 +3,8 @@ use crate::build::{BuildSummary, Builder};
 use crate::config::{CONFIG, INFO};
 use crate::database::Database;
 use crate::package;
-use crate::package::source::devel::DevelGitSource;
-use crate::package::source::normal::NormalSource;
-use crate::package::source::single::SingleSource;
-use crate::package::source::Source;
-use crate::package::{aur, Package};
+use crate::package::srcinfo::SrcinfoGenerator;
+use crate::package::{aur, source, Package};
 use crate::repository::crypto::{get_public_key_bytes, should_sign_packages};
 use crate::web::auth::{AuthRead, AuthWrite};
 use crate::web::broadcast::Broadcast;
@@ -25,14 +22,15 @@ use serene_data::package::{
 };
 use serene_data::SereneInfo;
 use std::str::FromStr;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 mod auth;
 pub mod broadcast;
 mod data;
 
-type BuildSchedulerData = Data<RwLock<BuildScheduler>>;
-type BuilderData = Data<RwLock<Builder>>;
+type BuildSchedulerData = Data<Mutex<BuildScheduler>>;
+type BuilderData = Data<Builder>;
+type SrcinfoGeneratorData = Data<Mutex<SrcinfoGenerator>>;
 
 pub trait InternalError<T> {
     fn internal(self) -> actix_web::Result<T>;
@@ -65,36 +63,25 @@ pub async fn add(
     _: AuthWrite,
     body: Json<PackageAddRequest>,
     db: Data<Database>,
+    srcinfo_generator: SrcinfoGeneratorData,
     scheduler: BuildSchedulerData,
 ) -> actix_web::Result<impl Responder> {
     // get repo and devel tag
-    let source: Box<dyn Source + Sync + Send> = match &body.0.source {
+    let source = match &body.0.source {
         PackageAddSource::Aur { name } => {
-            let package = aur::find(name)
+            let package = aur::info(name)
                 .await
                 .internal()?
                 .ok_or_else(|| ErrorNotFound(format!("aur package '{}' does not exist", name)))?;
 
-            if package.devel {
-                Box::new(DevelGitSource::empty(&package.repository))
-            } else {
-                Box::new(NormalSource::empty(&package.repository))
-            }
+            source::aur::new(&package, false) // TODO: support the devel flag
         }
-        PackageAddSource::Custom { url, devel } => {
-            if *devel {
-                Box::new(DevelGitSource::empty(url))
-            } else {
-                Box::new(NormalSource::empty(url))
-            }
-        }
-        PackageAddSource::Single { pkgbuild: source, devel } => {
-            Box::new(SingleSource::initialize(source.to_owned(), *devel))
-        }
+        PackageAddSource::Git { url, devel } => source::git::new(url, *devel),
+        PackageAddSource::Raw { pkgbuild: src, devel } => source::raw::new(src, *devel),
     };
 
     // create package
-    let packages = package::add_source(&db, source, body.replace)
+    let packages = package::add_source(&db, &srcinfo_generator, source, body.replace)
         .await
         .internal()?
         .ok_or_else(|| ErrorBadRequest("package with the same base is already added"))?;
@@ -107,7 +94,7 @@ pub async fn add(
 
     {
         // scheduling package
-        let mut scheduler = scheduler.write().await;
+        let mut scheduler = scheduler.lock().await;
 
         for p in &packages {
             scheduler.schedule(p).await.internal()?;
@@ -206,7 +193,7 @@ pub async fn build_all(
         .collect::<Vec<_>>();
 
     scheduler
-        .write()
+        .lock()
         .await
         .run(packages, BuildMeta::new(BuildReason::Manual, body.resolve, body.clean, body.force))
         .await
@@ -237,7 +224,7 @@ pub async fn build(
     }
 
     scheduler
-        .write()
+        .lock()
         .await
         .run(packages, BuildMeta::new(BuildReason::Manual, body.resolve, body.clean, body.force))
         .await
@@ -327,7 +314,7 @@ pub async fn remove(
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    builder.write().await.run_remove(&package).await.internal()?;
+    builder.run_remove(&package).await.internal()?;
 
     Ok(empty_response())
 }
@@ -339,6 +326,7 @@ pub async fn settings(
     body: Json<PackageSettingsRequest>,
     db: Data<Database>,
     scheduler: BuildSchedulerData,
+    srcinfo_generator: SrcinfoGeneratorData,
 ) -> actix_web::Result<impl Responder> {
     let mut package = Package::find(&package, &db)
         .await
@@ -346,18 +334,18 @@ pub async fn settings(
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
     // get repo and devel tag
-    let reschedule = match body.0 {
+    let (reschedule, source) = match body.0 {
         PackageSettingsRequest::Clean(b) => {
             package.clean = b;
-            false
+            (false, false)
         }
         PackageSettingsRequest::Enabled(b) => {
             package.enabled = b;
-            true
+            (true, false)
         }
         PackageSettingsRequest::Dependency(b) => {
             package.dependency = b;
-            false
+            (false, false)
         }
         PackageSettingsRequest::Schedule(s) => {
             if s.as_ref().and_then(|c| Schedule::from_str(c).err()).is_some() {
@@ -365,29 +353,43 @@ pub async fn settings(
                     "cannot parse cron expression (you probably forgot the seconds)",
                 ));
             }
-
             package.schedule = s;
-            true
+            (true, false)
         }
         PackageSettingsRequest::Prepare(s) => {
             package.prepare = s;
-            false
+            (false, false)
         }
         PackageSettingsRequest::Flags(f) => {
             package.flags = f;
-            false
+            (false, false)
+        }
+        PackageSettingsRequest::Devel(b) => {
+            package.source.devel = b;
+            (true, true)
+        }
+        PackageSettingsRequest::SrcinfoOverride(b) => {
+            package.source.srcinfo_override = b;
+            (false, true)
         }
     };
 
     if reschedule {
         if package.enabled {
-            scheduler.write().await.schedule(&package).await.internal()?;
+            scheduler.lock().await.schedule(&package).await.internal()?;
         } else {
-            scheduler.write().await.unschedule(&package).await.internal()?;
+            scheduler.lock().await.unschedule(&package).await.internal()?;
         }
     }
 
-    package.change_settings(&db).await.internal()?;
+    if source {
+        // update source if we have changed anything in it
+        package.update(&srcinfo_generator).await.internal()?;
+
+        package.change_sources(&db).await.internal()?;
+    } else {
+        package.change_settings(&db).await.internal()?;
+    }
 
     Ok(empty_response())
 }
@@ -425,7 +427,7 @@ pub async fn build_webhook(
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
     scheduler
-        .write()
+        .lock()
         .await
         .run(vec![package], BuildMeta::normal(BuildReason::Webhook))
         .await

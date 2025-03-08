@@ -1,5 +1,5 @@
 use crate::database::Database;
-use crate::package::source::SrcinfoWrapper;
+use crate::package::srcinfo::SrcinfoWrapper;
 use crate::package::Package;
 use crate::resolve::sync::create_and_sync;
 use alpm::Alpm;

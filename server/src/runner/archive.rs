@@ -1,5 +1,6 @@
-use crate::package::source::SrcinfoWrapper;
+use crate::package::srcinfo::SrcinfoWrapper;
 use anyhow::{anyhow, Context};
+use async_std::io::Read;
 use async_std::path::PathBuf;
 use async_tar::{Archive, Builder, Entries, Header};
 use futures_util::{AsyncRead, AsyncReadExt, StreamExt};
@@ -7,93 +8,125 @@ use hyper::Body;
 use std::path::Path;
 use std::str::FromStr;
 
-// TODO: Refactor this into some kind of ArchiveWrapper struct which may easily
-// be passed around.       However, I cannot store an Archive<impl AsyncRead +
-// Unpin> in a struct.       For now we will have to deal with passing that
-// archive into and out of functions.       If you know how to do this properly,
-// please let me know!
-
 const RUNNER_IMAGE_BUILD_ARCHIVE_SRCINFO: &str = "target/.SRCINFO";
 const RUNNER_IMAGE_BUILD_ARCHIVE_PACKAGE_DIR: &str = "target/";
 
-pub fn begin_read(
-    archive: Archive<impl AsyncRead + Unpin>,
-) -> anyhow::Result<Entries<impl AsyncRead + Unpin + Sized>> {
-    archive.entries().context("failed starting to read archive with build packages")
+/// this is an archive which can only be read from and is based on a stream
+pub struct OutputArchive<R>
+where
+    R: AsyncRead + Unpin,
+{
+    entries: Entries<R>,
 }
 
-pub async fn read_srcinfo(
-    entries: &mut Entries<impl AsyncRead + Unpin + Sized>,
-) -> anyhow::Result<SrcinfoWrapper> {
-    // we assume here that due to the filename of .SRCINFO, we will read this file
-    // first however, we have read it just from VERSION for a long time, and it
-    // did still work - WTF?
-    while let Some(Ok(mut entry)) = entries.next().await {
-        if entry.path()?.to_string_lossy() == RUNNER_IMAGE_BUILD_ARCHIVE_SRCINFO {
-            let mut srcinfo = String::new();
-            entry
-                .read_to_string(&mut srcinfo)
-                .await
-                .context("could not read .SRCINFO file from archive from container")?;
+impl<R: AsyncRead + Unpin> OutputArchive<R> {
+    pub fn new(input: R) -> anyhow::Result<Self> {
+        let archive = Archive::new(input);
 
-            return SrcinfoWrapper::from_str(&srcinfo)
-                .context("failed to parse srcinfo returned from build container");
+        Ok(Self { entries: archive.entries().context("failed to start reading archive")? })
+    }
+
+    /// read the srcinfo from the archive, this should be called before
+    /// extracting files
+    pub async fn srcinfo(&mut self) -> anyhow::Result<SrcinfoWrapper> {
+        // we assume here that due to the filename of .SRCINFO, we will read this file
+        // first however, we have read it just from VERSION for a long time, and it
+        // did still work - WTF?
+
+        while let Some(Ok(mut entry)) = self.entries.next().await {
+            if entry.path()?.to_string_lossy() == RUNNER_IMAGE_BUILD_ARCHIVE_SRCINFO {
+                let mut srcinfo = String::new();
+                entry
+                    .read_to_string(&mut srcinfo)
+                    .await
+                    .context("could not read .SRCINFO file from archive from container")?;
+
+                return SrcinfoWrapper::from_str(&srcinfo)
+                    .context("failed to parse srcinfo returned from build container");
+            }
+        }
+
+        Err(anyhow!("could not find .SRCINFO file in archive from container"))
+    }
+
+    /// extract list of files to the given location
+    pub async fn extract(&mut self, files: &Vec<String>, to: &Path) -> anyhow::Result<()> {
+        let tar_dir = PathBuf::from(RUNNER_IMAGE_BUILD_ARCHIVE_PACKAGE_DIR);
+
+        let mut paths: Vec<PathBuf> = files.into_iter().map(|s| tar_dir.join(s)).collect();
+
+        while let Some(Ok(mut entry)) = self.entries.next().await {
+            let path = entry.path()?.to_path_buf();
+
+            if paths.iter().any(|p| p == &path) {
+                entry
+                    .unpack(to.join(path.file_name().expect("file must have name")))
+                    .await
+                    .context("failed to extract package form archive")?;
+
+                paths.retain(|p| p != &path);
+            }
+        }
+
+        if !paths.is_empty() {
+            Err(anyhow!("could not find all expected built packages: {paths:?}"))
+        } else {
+            Ok(())
         }
     }
-
-    Err(anyhow!("could not find .SRCINFO file in archive from container"))
 }
 
-pub async fn extract_files(
-    entries: &mut Entries<impl AsyncRead + Unpin + Sized>,
-    which: &Vec<String>,
-    to: &Path,
-) -> anyhow::Result<()> {
-    let tar_dir = PathBuf::from(RUNNER_IMAGE_BUILD_ARCHIVE_PACKAGE_DIR);
+/// this is an archive you can write to, note however that its content are
+/// directly stored in memory (when calling finish)
+pub struct InputArchive {
+    builder: Builder<Vec<u8>>,
+}
 
-    let mut paths: Vec<PathBuf> = which.into_iter().map(|s| tar_dir.join(s)).collect();
-
-    while let Some(Ok(mut entry)) = entries.next().await {
-        let path = entry.path()?.to_path_buf();
-
-        if paths.iter().any(|p| p == &path) {
-            entry
-                .unpack(to.join(path.file_name().expect("file must have name")))
-                .await
-                .context("failed to extract package form archive")?;
-
-            paths.retain(|p| p != &path);
-        }
+#[allow(clippy::new_without_default)]
+impl InputArchive {
+    pub fn new() -> Self {
+        let buffer = vec![];
+        Self { builder: Builder::new(buffer) }
     }
 
-    if !paths.is_empty() {
-        Err(anyhow!("could not find all expected built packages: {paths:?}"))
-    } else {
-        Ok(())
+    /// write a string to a file in the archive
+    pub async fn write_file(
+        &mut self,
+        text: &str,
+        path: &Path,
+        writeable: bool,
+    ) -> anyhow::Result<()> {
+        let data = text.as_bytes();
+
+        let mut header = Header::new_gnu();
+        header.set_size(data.len() as u64);
+        header.set_cksum();
+        header.set_mode(if writeable { 0o666 } else { 0o444 });
+
+        self.builder
+            .append_data(&mut header, path, data)
+            .await
+            .context("failed to create file in archive")
     }
-}
 
-pub fn begin_write() -> Builder<Vec<u8>> {
-    let buffer = vec![];
-    Builder::new(buffer)
-}
+    /// append a directory on the filesystem to the archive
+    pub async fn append_directory(&mut self, src: &Path, dst: &Path) -> anyhow::Result<()> {
+        self.builder
+            .append_dir_all(dst, src)
+            .await
+            .context("failed to append directory to input archive")
+    }
 
-pub async fn write_file(
-    text: String,
-    path: &str,
-    writeable: bool,
-    archive: &mut Builder<Vec<u8>>,
-) -> anyhow::Result<()> {
-    let data = text.as_bytes();
+    /// append a file on the filesystem to the archive
+    pub async fn append_file(&mut self, src: &Path, dst: &Path) -> anyhow::Result<()> {
+        self.builder
+            .append_path_with_name(src, dst)
+            .await
+            .context("failed to append file to input archive")
+    }
 
-    let mut header = Header::new_gnu();
-    header.set_size(data.len() as u64);
-    header.set_cksum();
-    header.set_mode(if writeable { 0o666 } else { 0o444 });
-
-    archive.append_data(&mut header, path, data).await.context("failed to create file in archive")
-}
-
-pub async fn end_write(archive: Builder<Vec<u8>>) -> anyhow::Result<Body> {
-    Ok(Body::from(archive.into_inner().await?))
+    pub async fn finish(self) -> anyhow::Result<Body> {
+        // this internally finishes the archive
+        Ok(Body::from(self.builder.into_inner().await?))
+    }
 }

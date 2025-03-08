@@ -1,4 +1,5 @@
 #![feature(extract_if)]
+#![feature(type_alias_impl_trait)]
 
 pub mod package;
 pub mod runner;
@@ -13,6 +14,8 @@ mod web;
 use crate::build::schedule::BuildScheduler;
 use crate::build::{cleanup_unfinished, Builder};
 use crate::config::CONFIG;
+use crate::database::package::migrate_sources;
+use crate::package::srcinfo::SrcinfoGenerator;
 use crate::package::{migrate_build_state, Package};
 use crate::repository::PackageRepository;
 use crate::runner::update::ImageScheduler;
@@ -24,7 +27,7 @@ use anyhow::Context;
 use config::INFO;
 use log::{error, info};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -40,27 +43,34 @@ async fn main() -> anyhow::Result<()> {
     let broadcast = Broadcast::new();
 
     // initializing runner
-    let runner = Arc::new(RwLock::new(
-        Runner::new(broadcast.clone()).context("failed to connect to docker")?,
-    ));
+    let runner = Arc::new(Runner::new(broadcast.clone()).context("failed to connect to docker")?);
 
     // initializing repository
-    let repository = Arc::new(RwLock::new(
+    let repository = Arc::new(Mutex::new(
         PackageRepository::new().await.context("failed to create package repository")?,
     ));
 
+    // initializing srcinfo generator
+    let srcinfo_generator = Arc::new(Mutex::new(SrcinfoGenerator::new(runner.clone())));
+
     // initializing builder
-    let builder = Arc::new(RwLock::new(Builder::new(
+    let builder = Arc::new(Builder::new(
         db.clone(),
         runner.clone(),
         repository.clone(),
         broadcast.clone(),
-    )));
+        srcinfo_generator.clone(),
+    ));
 
     // creating scheduler
-    let mut schedule = BuildScheduler::new(builder.clone(), db.clone(), broadcast.clone())
-        .await
-        .context("failed to start package scheduler")?;
+    let mut schedule = BuildScheduler::new(
+        builder.clone(),
+        db.clone(),
+        broadcast.clone(),
+        srcinfo_generator.clone(),
+    )
+    .await
+    .context("failed to start package scheduler")?;
 
     // creating image scheduler
     let image_scheduler = ImageScheduler::new(runner.clone());
@@ -74,6 +84,8 @@ async fn main() -> anyhow::Result<()> {
     if let Err(e) = migrate_build_state(&db).await {
         error!("failed apply heuristics to migrate to built_state: {e:#}")
     }
+
+    migrate_sources(&db, &srcinfo_generator).await?; // we should panic if it fails
 
     repository::remove_orphan_signature().await;
 
@@ -90,7 +102,7 @@ async fn main() -> anyhow::Result<()> {
     image_scheduler.run_sync().await;
 
     if config::CONFIG.build_cli {
-        if let Err(e) = package::try_add_cli(&db, &mut schedule).await {
+        if let Err(e) = package::try_add_cli(&db, &mut schedule, &srcinfo_generator).await {
             error!("failed to add cli package: {e:#}")
         }
     }
@@ -98,7 +110,7 @@ async fn main() -> anyhow::Result<()> {
     image_scheduler.start().await?;
     schedule.start().await?;
 
-    let schedule = Arc::new(RwLock::new(schedule));
+    let schedule = Arc::new(Mutex::new(schedule));
 
     info!("serene started successfully on port {}!", CONFIG.port);
     // web app
@@ -108,6 +120,7 @@ async fn main() -> anyhow::Result<()> {
             .app_data(Data::from(schedule.clone()))
             .app_data(Data::from(builder.clone()))
             .app_data(Data::from(broadcast.clone()))
+            .app_data(Data::from(srcinfo_generator.clone()))
             .service(repository::webservice())
             .service(web::info)
             .service(web::add)

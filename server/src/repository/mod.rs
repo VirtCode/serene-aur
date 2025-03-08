@@ -1,6 +1,7 @@
 use crate::config::CONFIG;
 use crate::package::{Package, PACKAGE_EXTENSION};
 use crate::runner::archive;
+use crate::runner::archive::OutputArchive;
 use actix_files::Files;
 use anyhow::{anyhow, Context};
 use async_tar::Entries;
@@ -10,7 +11,9 @@ use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use tokio::fs;
+use tokio::sync::Mutex;
 
 pub mod crypto;
 mod manage;
@@ -59,6 +62,8 @@ pub async fn remove_orphan_signature() {
 pub fn webservice() -> Files {
     Files::new(&CONFIG.architecture, REPO_DIR).show_files_listing()
 }
+
+pub type PackageRepositoryInstance = Arc<Mutex<PackageRepository>>;
 
 pub struct PackageRepository {
     name: String,
@@ -116,7 +121,7 @@ impl PackageRepository {
     pub async fn publish(
         &mut self,
         package: &Package,
-        mut output: Entries<impl AsyncRead + Unpin + Sized>,
+        mut output: OutputArchive<impl AsyncRead + Unpin>,
     ) -> anyhow::Result<()> {
         let files = package
             .expected_files()
@@ -156,7 +161,8 @@ impl PackageRepository {
         }
 
         // extract package files
-        archive::extract_files(&mut output, &files, Path::new(REPO_DIR))
+        output
+            .extract(&files, Path::new(REPO_DIR))
             .await
             .context("failed to extract all packages from build container")?;
 
