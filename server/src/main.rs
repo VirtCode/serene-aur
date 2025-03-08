@@ -75,6 +75,12 @@ async fn main() -> anyhow::Result<()> {
     // creating image scheduler
     let image_scheduler = ImageScheduler::new(runner.clone());
 
+    // yes, this will wait before starting the api, because after updates stuff
+    // can't be built without a new image
+    // we'll do this before the migrations because some need the new container
+    // already
+    image_scheduler.run_sync().await;
+
     // cleanup unfinished builds
     if let Err(e) = cleanup_unfinished(&db).await {
         error!("failed to cleanup unfinished builds: {e:#}")
@@ -96,10 +102,6 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context(format!("failed to start schedule for package {}", &package.base))?;
     }
-
-    // yes, this will wait before starting the api, because after updates stuff
-    // can't be built without a new image
-    image_scheduler.run_sync().await;
 
     if config::CONFIG.build_cli {
         if let Err(e) = package::try_add_cli(&db, &mut schedule, &srcinfo_generator).await {
