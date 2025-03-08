@@ -1,5 +1,11 @@
 ## TODO
 
+#### Bugs
+
+*unintended behaviour that should be fixed*
+
+- [ ] When using OWN_REPOSITORY on a new instance, without one previously built package, the containers can't udpate themselves
+
 #### Polish
 
 *polish for a better user experience*

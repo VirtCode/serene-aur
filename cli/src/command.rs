@@ -224,4 +224,18 @@ pub enum SettingsSubcommand {
         /// flags to add, without the dashes
         flags: Vec<String>,
     },
+
+    /// set whether the package is a devel package and should check for source changes
+    Devel {
+        /// check sources on update
+        #[arg(action = ArgAction::Set)]
+        devel: bool
+    },
+
+    /// force serene to generate the .SRCINFO for the package instead of using the provided one
+    SrcinfoOverride {
+        /// force regeneration of .SRCINFO on update
+        #[arg(action = ArgAction::Set)]
+        force: bool
+    },
 }

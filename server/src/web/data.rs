@@ -20,17 +20,21 @@ impl Package {
         PackageInfo {
             base: self.base.clone(),
             members: self.get_packages(),
+            description: self.get_description(),
+            builds: build_count,
             version: self.get_version(),
+            source: self.source.get_type(),
+            source_url: self.source.get_url(),
             devel: self.source.devel,
-            dependency: self.dependency,
+            srcinfo_override: self.source.srcinfo_override,
             enabled: self.enabled,
             clean: self.clean,
+            dependency: self.dependency,
             schedule: self.get_schedule(),
             schedule_changed: self.schedule.is_some(),
-            added: self.added,
             prepare_commands: self.prepare.clone(),
             makepkg_flags: self.flags.clone(),
-            builds: build_count,
+            added: self.added,
         }
     }
 }

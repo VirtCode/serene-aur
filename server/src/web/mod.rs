@@ -76,8 +76,8 @@ pub async fn add(
 
             source::aur::new(&package, false) // TODO: support the devel flag
         }
-        PackageAddSource::Custom { url, devel } => source::git::new(url, *devel),
-        PackageAddSource::Single { pkgbuild: src, devel } => source::raw::new(src, *devel),
+        PackageAddSource::Git { url, devel } => source::git::new(url, *devel),
+        PackageAddSource::Raw { pkgbuild: src, devel } => source::raw::new(src, *devel),
     };
 
     // create package
@@ -326,6 +326,7 @@ pub async fn settings(
     body: Json<PackageSettingsRequest>,
     db: Data<Database>,
     scheduler: BuildSchedulerData,
+    srcinfo_generator: SrcinfoGeneratorData,
 ) -> actix_web::Result<impl Responder> {
     let mut package = Package::find(&package, &db)
         .await
@@ -333,18 +334,18 @@ pub async fn settings(
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
     // get repo and devel tag
-    let reschedule = match body.0 {
+    let (reschedule, source) = match body.0 {
         PackageSettingsRequest::Clean(b) => {
             package.clean = b;
-            false
+            (false, false)
         }
         PackageSettingsRequest::Enabled(b) => {
             package.enabled = b;
-            true
+            (true, false)
         }
         PackageSettingsRequest::Dependency(b) => {
             package.dependency = b;
-            false
+            (false, false)
         }
         PackageSettingsRequest::Schedule(s) => {
             if s.as_ref().and_then(|c| Schedule::from_str(c).err()).is_some() {
@@ -352,17 +353,24 @@ pub async fn settings(
                     "cannot parse cron expression (you probably forgot the seconds)",
                 ));
             }
-
             package.schedule = s;
-            true
+            (true, false)
         }
         PackageSettingsRequest::Prepare(s) => {
             package.prepare = s;
-            false
+            (false, false)
         }
         PackageSettingsRequest::Flags(f) => {
             package.flags = f;
-            false
+            (false, false)
+        }
+        PackageSettingsRequest::Devel(b) => {
+            package.source.devel = b;
+            (true, true)
+        }
+        PackageSettingsRequest::SrcinfoOverride(b) => {
+            package.source.srcinfo_override = b;
+            (false, true)
         }
     };
 
@@ -374,7 +382,14 @@ pub async fn settings(
         }
     }
 
-    package.change_settings(&db).await.internal()?;
+    if source {
+        // update source if we have changed anything in it
+        package.update(&srcinfo_generator).await.internal()?;
+
+        package.change_sources(&db).await.internal()?;
+    } else {
+        package.change_settings(&db).await.internal()?;
+    }
 
     Ok(empty_response())
 }

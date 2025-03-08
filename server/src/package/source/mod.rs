@@ -140,8 +140,8 @@ impl Source {
 
         let inner_no_srcinfo = self.inner.get_srcinfo(folder).await?.is_none();
 
-        if (self.inner.get_state() != before && (inner_no_srcinfo || self.srcinfo_override))
-            || (self.srcinfo.is_none() && inner_no_srcinfo)
+        if (self.inner.get_state() != before || self.srcinfo.is_none())
+            && (inner_no_srcinfo || self.srcinfo_override)
         {
             let mut input = InputArchive::new();
             self.inner.load_build_files(&mut input, folder).await?;
@@ -202,5 +202,15 @@ impl Source {
         archive: &mut InputArchive,
     ) -> anyhow::Result<()> {
         self.inner.load_build_files(archive, folder).await
+    }
+
+    /// get a string describing the type of the source
+    pub fn get_type(&self) -> String {
+        self.inner.get_type()
+    }
+
+    /// get an url to the upstream of the source if there is any
+    pub fn get_url(&self) -> Option<String> {
+        self.inner.get_url()
     }
 }

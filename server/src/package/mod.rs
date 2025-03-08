@@ -375,11 +375,14 @@ impl Package {
         fs::remove_dir_all(self.get_folder()).await.context("could not delete source directory")
     }
 
+    /// returns all currently-known members of the package
     pub fn get_packages(&self) -> Vec<String> {
-        self.srcinfo
-            .as_ref()
-            .map(|s| s.names().map(|s| s.to_owned()).collect())
-            .unwrap_or_else(|| vec![])
+        self.srcinfo.as_ref().map(|s| s.names().map(|s| s.to_owned()).collect()).unwrap_or_default()
+    }
+
+    /// returns the description of the package from the srcinfo if there is any
+    pub fn get_description(&self) -> Option<String> {
+        self.srcinfo.as_ref().and_then(|s| s.pkg.pkgdesc.clone())
     }
 }
 
