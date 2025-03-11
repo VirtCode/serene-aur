@@ -163,7 +163,11 @@ pub async fn try_add_cli(
     scheduler: &mut BuildScheduler,
     srcinfo_generator: &SrcinfoGeneratorInstance,
 ) -> anyhow::Result<()> {
-    if Package::has(CLI_PACKAGE_NAME, db).await? {
+    // is the package already added?
+    if let Some(pkg) = Package::find(CLI_PACKAGE_NAME, db).await? {
+        debug!("update serene-cli now in case of an update");
+        scheduler.run(vec![pkg], BuildMeta::normal(BuildReason::Schedule)).await?;
+
         return Ok(());
     }
 
