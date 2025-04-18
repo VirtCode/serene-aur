@@ -25,6 +25,7 @@ pub enum PackageAddSource {
 #[serde(tag = "key", content = "value", rename_all = "lowercase")]
 pub enum PackageSettingsRequest {
     Clean(bool),
+    Private(bool),
     Enabled(bool),
     Dependency(bool),
     Schedule(Option<String>),
@@ -146,6 +147,8 @@ pub struct PackageInfo {
     pub enabled: bool,
     /// does clean-build
     pub clean: bool,
+    /// is marked as private
+    pub private: bool,
     /// is added as a dependency
     pub dependency: bool,
     /// schedule of the package

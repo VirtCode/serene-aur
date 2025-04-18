@@ -200,6 +200,13 @@ pub enum SettingsSubcommand {
         enabled: bool,
     },
 
+    /// mark or unmark the package as private
+    Private {
+        /// the package is private (will hide preparation commands)
+        #[arg(action = ArgAction::Set)]
+        mark: bool,
+    },
+
     /// enable or disable automatic package building
     Enable {
         /// enable automatic building

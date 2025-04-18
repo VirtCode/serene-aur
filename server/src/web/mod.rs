@@ -339,6 +339,10 @@ pub async fn settings(
             package.clean = b;
             (false, false)
         }
+        PackageSettingsRequest::Private(b) => {
+            package.private = b;
+            (false, false)
+        }
         PackageSettingsRequest::Enabled(b) => {
             package.enabled = b;
             (true, false)

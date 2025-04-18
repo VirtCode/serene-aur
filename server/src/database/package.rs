@@ -16,6 +16,7 @@ use std::str::FromStr;
 /// server/migrations/20240306195926_makepkg_flags.sql
 /// server/migrations/20241004212454_built_state.sql
 /// server/migrations/20241007180807_remove_version.sql
+/// server/migrations/20250418161813_private.sql
 #[derive(Debug)]
 struct PackageRecord {
     /// id
@@ -27,6 +28,7 @@ struct PackageRecord {
     pkgbuild: Option<String>,
     built_state: String,
     enabled: bool,
+    private: bool,
     clean: bool,
     dependency: bool,
     schedule: Option<String>,
@@ -45,6 +47,7 @@ impl DatabaseConversion<PackageRecord> for Package {
             built_state: self.built_state.clone(),
             enabled: self.enabled,
             clean: self.clean,
+            private: self.private,
             schedule: self.schedule.clone(),
             prepare: self.prepare.clone(),
             flags: if !self.flags.is_empty() {
@@ -69,6 +72,7 @@ impl DatabaseConversion<PackageRecord> for Package {
             built_state: value.built_state,
             enabled: value.enabled,
             clean: value.clean,
+            private: value.private,
             schedule: value.schedule,
             prepare: value.prepare,
             flags: value
@@ -146,10 +150,10 @@ impl Package {
         let record = self.create_record()?;
 
         query!(r#"
-            INSERT INTO package (base, added, source, srcinfo, pkgbuild, enabled, clean, schedule, prepare, flags, dependency, built_state)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            INSERT INTO package (base, added, source, srcinfo, pkgbuild, enabled, clean, private, schedule, prepare, flags, dependency, built_state)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         "#,
-            record.base, record.added, record.source, record.srcinfo, record.pkgbuild, record.enabled, record.clean, record.schedule, record.prepare, record.flags, record.dependency, record.built_state
+            record.base, record.added, record.source, record.srcinfo, record.pkgbuild, record.enabled, record.clean, record.private, record.schedule, record.prepare, record.flags, record.dependency, record.built_state
         )
             .execute(db).await?;
 
@@ -163,12 +167,13 @@ impl Package {
         query!(
             r#"
             UPDATE package
-            SET enabled = $2, clean = $3, schedule = $4, prepare = $5, flags = $6, dependency = $7
+            SET enabled = $2, clean = $3, private = $4, schedule = $5, prepare = $6, flags = $7, dependency = $8
             WHERE base = $1
         "#,
             record.base,
             record.enabled,
             record.clean,
+            record.private,
             record.schedule,
             record.prepare,
             record.flags,

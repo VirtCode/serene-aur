@@ -30,10 +30,11 @@ impl Package {
             srcinfo_override: self.source.srcinfo_override,
             enabled: self.enabled,
             clean: self.clean,
+            private: self.private,
             dependency: self.dependency,
             schedule: self.get_schedule(),
             schedule_changed: self.schedule.is_some(),
-            prepare_commands: self.prepare.clone(),
+            prepare_commands: if self.private { None } else { self.prepare.clone() },
             makepkg_flags: self.flags.clone(),
             added: self.added,
         }

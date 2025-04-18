@@ -409,6 +409,9 @@ pub fn info(c: &Config, package: &str, all: bool) {
     if info.dependency {
         tags.push("dependency".purple())
     }
+    if info.private {
+        tags.push("private".bright_black())
+    }
 
     println!(
         "{:<9} {}",
@@ -436,7 +439,10 @@ pub fn info(c: &Config, package: &str, all: bool) {
 
     println!("{:<9} {}", "builds:", info.builds);
 
-    if let Some(prepare) = &info.prepare_commands {
+    if info.private {
+        println!();
+        println!("prepare commands: {}", "redacted".dimmed().italic());
+    } else if let Some(prepare) = &info.prepare_commands {
         println!();
         println!("prepare commands:");
         println!("{}", prepare.trim());
@@ -582,7 +588,7 @@ pub fn signing_key(c: &Config, machine: bool) {
             } else {
                 println!(
                     "Here's the public key that is used to sign the packages on that server.\n\
-                     You can import it into `pacman` to make use of the signatures. Refer to\n{}\n", 
+                     You can import it into `pacman` to make use of the signatures. Refer to\n{}\n",
                     "https://wiki.archlinux.org/title/Pacman/Package_signing#Adding_unofficial_keys".italic()
                 );
 
@@ -668,6 +674,13 @@ pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
                 if enabled { "enabling" } else { "disabling" }
             ));
             PackageSettingsRequest::Clean(enabled)
+        }
+        SettingsSubcommand::Private { mark } => {
+            log.next(&format!(
+                "marking package {package} as {}",
+                if mark { "private" } else { "not private anymore" }
+            ));
+            PackageSettingsRequest::Private(mark)
         }
         SettingsSubcommand::Enable { enabled } => {
             log.next(&format!(

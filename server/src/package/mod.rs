@@ -218,6 +218,9 @@ pub struct Package {
     pub dependency: bool,
     /// whether package should be cleaned after building
     pub clean: bool,
+    /// whether the package contains private information (currently only hides
+    /// prepare commands)
+    pub private: bool,
     /// potential custom cron schedule string
     pub schedule: Option<String>,
     /// commands to run in container before package build, they are written to
@@ -237,6 +240,7 @@ impl Package {
             dependency,
             clean: !source.devel,
             enabled: true,
+            private: false,
             schedule: None,
             prepare: None,
             flags: vec![],
