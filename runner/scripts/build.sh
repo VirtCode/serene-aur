@@ -23,4 +23,8 @@ makepkg --syncdeps --force --noconfirm $FLAGS
 message "collecting package information"
 makepkg --printsrcinfo > ../target/.SRCINFO
 
+message "cleaning up to save space"
+# we have no use for the pacman cache (and yes --noconfirm doesn't work here)
+yes | sudo pacman -Scc
+
 message "build script finished"
