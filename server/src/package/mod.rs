@@ -3,7 +3,7 @@ use crate::build::BuildSummary;
 use crate::config::{CLI_PACKAGE_NAME, CONFIG};
 use crate::database::Database;
 use crate::package::source::Source;
-use crate::package::srcinfo::{SrcinfoGeneratorInstance, SrcinfoWrapper};
+use crate::package::srcinfo::SrcinfoWrapper;
 use crate::resolve::AurResolver;
 use crate::runner;
 use crate::runner::archive;
@@ -28,14 +28,12 @@ pub const SOURCE_FOLDER: &str = "sources";
 pub(crate) const PACKAGE_EXTENSION: &str = ".pkg.tar.zst"; // see /etc/makepkg.conf
 
 pub async fn add_source(
-    db: &Database,
-    srcinfo_generator: &SrcinfoGeneratorInstance,
     source: Source,
     replace: bool,
 ) -> anyhow::Result<Option<Vec<Package>>> {
     let temp = get_temp();
 
-    let result = add(db, srcinfo_generator, source, &temp, replace).await;
+    let result = add(source, &temp, replace).await;
 
     if let Err(e) = fs::remove_dir_all(&temp).await {
         warn!("failed to remove temp for checkout: {e:#}");
@@ -56,15 +54,11 @@ fn get_temp_package(temp: &Path) -> PathBuf {
     temp.join(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string())
 }
 
-async fn checkout(
-    source: &mut Source,
-    temp: &Path,
-    srcinfo_generator: &SrcinfoGeneratorInstance,
-) -> anyhow::Result<(PathBuf, SrcinfoWrapper)> {
+async fn checkout(source: &mut Source, temp: &Path) -> anyhow::Result<(PathBuf, SrcinfoWrapper)> {
     let folder = get_temp_package(temp);
     fs::create_dir_all(&folder).await?;
 
-    source.initialize(srcinfo_generator, &folder).await.context("failed to checkout source")?;
+    source.initialize(&folder).await.context("failed to checkout source")?;
 
     let srcinfo = source.get_srcinfo(&folder).await?;
 
@@ -72,23 +66,21 @@ async fn checkout(
 }
 
 async fn add(
-    db: &Database,
-    srcinfo_generator: &SrcinfoGeneratorInstance,
     mut source: Source,
     temp: &Path,
     replace: bool,
 ) -> anyhow::Result<Option<Vec<Package>>> {
     // checkout target
-    let (path, srcinfo) = checkout(&mut source, temp, srcinfo_generator).await?;
+    let (path, srcinfo) = checkout(&mut source, temp).await?;
     let target = srcinfo.base.pkgbase.clone();
     info!("adding new package {target}");
 
-    if Package::find(&srcinfo.base.pkgbase, db).await?.is_some() && !replace {
+    if Package::find(&srcinfo.base.pkgbase).await?.is_some() && !replace {
         return Ok(None);
     }
 
     // resolve deps - this already resolves transitive deps
-    let mut resolver = AurResolver::with(db, &srcinfo).await?;
+    let mut resolver = AurResolver::with(&srcinfo).await?;
     let actions = resolver.resolve_package_raw(&srcinfo.base.pkgbase).await?;
 
     if !actions.missing.is_empty() {
@@ -105,7 +97,7 @@ async fn add(
     for dep in actions.iter_aur_pkgs().map(|p| &p.pkg) {
         let mut source = source::aur::new(&dep, false);
 
-        let (path, srcinfo) = checkout(&mut source, temp, srcinfo_generator)
+        let (path, srcinfo) = checkout(&mut source, temp)
             .await
             .context("failed to checkout source for dependency")?;
 
@@ -120,7 +112,7 @@ async fn add(
     for (path, srcinfo, source, replace) in packages {
         // check other packages
         let (package, new) =
-            if let Some(mut package) = Package::find(&srcinfo.base.pkgbase, db).await? {
+            if let Some(mut package) = Package::find(&srcinfo.base.pkgbase).await? {
                 // only proceed if replacing enabled
                 if !replace {
                     warn!("aur-resolve suggested package that was already added: {}", package.base);
@@ -145,9 +137,9 @@ async fn add(
         fs::rename(path, package.get_folder()).await.context("failed to move source")?;
 
         if new {
-            package.save(db).await?
+            package.save().await?
         } else {
-            package.change_sources(db).await?
+            package.change_sources().await?
         }
 
         info!("successfully added package {}", &package.base);
@@ -158,13 +150,9 @@ async fn add(
 }
 
 /// adds the cli to the current packages
-pub async fn try_add_cli(
-    db: &Database,
-    scheduler: &mut BuildScheduler,
-    srcinfo_generator: &SrcinfoGeneratorInstance,
-) -> anyhow::Result<()> {
+pub async fn try_add_cli(scheduler: &mut BuildScheduler) -> anyhow::Result<()> {
     // is the package already added?
-    if let Some(pkg) = Package::find(CLI_PACKAGE_NAME, db).await? {
+    if let Some(pkg) = Package::find(CLI_PACKAGE_NAME).await? {
         debug!("update serene-cli now in case of an update");
         scheduler.run(vec![pkg], BuildMeta::normal(BuildReason::Schedule)).await?;
 
@@ -172,14 +160,14 @@ pub async fn try_add_cli(
     }
 
     info!("adding and building serene-cli");
-    if let Some(all) = add_source(db, srcinfo_generator, source::cli::new(), false).await? {
+    if let Some(all) = add_source(source::cli::new(), false).await? {
         // TODO: cleanify with support for deps
         let Some(mut package) = all.into_iter().next() else {
             return Err(anyhow!("failed to add serene-cli, not in added pkgs"));
         };
 
         package.clean = true;
-        package.change_settings(db).await?;
+        package.change_settings().await?;
 
         scheduler.schedule(&package).await?;
 
@@ -277,11 +265,8 @@ impl Package {
         self.built_state == self.source.get_state()
     }
 
-    pub async fn update(
-        &mut self,
-        srcinfo_generator: &SrcinfoGeneratorInstance,
-    ) -> anyhow::Result<()> {
-        self.source.update(srcinfo_generator, &self.get_folder()).await
+    pub async fn update(&mut self) -> anyhow::Result<()> {
+        self.source.update(&self.get_folder()).await
     }
 
     /// upgrades the version of the package
@@ -412,10 +397,10 @@ fn select_arch(available: &Vec<String>) -> String {
 /// performs heuristics to migrate packages to the new built_state
 /// will check whether the latest build was a success and if so will assume the
 /// source has not changed
-pub async fn migrate_build_state(db: &Database) -> anyhow::Result<()> {
-    for mut package in Package::find_migrated_built_state(db).await? {
+pub async fn migrate_build_state() -> anyhow::Result<()> {
+    for mut package in Package::find_migrated_built_state().await? {
         debug!("trying to migrate package {} to built_state", package.base);
-        let Some(summary) = BuildSummary::find_latest_for_package(&package.base, db).await? else {
+        let Some(summary) = BuildSummary::find_latest_for_package(&package.base).await? else {
             continue;
         };
 
@@ -423,7 +408,7 @@ pub async fn migrate_build_state(db: &Database) -> anyhow::Result<()> {
             info!("migrating package {} to built_state, assuming up-to-date", package.base);
 
             package.built_state = package.source.get_state();
-            package.change_sources(db).await?;
+            package.change_sources().await?;
         }
     }
     Ok(())

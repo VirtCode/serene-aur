@@ -1,6 +1,6 @@
 use crate::database::{Database, DatabaseConversion};
 use crate::package::source::legacy::LegacySource;
-use crate::package::srcinfo::{SrcinfoGeneratorInstance, SrcinfoWrapper};
+use crate::package::srcinfo::SrcinfoWrapper;
 use crate::package::{Package, SOURCE_FOLDER};
 use actix_web_lab::sse::Data;
 use anyhow::{Context, Result};
@@ -10,6 +10,8 @@ use serde_json::Value;
 use sqlx::{query, query_as};
 use std::path::Path;
 use std::str::FromStr;
+
+use super::DATABASE;
 
 /// See migrations:
 /// server/migrations/20240210163236_package.sql,
@@ -86,14 +88,14 @@ impl DatabaseConversion<PackageRecord> for Package {
 
 impl Package {
     /// Returns whether the database contains a specific package
-    pub async fn has(base: &str, db: &Database) -> Result<bool> {
+    pub async fn has(base: &str) -> Result<bool> {
         let amount = query!(
             r#"
             SELECT COUNT(base) as count FROM package WHERE base == $1
         "#,
             base
         )
-        .fetch_one(db)
+        .fetch_one(&*DATABASE)
         .await?
         .count;
 
@@ -101,7 +103,7 @@ impl Package {
     }
 
     /// Find a specific package from the database
-    pub async fn find(base: &str, db: &Database) -> Result<Option<Self>> {
+    pub async fn find(base: &str) -> Result<Option<Self>> {
         let record = query_as!(
             PackageRecord,
             r#"
@@ -109,21 +111,21 @@ impl Package {
         "#,
             base
         )
-        .fetch_optional(db)
+        .fetch_optional(&*DATABASE)
         .await?;
 
         record.map(Package::from_record).transpose()
     }
 
     /// Find all packages from the database
-    pub async fn find_all(db: &Database) -> Result<Vec<Self>> {
+    pub async fn find_all() -> Result<Vec<Self>> {
         let records = query_as!(
             PackageRecord,
             r#"
             SELECT * FROM package
         "#
         )
-        .fetch_all(db)
+        .fetch_all(&*DATABASE)
         .await?;
 
         records.into_iter().map(Package::from_record).collect()
@@ -131,7 +133,7 @@ impl Package {
 
     /// Find all packages from the database which were freshly migrated to built
     /// states
-    pub async fn find_migrated_built_state(db: &Database) -> Result<Vec<Self>> {
+    pub async fn find_migrated_built_state() -> Result<Vec<Self>> {
         let records = query_as!(
             PackageRecord,
             r#"
@@ -139,14 +141,14 @@ impl Package {
         "#,
             "migrated"
         )
-        .fetch_all(db)
+        .fetch_all(&*DATABASE)
         .await?;
 
         records.into_iter().map(Package::from_record).collect()
     }
 
     /// Saves the package to the database for a first time
-    pub async fn save(&self, db: &Database) -> Result<()> {
+    pub async fn save(&self) -> Result<()> {
         let record = self.create_record()?;
 
         query!(r#"
@@ -155,13 +157,13 @@ impl Package {
         "#,
             record.base, record.added, record.source, record.srcinfo, record.pkgbuild, record.enabled, record.clean, record.private, record.schedule, record.prepare, record.flags, record.dependency, record.built_state
         )
-            .execute(db).await?;
+            .execute(&*DATABASE).await?;
 
         Ok(())
     }
 
     /// Updates the settings inside the database
-    pub async fn change_settings(&self, db: &Database) -> Result<()> {
+    pub async fn change_settings(&self) -> Result<()> {
         let record = self.create_record()?;
 
         query!(
@@ -179,14 +181,14 @@ impl Package {
             record.flags,
             record.dependency
         )
-        .execute(db)
+        .execute(&*DATABASE)
         .await?;
 
         Ok(())
     }
 
     /// Updates the sources inside the database
-    pub async fn change_sources(&self, db: &Database) -> Result<()> {
+    pub async fn change_sources(&self) -> Result<()> {
         let record = self.create_record()?;
 
         query!(
@@ -201,14 +203,14 @@ impl Package {
             record.pkgbuild,
             record.built_state
         )
-        .execute(db)
+        .execute(&*DATABASE)
         .await?;
 
         Ok(())
     }
 
     /// Deletes the package from the database
-    pub async fn delete(&self, db: &Database) -> Result<()> {
+    pub async fn delete(&self) -> Result<()> {
         let base = &self.base;
 
         query!(
@@ -217,24 +219,21 @@ impl Package {
         "#,
             base
         )
-        .execute(db)
+        .execute(&*DATABASE)
         .await?;
 
         Ok(())
     }
 }
 
-pub async fn migrate_sources(
-    db: &Database,
-    srcinfo_generator: &SrcinfoGeneratorInstance,
-) -> Result<()> {
+pub async fn migrate_sources() -> Result<()> {
     let records = query_as!(
         PackageRecord,
         r#"
             SELECT * FROM package
         "#
     )
-    .fetch_all(db)
+    .fetch_all(&*DATABASE)
     .await?;
 
     for mut record in records {
@@ -263,8 +262,8 @@ pub async fn migrate_sources(
             }
 
             // update the source to generate srcinfos if required and save to db
-            package.update(srcinfo_generator).await?;
-            package.change_sources(db).await?;
+            package.update().await?;
+            package.change_sources().await?;
         }
     }
 

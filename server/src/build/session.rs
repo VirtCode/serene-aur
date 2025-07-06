@@ -4,7 +4,7 @@ use crate::config::CONFIG;
 use crate::database::Database;
 use crate::package::Package;
 use crate::resolve::build::BuildResolver;
-use crate::web::broadcast::{Broadcast, BroadcastInstance};
+use crate::web::broadcast::{Broadcast, BROADCAST};
 use anyhow::{Context, Result};
 use log::{debug, error, info, warn};
 use serene_data::build::{BuildProgress, BuildReason, BuildState};
@@ -13,39 +13,35 @@ use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{oneshot, RwLock};
 
-pub struct BuildSession<'a> {
+pub struct BuildSession {
     packages: Vec<(Package, BuildSummary, HashSet<String>)>,
     building: HashSet<String>,
     meta: BuildMeta,
 
     builder: BuilderInstance,
-    broadcast: BroadcastInstance,
-    db: &'a Database,
 }
 
 /// specifies whether a build was successful
 struct BuildResult(String, bool);
 
-impl<'a> BuildSession<'a> {
+impl BuildSession {
     /// starts a session by resolving the packages.
     /// packages should be updated outside, as they might not build successfully
     /// anyway
     pub async fn start(
         packages: Vec<Package>,
-        db: &'a Database,
         builder: BuilderInstance,
-        broadcast: BroadcastInstance,
         meta: BuildMeta,
     ) -> Result<Self> {
         let result = if meta.resolve && CONFIG.resolve_build_sequence && packages.len() > 1 {
-            Self::resolve(packages, meta.reason, db, broadcast.clone()).await?
+            Self::resolve(packages, meta.reason).await?
         } else {
             let mut result = vec![];
 
             for package in packages {
                 let summary = BuildSummary::start(&package, meta.reason);
-                summary.save(db).await?;
-                broadcast.change(&package.base, summary.state.clone()).await;
+                summary.save().await?;
+                BROADCAST.change(&package.base, summary.state.clone()).await;
 
                 result.push((package, summary, HashSet::new()))
             }
@@ -53,7 +49,7 @@ impl<'a> BuildSession<'a> {
             result
         };
 
-        Ok(Self { builder, broadcast, db, packages: result, building: HashSet::new(), meta })
+        Ok(Self { builder, packages: result, building: HashSet::new(), meta })
     }
 
     // FIXME: remove this once Alpm is sync, see sync.rs
@@ -63,13 +59,8 @@ impl<'a> BuildSession<'a> {
     async fn resolve(
         packages: Vec<Package>,
         reason: BuildReason,
-        db: &'a Database,
-        broadcast: Arc<Broadcast>,
     ) -> Result<Vec<(Package, BuildSummary, HashSet<String>)>> {
         let (tx, rx) = oneshot::channel();
-
-        let db = db.clone();
-        let broadcast = broadcast.clone();
 
         // spawn new thread
         std::thread::spawn(move || {
@@ -81,7 +72,7 @@ impl<'a> BuildSession<'a> {
                     debug!("resolving packages on seperate thread");
 
                     let result = 'content: {
-                        let mut resolver = match BuildResolver::new(&db, broadcast).await {
+                        let mut resolver = match BuildResolver::new().await {
                             Ok(r) => r,
                             Err(e) => break 'content Err(e),
                         };
@@ -154,8 +145,8 @@ impl<'a> BuildSession<'a> {
                     sum.end(BuildState::Cancelled(format!(
                         "failed to build dependency {built} successfully"
                     )));
-                    sum.change(self.db).await?;
-                    self.broadcast.change(&pkg.base, sum.state.clone()).await;
+                    sum.change().await?;
+                    BROADCAST.change(&pkg.base, sum.state.clone()).await;
                 }
             }
         }
@@ -170,8 +161,8 @@ impl<'a> BuildSession<'a> {
                 ),
                 BuildProgress::Resolve,
             ));
-            summary.change(self.db).await?;
-            self.broadcast.change(&p.base, summary.state.clone()).await;
+            summary.change().await?;
+            BROADCAST.change(&p.base, summary.state.clone()).await;
         }
 
         Ok(())

@@ -1,3 +1,4 @@
+use crate::init::Init;
 use crate::runner::archive::InputArchive;
 use crate::runner::RunnerInstance;
 use anyhow::anyhow;
@@ -68,7 +69,7 @@ impl<'de> Deserialize<'de> for SrcinfoWrapper {
 
 // we wrap this in a mutex so we don't get any race conditions of different
 // packages trying to generate their srcinfo at the same time
-pub type SrcinfoGeneratorInstance = Arc<Mutex<SrcinfoGenerator>>;
+pub static SRCINFO_GENERATOR: Init<Mutex<SrcinfoGenerator>> = Init::new();
 
 pub struct SrcinfoGenerator {
     runner: RunnerInstance,

@@ -4,7 +4,7 @@ pub mod update;
 use crate::config::{CONFIG, INFO};
 use crate::package::Package;
 use crate::runner::archive::{InputArchive, OutputArchive};
-use crate::web::broadcast::{Broadcast, BroadcastInstance};
+use crate::web::broadcast::{Broadcast, BROADCAST};
 use anyhow::Context;
 use async_tar::Archive;
 use bollard::container::{
@@ -46,13 +46,12 @@ pub type RunnerInstance = Arc<Runner>;
 /// this is a wrapper for docker which creates and interacts with runner
 /// containers
 pub struct Runner {
-    pub docker: Docker,
-    broadcast: BroadcastInstance,
+    pub docker: Docker
 }
 
 impl Runner {
     /// creates a new runner by taking the docker from the default socket
-    pub fn new(broadcast: BroadcastInstance) -> anyhow::Result<Self> {
+    pub fn new() -> anyhow::Result<Self> {
         let docker = if let Some(url) = &CONFIG.docker_url {
             if url.starts_with("tcp://") || url.starts_with("http://") {
                 info!("using docker via tcp at '{url}'");
@@ -70,7 +69,7 @@ impl Runner {
             Docker::connect_with_unix_defaults()
         };
 
-        Ok(Self { docker: docker.context("failed to initialize docker")?, broadcast })
+        Ok(Self { docker: docker.context("failed to initialize docker")? })
     }
 
     /// runs the container
@@ -95,7 +94,6 @@ impl Runner {
 
         let mut stream = self.docker.logs::<String>(container, Some(log_options));
 
-        let broadcast = self.broadcast.clone();
         let log_collector = tokio::spawn(async move {
             let mut logs = vec![];
 
@@ -107,7 +105,7 @@ impl Runner {
 
                     logs.push(value.clone());
                     if let Some(base) = &broadcast_target {
-                        broadcast.log(base, value).await;
+                        BROADCAST.log(base, value).await;
                     }
                 }
             }

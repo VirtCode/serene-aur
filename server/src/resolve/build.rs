@@ -2,17 +2,13 @@ use crate::build::BuildSummary;
 use crate::database::Database;
 use crate::package::Package;
 use crate::resolve::AurResolver;
-use crate::web::broadcast::Broadcast;
+use crate::web::broadcast::{Broadcast, BROADCAST};
 use log::debug;
 use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-pub struct BuildResolver<'a> {
-    /// database
-    db: &'a Database,
-    broadcast: Arc<Broadcast>,
-
+pub struct BuildResolver {
     /// packages involved in this build round
     packages: Vec<(Package, BuildSummary)>,
 }
@@ -25,9 +21,9 @@ enum Status {
     Failure(String),
 }
 
-impl<'a> BuildResolver<'a> {
-    pub async fn new(db: &'a Database, broadcast: Arc<Broadcast>) -> anyhow::Result<Self> {
-        Ok(Self { packages: Vec::new(), db, broadcast })
+impl BuildResolver {
+    pub async fn new() -> anyhow::Result<Self> {
+        Ok(Self { packages: Vec::new() })
     }
 
     /// combines the lower two functions
@@ -47,7 +43,7 @@ impl<'a> BuildResolver<'a> {
 
             // create build
             let summary = BuildSummary::start(&package, reason);
-            summary.save(self.db).await?;
+            summary.save().await?;
 
             // add them
             self.packages.push((package, summary));
@@ -60,7 +56,7 @@ impl<'a> BuildResolver<'a> {
     pub async fn resolve(
         &mut self,
     ) -> anyhow::Result<Vec<(Package, BuildSummary, HashSet<String>)>> {
-        let mut resolver = AurResolver::next(self.db, self.packages.iter().map(|(p, _)| p)).await?;
+        let mut resolver = AurResolver::next(self.packages.iter().map(|(p, _)| p)).await?;
 
         // resolve packages
         debug!("starting to resolve all packages for build");
@@ -88,7 +84,7 @@ impl<'a> BuildResolver<'a> {
                 ));
 
                 for pkg in &info.aur {
-                    if Package::has(pkg, self.db).await? {
+                    if Package::has(pkg).await? {
                         result = Status::Failure(format!(
                             "dependency {pkg} is added but has never built successfully"
                         ));
@@ -162,8 +158,8 @@ impl<'a> BuildResolver<'a> {
                 Status::Failure(err) => {
                     debug!("cancelling package {} because: {err}", package.base);
                     summary.end(BuildState::Cancelled(err));
-                    summary.change(self.db).await?;
-                    self.broadcast.change(&package.base, summary.state.clone()).await;
+                    summary.change().await?;
+                    BROADCAST.change(&package.base, summary.state.clone()).await;
                 }
             }
         }
@@ -176,7 +172,7 @@ impl<'a> BuildResolver<'a> {
     pub async fn finish_fatally(&mut self, message: &str) -> anyhow::Result<()> {
         for (_, summary) in &mut self.packages {
             summary.end(BuildState::Fatal(message.to_string(), BuildProgress::Resolve));
-            summary.save(self.db).await?;
+            summary.save().await?;
         }
 
         Ok(())

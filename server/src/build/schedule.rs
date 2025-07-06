@@ -1,9 +1,8 @@
 use crate::build::session::BuildSession;
 use crate::build::{Builder, BuilderInstance};
 use crate::database::Database;
-use crate::package::srcinfo::SrcinfoGeneratorInstance;
 use crate::package::Package;
-use crate::web::broadcast::{Broadcast, BroadcastInstance};
+use crate::web::broadcast::{Broadcast};
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
@@ -40,10 +39,7 @@ impl BuildMeta {
 
 /// this struct schedules builds for all packages
 pub struct BuildScheduler {
-    db: Database,
     builder: BuilderInstance,
-    broadcast: BroadcastInstance,
-    srcinfo_generator: SrcinfoGeneratorInstance,
 
     signal: Option<Sender<()>>,
     jobs: Arc<Mutex<HashMap<DateTime<Utc>, HashSet<String>>>>,
@@ -54,15 +50,9 @@ impl BuildScheduler {
     /// creates a new scheduler
     pub async fn new(
         builder: BuilderInstance,
-        db: Database,
-        broadcast: BroadcastInstance,
-        srcinfo_generator: SrcinfoGeneratorInstance,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             builder,
-            db,
-            broadcast,
-            srcinfo_generator,
             signal: None,
             jobs: Arc::new(Mutex::new(HashMap::new())),
             lock: Arc::new(Mutex::new(HashSet::new())),
@@ -90,13 +80,10 @@ impl BuildScheduler {
 
         let builder = self.builder.clone();
         let lock = self.lock.clone();
-        let db = self.db.clone();
-        let broadcast = self.broadcast.clone();
-        let srcinfo_generator = self.srcinfo_generator.clone();
 
-        tokio::spawn(async move {
-            Self::run_now(packages, builder, lock, db, broadcast, srcinfo_generator, meta).await
-        });
+        tokio::spawn(
+            async move { Self::run_now(packages, builder, lock, meta).await },
+        );
 
         Ok(())
     }
@@ -133,9 +120,6 @@ impl BuildScheduler {
         self.signal = Some(tx);
 
         let jobs = self.jobs.clone();
-        let db = self.db.clone();
-        let broadcast = self.broadcast.clone();
-        let srcinfo_generator = self.srcinfo_generator.clone();
         let builder = self.builder.clone();
         let lock = self.lock.clone();
 
@@ -168,7 +152,7 @@ impl BuildScheduler {
 
                     let mut packages = vec![];
                     for base in set {
-                        match Package::find(&base, &db).await {
+                        match Package::find(&base).await {
                             Ok(Some(p)) => packages.push(p),
                             Ok(None) => {
                                 warn!("package with base {base} was scheduled but is no longer present")
@@ -185,18 +169,12 @@ impl BuildScheduler {
                     // run build
                     let builder = builder.clone();
                     let lock = lock.clone();
-                    let db = db.clone();
-                    let broadcast = broadcast.clone();
-                    let srcinfo_generator = srcinfo_generator.clone();
 
                     tokio::spawn(async move {
                         Self::run_now(
                             packages,
                             builder,
                             lock,
-                            db,
-                            broadcast,
-                            srcinfo_generator,
                             BuildMeta::normal(BuildReason::Schedule),
                         )
                         .await
@@ -250,9 +228,6 @@ impl BuildScheduler {
         mut packages: Vec<Package>,
         builder: BuilderInstance,
         lock: Arc<Mutex<HashSet<String>>>,
-        db: Database,
-        broadcast: BroadcastInstance,
-        srcinfo_generator: SrcinfoGeneratorInstance,
         meta: BuildMeta,
     ) {
         info!(
@@ -286,9 +261,9 @@ impl BuildScheduler {
         // update sources here as they are needed for the up-to-date check, and also for
         // the resolving
         for package in &mut packages {
-            if let Err(e) = package.update(&srcinfo_generator).await {
+            if let Err(e) = package.update().await {
                 warn!("failed to update source for {}: {e:#}", package.base);
-            } else if let Err(e) = package.change_sources(&db).await {
+            } else if let Err(e) = package.change_sources().await {
                 error!("failed to store updated source in db for {}: {e:#}", package.base);
             }
         }
@@ -305,7 +280,7 @@ impl BuildScheduler {
 
         let targets = packages.iter().map(|p| p.base.clone()).collect::<HashSet<_>>();
 
-        match BuildSession::start(packages, &db, builder, broadcast, meta).await {
+        match BuildSession::start(packages, builder, meta).await {
             Ok(mut session) => {
                 if let Err(e) = session.run().await {
                     error!("failed to run build session: {e:#}");

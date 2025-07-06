@@ -34,11 +34,11 @@ pub struct AurResolver {
 impl AurResolver {
     /// create a new resolver with packages in their current states, unless they
     /// are contained in the iterator next
-    pub async fn next<'a, T>(db: &Database, next: T) -> anyhow::Result<Self>
+    pub async fn next<'a, T>(next: T) -> anyhow::Result<Self>
     where
         T: Iterator<Item = &'a Package>,
     {
-        let all = Package::find_all(db).await?;
+        let all = Package::find_all().await?;
         let mut added = vec![];
 
         let next = next.map(|p| p.base.clone()).collect::<Vec<_>>();
@@ -60,8 +60,8 @@ impl AurResolver {
     }
 
     /// create a new resolver with an additional added package
-    pub async fn with(db: &Database, srcinfo: &SrcinfoWrapper) -> anyhow::Result<Self> {
-        let mut all: Vec<Srcinfo> = Package::find_all(db)
+    pub async fn with(srcinfo: &SrcinfoWrapper) -> anyhow::Result<Self> {
+        let mut all: Vec<Srcinfo> = Package::find_all()
             .await?
             .into_iter()
             .filter_map(|p| p.srcinfo.map(|s| s.into()))

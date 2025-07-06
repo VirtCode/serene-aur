@@ -1,9 +1,9 @@
 use crate::database::Database;
-use crate::package::srcinfo::{SrcinfoGenerator, SrcinfoGeneratorInstance};
+use crate::package::srcinfo::SrcinfoGenerator;
 use crate::package::Package;
 use crate::repository::{PackageRepository, PackageRepositoryInstance};
 use crate::runner::{ContainerId, RunStatus, Runner, RunnerInstance};
-use crate::web::broadcast::{Broadcast, BroadcastInstance};
+use crate::web::broadcast::{Broadcast, BROADCAST};
 use chrono::{DateTime, Utc};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
@@ -57,23 +57,23 @@ impl BuildSummary {
 
 /// cleans up builds which are pending or working, but serene exited in the
 /// meantime, or some beyond fatal error happened
-pub async fn cleanup_unfinished(db: &Database) -> anyhow::Result<()> {
+pub async fn cleanup_unfinished() -> anyhow::Result<()> {
     info!("checking for unfinished builds");
 
-    let active = BuildSummary::find_active(db).await?;
+    let active = BuildSummary::find_active().await?;
 
     for mut summary in active {
         warn!("cleaning build for {}, as it is still active", summary.package);
 
         summary.end(Fatal(
-            "build was not finished or failed beyond fatally, then serene was restarted - check your logs!".to_owned(), 
+            "build was not finished or failed beyond fatally, then serene was restarted - check your logs!".to_owned(),
             if let Running(state) = &summary.state { *state } else { BuildProgress::Resolve }
         ));
 
         // we set the time to zero so we don't have stupidly long time durations
         summary.ended = Some(summary.started);
 
-        summary.change(db).await?;
+        summary.change().await?;
     }
 
     Ok(())
@@ -82,23 +82,17 @@ pub async fn cleanup_unfinished(db: &Database) -> anyhow::Result<()> {
 pub type BuilderInstance = Arc<Builder>;
 
 pub struct Builder {
-    db: Database,
     runner: RunnerInstance,
-    broadcast: BroadcastInstance,
     repository: PackageRepositoryInstance,
-    srcinfo_generator: SrcinfoGeneratorInstance,
 }
 
 impl Builder {
     /// creates a new builder
     pub fn new(
-        db: Database,
         runner: RunnerInstance,
         repository: PackageRepositoryInstance,
-        broadcast: BroadcastInstance,
-        srcinfo_generator: SrcinfoGeneratorInstance,
     ) -> Self {
-        Self { db, runner, repository, broadcast, srcinfo_generator }
+        Self { runner, repository }
     }
 
     /// Removes a package from the system, by removing the container, from the
@@ -112,7 +106,7 @@ impl Builder {
         }
 
         package.self_destruct().await?;
-        package.delete(&self.db).await?;
+        package.delete().await?;
 
         Ok(())
     }
@@ -130,8 +124,8 @@ impl Builder {
             // UPDATE
             if update {
                 summary.state = Running(Update);
-                summary.change(&self.db).await?;
-                self.broadcast.change(&package.base, summary.state.clone()).await;
+                summary.change().await?;
+                BROADCAST.change(&package.base, summary.state.clone()).await;
 
                 match self.update(&mut package).await {
                     Ok(_) => {}
@@ -143,8 +137,8 @@ impl Builder {
 
             // BUILD
             summary.state = Running(Build);
-            summary.change(&self.db).await?;
-            self.broadcast.change(&package.base, summary.state.clone()).await;
+            summary.change().await?;
+            BROADCAST.change(&package.base, summary.state.clone()).await;
 
             let clean = package.clean || force_clean; // also clean here if force clean
             let (container, success) = match self.build(&mut package, clean).await {
@@ -161,8 +155,8 @@ impl Builder {
             // PUBLISH
             if success {
                 summary.state = Running(Publish);
-                summary.change(&self.db).await?;
-                self.broadcast.change(&package.base, summary.state.clone()).await;
+                summary.change().await?;
+                BROADCAST.change(&package.base, summary.state.clone()).await;
 
                 match self.publish(&mut package, &container).await {
                     Ok(()) => {}
@@ -174,18 +168,18 @@ impl Builder {
                 summary.version = package.get_version();
                 summary.state = Running(Clean);
 
-                summary.change(&self.db).await?;
-                self.broadcast.change(&package.base, summary.state.clone()).await;
+                summary.change().await?;
+                BROADCAST.change(&package.base, summary.state.clone()).await;
 
                 // change sources here as the new package was successfully published
-                package.change_sources(&self.db).await?;
+                package.change_sources().await?;
             }
 
             // CLEAN
             if package.clean {
                 summary.state = Running(Publish);
-                summary.change(&self.db).await?;
-                self.broadcast.change(&package.base, summary.state.clone()).await;
+                summary.change().await?;
+                BROADCAST.change(&package.base, summary.state.clone()).await;
 
                 match self.clean(&container).await {
                     Ok(()) => {}
@@ -203,15 +197,15 @@ impl Builder {
         };
 
         summary.end(state);
-        summary.change(&self.db).await?;
-        self.broadcast.change(&package.base, summary.state.clone()).await;
+        summary.change().await?;
+        BROADCAST.change(&package.base, summary.state.clone()).await;
 
         Ok(summary)
     }
 
     /// updates the sources of a given package
     async fn update(&self, package: &mut Package) -> anyhow::Result<()> {
-        package.update(&self.srcinfo_generator).await
+        package.update().await
     }
 
     /// builds a given package

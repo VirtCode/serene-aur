@@ -7,6 +7,8 @@ use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use sqlx::{query, query_as};
 use std::str::FromStr;
 
+use super::DATABASE;
+
 const STATE_PENDING: &str = "pending";
 const STATE_CANCELLED: &str = "cancelled";
 const STATE_RUNNING: &str = "running";
@@ -108,7 +110,7 @@ impl DatabaseConversion<BuildRecord> for BuildSummary {
 }
 
 impl BuildSummary {
-    pub async fn find(date: &DateTime<Utc>, base: &str, db: &Database) -> Result<Option<Self>> {
+    pub async fn find(date: &DateTime<Utc>, base: &str) -> Result<Option<Self>> {
         let naive = date.naive_utc();
 
         let record = query_as!(
@@ -119,13 +121,13 @@ impl BuildSummary {
             naive,
             base
         )
-        .fetch_optional(db)
+        .fetch_optional(&*DATABASE)
         .await?;
 
         record.map(BuildSummary::from_record).transpose()
     }
 
-    pub async fn find_nth_for_package(n: u32, base: &str, db: &Database) -> Result<Option<Self>> {
+    pub async fn find_nth_for_package(n: u32, base: &str) -> Result<Option<Self>> {
         let record = query_as!(
             BuildRecord,
             r#"
@@ -134,27 +136,27 @@ impl BuildSummary {
             base,
             n
         )
-        .fetch_optional(db)
+        .fetch_optional(&*DATABASE)
         .await?;
 
         record.map(BuildSummary::from_record).transpose()
     }
 
-    pub async fn count_for_package(base: &str, db: &Database) -> Result<u32> {
+    pub async fn count_for_package(base: &str) -> Result<u32> {
         let count = query!(
             r#"
             SELECT COUNT(1) as count FROM build WHERE package = $1
         "#,
             base,
         )
-        .fetch_one(db)
+        .fetch_one(&*DATABASE)
         .await?
         .count;
 
         Ok(count as u32)
     }
 
-    pub async fn find_all_for_package(base: &str, db: &Database) -> Result<Vec<Self>> {
+    pub async fn find_all_for_package(base: &str) -> Result<Vec<Self>> {
         let records = query_as!(
             BuildRecord,
             r#"
@@ -162,13 +164,13 @@ impl BuildSummary {
         "#,
             base
         )
-        .fetch_all(db)
+        .fetch_all(&*DATABASE)
         .await?;
 
         records.into_iter().map(BuildSummary::from_record).collect()
     }
 
-    pub async fn find_latest_for_package(base: &str, db: &Database) -> Result<Option<Self>> {
+    pub async fn find_latest_for_package(base: &str) -> Result<Option<Self>> {
         let record = query_as!(
             BuildRecord,
             r#"
@@ -176,13 +178,13 @@ impl BuildSummary {
         "#,
             base
         )
-        .fetch_optional(db)
+        .fetch_optional(&*DATABASE)
         .await?;
 
         record.map(BuildSummary::from_record).transpose()
     }
 
-    pub async fn find_latest_n_for_package(base: &str, n: u32, db: &Database) -> Result<Vec<Self>> {
+    pub async fn find_latest_n_for_package(base: &str, n: u32) -> Result<Vec<Self>> {
         let record = query_as!(
             BuildRecord,
             r#"
@@ -191,13 +193,13 @@ impl BuildSummary {
             base,
             n
         )
-        .fetch_all(db)
+        .fetch_all(&*DATABASE)
         .await?;
 
         record.into_iter().map(BuildSummary::from_record).collect()
     }
 
-    pub async fn find_active(db: &Database) -> Result<Vec<Self>> {
+    pub async fn find_active() -> Result<Vec<Self>> {
         let record = query_as!(
             BuildRecord,
             r#"
@@ -206,13 +208,13 @@ impl BuildSummary {
             STATE_PENDING,
             STATE_RUNNING
         )
-        .fetch_all(db)
+        .fetch_all(&*DATABASE)
         .await?;
 
         record.into_iter().map(BuildSummary::from_record).collect()
     }
 
-    pub async fn save(&self, db: &Database) -> Result<()> {
+    pub async fn save(&self) -> Result<()> {
         let record = self.create_record()?;
 
         query!(r#"
@@ -221,12 +223,12 @@ impl BuildSummary {
         "#,
             record.package, record.started, record.ended, record.state, record.progress, record.fatal, record.version, record.run_success, record.run_logs, record.run_started, record.run_ended, record.reason
         )
-            .execute(db).await?;
+            .execute(&*DATABASE).await?;
 
         Ok(())
     }
 
-    pub async fn change(&self, db: &Database) -> Result<()> {
+    pub async fn change(&self) -> Result<()> {
         let record = self.create_record()?;
 
         query!(r#"
@@ -236,12 +238,12 @@ impl BuildSummary {
         "#,
             record.started, record.ended, record.state, record.progress, record.fatal, record.version, record.run_success, record.run_logs, record.run_started, record.run_ended
         )
-            .execute(db).await?;
+            .execute(&*DATABASE).await?;
 
         Ok(())
     }
 
-    pub async fn delete(&self, db: &Database) -> Result<()> {
+    pub async fn delete(&self) -> Result<()> {
         let base = self.started.naive_utc();
 
         query!(
@@ -250,7 +252,7 @@ impl BuildSummary {
         "#,
             base
         )
-        .execute(db)
+        .execute(&*DATABASE)
         .await?;
 
         Ok(())

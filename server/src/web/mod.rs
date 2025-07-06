@@ -12,6 +12,7 @@ use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound}
 use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{delete, get, post, Responder};
 use auth::{create_webhook_secret, AuthWebhook};
+use broadcast::BROADCAST;
 use chrono::DateTime;
 use cron::Schedule;
 use hyper::StatusCode;
@@ -30,7 +31,6 @@ mod data;
 
 type BuildSchedulerData = Data<Mutex<BuildScheduler>>;
 type BuilderData = Data<Builder>;
-type SrcinfoGeneratorData = Data<Mutex<SrcinfoGenerator>>;
 
 pub trait InternalError<T> {
     fn internal(self) -> actix_web::Result<T>;
@@ -62,8 +62,6 @@ pub async fn info() -> actix_web::Result<impl Responder> {
 pub async fn add(
     _: AuthWrite,
     body: Json<PackageAddRequest>,
-    db: Data<Database>,
-    srcinfo_generator: SrcinfoGeneratorData,
     scheduler: BuildSchedulerData,
 ) -> actix_web::Result<impl Responder> {
     // get repo and devel tag
@@ -81,14 +79,14 @@ pub async fn add(
     };
 
     // create package
-    let packages = package::add_source(&db, &srcinfo_generator, source, body.replace)
+    let packages = package::add_source(source, body.replace)
         .await
         .internal()?
         .ok_or_else(|| ErrorBadRequest("package with the same base is already added"))?;
 
     let mut response = vec![];
     for package in &packages {
-        let count = BuildSummary::count_for_package(&package.base, &db).await.internal()?;
+        let count = BuildSummary::count_for_package(&package.base).await.internal()?;
         response.push(package.to_info(count));
     }
 
@@ -110,14 +108,14 @@ pub async fn add(
 }
 
 #[get("/package/list")]
-pub async fn list(_: AuthRead, db: Data<Database>) -> actix_web::Result<impl Responder> {
-    let package = Package::find_all(&db).await.internal()?;
+pub async fn list(_: AuthRead) -> actix_web::Result<impl Responder> {
+    let package = Package::find_all().await.internal()?;
 
     let mut peeks = vec![];
 
     for p in package {
         // retrieve latest build
-        let b = BuildSummary::find_latest_for_package(&p.base, &db).await.internal()?;
+        let b = BuildSummary::find_latest_for_package(&p.base).await.internal()?;
 
         peeks.push(p.to_peek(b));
     }
@@ -129,14 +127,13 @@ pub async fn list(_: AuthRead, db: Data<Database>) -> actix_web::Result<impl Res
 pub async fn status(
     _: AuthRead,
     package: Path<String>,
-    db: Data<Database>,
 ) -> actix_web::Result<impl Responder> {
-    let package = Package::find(&package, &db)
+    let package = Package::find(&package)
         .await
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    let count = BuildSummary::count_for_package(&package.base, &db).await.internal()?;
+    let count = BuildSummary::count_for_package(&package.base).await.internal()?;
 
     Ok(Json(package.to_info(count)))
 }
@@ -145,9 +142,8 @@ pub async fn status(
 pub async fn pkgbuild(
     _: AuthRead,
     package: Path<String>,
-    db: Data<Database>,
 ) -> actix_web::Result<impl Responder> {
-    let package = Package::find(&package, &db)
+    let package = Package::find(&package)
         .await
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
@@ -167,12 +163,11 @@ pub async fn get_all_builds(
     _: AuthRead,
     package: Path<String>,
     Query(count): Query<CountQuery>,
-    db: Data<Database>,
 ) -> actix_web::Result<impl Responder> {
     let builds = if let Some(count) = count.count {
-        BuildSummary::find_latest_n_for_package(&package, count, &db).await.internal()?
+        BuildSummary::find_latest_n_for_package(&package, count).await.internal()?
     } else {
-        BuildSummary::find_all_for_package(&package, &db).await.internal()?
+        BuildSummary::find_all_for_package(&package).await.internal()?
     };
 
     Ok(Json(builds.iter().map(|b| b.as_info()).collect::<Vec<_>>()))
@@ -181,11 +176,10 @@ pub async fn get_all_builds(
 #[post("/build/all")]
 pub async fn build_all(
     _: AuthWrite,
-    db: Data<Database>,
     body: Json<PackageBuildRequest>,
     scheduler: BuildSchedulerData,
 ) -> actix_web::Result<impl Responder> {
-    let packages = Package::find_all(&db)
+    let packages = Package::find_all()
         .await
         .internal()?
         .into_iter()
@@ -213,7 +207,7 @@ pub async fn build(
 
     for package in &body.packages {
         packages.push(
-            Package::find(package, &db).await.internal()?.ok_or_else(|| {
+            Package::find(package).await.internal()?.ok_or_else(|| {
                 ErrorNotFound(format!("package with base {} is not added", package))
             })?,
         )
@@ -236,14 +230,13 @@ pub async fn build(
 async fn get_build_for(
     base: &str,
     time: &str,
-    db: &Database,
 ) -> actix_web::Result<Option<BuildSummary>> {
     if time == "latest" {
-        BuildSummary::find_latest_for_package(base, db).await.internal()
+        BuildSummary::find_latest_for_package(base).await.internal()
     } else if let Ok(n) = u32::from_str(time) {
-        BuildSummary::find_nth_for_package(n, base, db).await.internal()
+        BuildSummary::find_nth_for_package(n, base).await.internal()
     } else if let Ok(date) = DateTime::from_str(time) {
-        BuildSummary::find(&date, base, db).await.internal()
+        BuildSummary::find(&date, base).await.internal()
     } else {
         Err(ErrorBadRequest(format!(
             "expected valid date, valid index number, or 'latest', not '{time}'"
@@ -255,12 +248,11 @@ async fn get_build_for(
 pub async fn get_build(
     _: AuthRead,
     path: Path<(String, String)>,
-    db: Data<Database>,
 ) -> actix_web::Result<impl Responder> {
     let (package, time) = path.into_inner();
 
     Ok(Json(
-        get_build_for(&package, &time, &db)
+        get_build_for(&package, &time)
             .await?
             .map(|b| b.as_info())
             .ok_or_else(|| ErrorNotFound("package not found or no build at this time"))?,
@@ -271,12 +263,11 @@ pub async fn get_build(
 pub async fn get_logs(
     _: AuthRead,
     path: Path<(String, String)>,
-    db: Data<Database>,
 ) -> actix_web::Result<impl Responder> {
     let (package, time) = path.into_inner();
 
     Ok(Json(
-        get_build_for(&package, &time, &db)
+        get_build_for(&package, &time)
             .await?
             .and_then(|s| s.logs)
             .map(|l| l.logs)
@@ -290,26 +281,23 @@ pub async fn get_logs(
 pub async fn subscribe_logs(
     _: AuthRead,
     path: Path<String>,
-    broadcast: Data<Broadcast>,
-    db: Data<Database>,
 ) -> actix_web::Result<impl Responder> {
     let package = path.into_inner();
-    let _ = Package::find(&package, &db)
+    let _ = Package::find(&package)
         .await
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
 
-    broadcast.subscribe(package).await
+    BROADCAST.subscribe(package).await
 }
 
 #[delete("/package/{name}")]
 pub async fn remove(
     _: AuthWrite,
     package: Path<String>,
-    db: Data<Database>,
     builder: BuilderData,
 ) -> actix_web::Result<impl Responder> {
-    let package = Package::find(&package, &db)
+    let package = Package::find(&package)
         .await
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
@@ -324,11 +312,9 @@ pub async fn settings(
     _: AuthWrite,
     package: Path<String>,
     body: Json<PackageSettingsRequest>,
-    db: Data<Database>,
     scheduler: BuildSchedulerData,
-    srcinfo_generator: SrcinfoGeneratorData,
 ) -> actix_web::Result<impl Responder> {
-    let mut package = Package::find(&package, &db)
+    let mut package = Package::find(&package)
         .await
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
@@ -388,11 +374,11 @@ pub async fn settings(
 
     if source {
         // update source if we have changed anything in it
-        package.update(&srcinfo_generator).await.internal()?;
+        package.update().await.internal()?;
 
-        package.change_sources(&db).await.internal()?;
+        package.change_sources().await.internal()?;
     } else {
-        package.change_settings(&db).await.internal()?;
+        package.change_settings().await.internal()?;
     }
 
     Ok(empty_response())
@@ -422,10 +408,9 @@ pub async fn get_webhook_secret(
 pub async fn build_webhook(
     _: AuthWebhook,
     package: Path<String>,
-    db: Data<Database>,
     scheduler: BuildSchedulerData,
 ) -> actix_web::Result<impl Responder> {
-    let package = Package::find(&package, &db)
+    let package = Package::find(&package)
         .await
         .internal()?
         .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;

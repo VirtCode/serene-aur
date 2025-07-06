@@ -5,7 +5,7 @@ pub mod legacy;
 pub mod raw;
 
 use crate::package;
-use crate::package::srcinfo::{SrcinfoGenerator, SrcinfoGeneratorInstance, SrcinfoWrapper};
+use crate::package::srcinfo::{SrcinfoGenerator, SrcinfoWrapper};
 use crate::runner::archive::InputArchive;
 use anyhow::Context;
 use async_trait::async_trait;
@@ -18,6 +18,8 @@ use std::ops::Deref;
 use std::path::Path;
 use std::str::FromStr;
 use tokio::fs;
+
+use super::srcinfo::SRCINFO_GENERATOR;
 
 const SRCINFO: &str = ".SRCINFO";
 const PKGBUILD: &str = "PKGBUILD";
@@ -117,24 +119,16 @@ impl Source {
     }
 
     /// initializes the source in the folder
-    pub async fn initialize(
-        &mut self,
-        srcinfo_generator: &SrcinfoGeneratorInstance,
-        folder: &Path,
-    ) -> anyhow::Result<()> {
+    pub async fn initialize(&mut self, folder: &Path) -> anyhow::Result<()> {
         // run inner initialization
         self.inner.initialize(folder).await?;
 
         // initialize itself by updating (will gen srcinfo etc.)
-        self.update(srcinfo_generator, folder).await
+        self.update(folder).await
     }
 
     /// update the build files of the source to their newest state
-    pub async fn update(
-        &mut self,
-        srcinfo_generator: &SrcinfoGeneratorInstance,
-        folder: &Path,
-    ) -> anyhow::Result<()> {
+    pub async fn update(&mut self, folder: &Path) -> anyhow::Result<()> {
         let before = self.inner.get_state();
         self.inner.update(folder).await?;
 
@@ -147,7 +141,7 @@ impl Source {
             self.inner.load_build_files(&mut input, folder).await?;
 
             self.srcinfo = Some(
-                srcinfo_generator
+                SRCINFO_GENERATOR
                     .lock()
                     .await
                     .generate_srcinfo(input)

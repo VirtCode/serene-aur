@@ -11,7 +11,10 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
 
-pub type BroadcastInstance = Arc<Broadcast>;
+use crate::init::Init;
+
+// TODO: remove this arc here
+pub static BROADCAST: Init<Arc<Broadcast>> = Init::new();
 
 pub struct Broadcast {
     subscriptions: Mutex<HashMap<String, Vec<tokio::sync::mpsc::Sender<sse::Event>>>>,

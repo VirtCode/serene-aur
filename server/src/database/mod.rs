@@ -6,7 +6,11 @@ use anyhow::Result;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
 use sqlx::{migrate, SqlitePool};
 
+use crate::init::Init;
+
 const FILE: &str = "serene.db";
+
+pub static DATABASE: Init<Database> = Init::new();
 
 pub type Database = SqlitePool;
 

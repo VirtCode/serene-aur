@@ -4,8 +4,10 @@
 pub mod package;
 pub mod runner;
 
-mod build;
 pub mod config;
+pub mod init;
+
+mod build;
 mod database;
 mod repository;
 mod resolve;
@@ -24,8 +26,11 @@ use crate::web::broadcast::Broadcast;
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
 use anyhow::Context;
-use config::INFO;
-use log::{error, info};
+use config::{Config, Info, INFO};
+use database::DATABASE;
+use log::{debug, error, info};
+use package::srcinfo::SRCINFO_GENERATOR;
+use web::broadcast::BROADCAST;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
@@ -33,17 +38,18 @@ use tokio::sync::{Mutex, RwLock};
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    // this is mainly here to initialize the lazy INFO struct
+    INFO.init(Info::start());
     info!("starting serene version {}", INFO.version);
 
-    // initializing database
-    let db = database::connect().await?;
+    debug!("loading configuration from env variables");
+    CONFIG.init(Config::env());
 
-    // initialize broadcast
-    let broadcast = Broadcast::new();
+    // initializing database
+    DATABASE.init(database::connect().await?);
+    BROADCAST.init(Broadcast::new());
 
     // initializing runner
-    let runner = Arc::new(Runner::new(broadcast.clone()).context("failed to connect to docker")?);
+    let runner = Arc::new(Runner::new().context("failed to connect to docker")?);
 
     // initializing repository
     let repository = Arc::new(Mutex::new(
@@ -51,26 +57,16 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     // initializing srcinfo generator
-    let srcinfo_generator = Arc::new(Mutex::new(SrcinfoGenerator::new(runner.clone())));
+    SRCINFO_GENERATOR.init(Mutex::new(SrcinfoGenerator::new(runner.clone())));
 
     // initializing builder
-    let builder = Arc::new(Builder::new(
-        db.clone(),
-        runner.clone(),
-        repository.clone(),
-        broadcast.clone(),
-        srcinfo_generator.clone(),
-    ));
+    let builder =
+        Arc::new(Builder::new(runner.clone(), repository.clone()));
 
     // creating scheduler
-    let mut schedule = BuildScheduler::new(
-        builder.clone(),
-        db.clone(),
-        broadcast.clone(),
-        srcinfo_generator.clone(),
-    )
-    .await
-    .context("failed to start package scheduler")?;
+    let mut schedule = BuildScheduler::new(builder.clone())
+        .await
+        .context("failed to start package scheduler")?;
 
     // creating image scheduler
     let image_scheduler = ImageScheduler::new(runner.clone());
@@ -82,21 +78,21 @@ async fn main() -> anyhow::Result<()> {
     image_scheduler.run_sync().await;
 
     // cleanup unfinished builds
-    if let Err(e) = cleanup_unfinished(&db).await {
+    if let Err(e) = cleanup_unfinished().await {
         error!("failed to cleanup unfinished builds: {e:#}")
     }
 
     // migrations
-    if let Err(e) = migrate_build_state(&db).await {
+    if let Err(e) = migrate_build_state().await {
         error!("failed apply heuristics to migrate to built_state: {e:#}")
     }
 
-    migrate_sources(&db, &srcinfo_generator).await?; // we should panic if it fails
+    migrate_sources().await?; // we should panic if it fails
 
     repository::remove_orphan_signature().await;
 
     // schedule packages (which are enabled)
-    for package in Package::find_all(&db).await?.iter().filter(|p| p.enabled) {
+    for package in Package::find_all().await?.iter().filter(|p| p.enabled) {
         schedule
             .schedule(package)
             .await
@@ -104,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if config::CONFIG.build_cli {
-        if let Err(e) = package::try_add_cli(&db, &mut schedule, &srcinfo_generator).await {
+        if let Err(e) = package::try_add_cli(&mut schedule).await {
             error!("failed to add cli package: {e:#}")
         }
     }
@@ -118,11 +114,8 @@ async fn main() -> anyhow::Result<()> {
     // web app
     HttpServer::new(move || {
         App::new()
-            .app_data(Data::new(db.clone()))
             .app_data(Data::from(schedule.clone()))
             .app_data(Data::from(builder.clone()))
-            .app_data(Data::from(broadcast.clone()))
-            .app_data(Data::from(srcinfo_generator.clone()))
             .service(repository::webservice())
             .service(web::info)
             .service(web::add)

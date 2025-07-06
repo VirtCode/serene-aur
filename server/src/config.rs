@@ -4,13 +4,13 @@ use log::warn;
 use std::env;
 use std::str::FromStr;
 
+use crate::init::Init;
+
 pub const SOURCE_REPOSITORY: &str = "https://github.com/VirtCode/serene-aur";
 pub const RUNNER_CONTAINER_NAME: &str = "ghcr.io/virtcode/serene-aur-runner:edge-{version}";
 pub const CLI_PACKAGE_NAME: &str = "serene-cli";
 
-lazy_static! {
-    pub static ref INFO: Info = Info::start();
-}
+pub static INFO: Init<Info> = Init::new();
 
 pub struct Info {
     pub start_time: DateTime<Utc>,
@@ -18,14 +18,12 @@ pub struct Info {
 }
 
 impl Info {
-    fn start() -> Self {
+    pub fn start() -> Self {
         Self { start_time: Utc::now(), version: env!("TAG").to_string() }
     }
 }
 
-lazy_static! {
-    pub static ref CONFIG: Config = Config::env();
-}
+pub static CONFIG: Init<Config> = Init::new();
 
 pub struct Config {
     /// allow reading information for non-authenticated clients
@@ -148,7 +146,7 @@ impl Config {
     }
 
     #[rustfmt::skip]
-    fn env() -> Self {
+    pub fn env() -> Self {
         let default = Self::default();
 
         Self {
