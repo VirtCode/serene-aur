@@ -1,4 +1,4 @@
-FROM rustlang/rust:nightly-alpine3.20 as builder
+FROM rustlang/rust:nightly-alpine3.22 as builder
 
 WORKDIR /app
 
@@ -6,7 +6,7 @@ RUN apk add --no-cache musl-dev
 # install nettle for signing
 RUN apk add --no-cache nettle-dev clang clang-libclang pkgconfig
 # install pacman for libalpm
-RUN apk add --no-cache pacman-dev --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community
+RUN apk add --no-cache pacman-dev
 # install git for dynamic version
 RUN apk add --no-cache git
 
@@ -23,7 +23,7 @@ ENV RUSTFLAGS -Ctarget-feature=-crt-static
 RUN cargo sqlx database setup --source server/migrations
 RUN cargo build --release --bin serene
 
-FROM alpine:3.20 as runner
+FROM alpine:3.22 as runner
 
 WORKDIR /app
 
@@ -31,9 +31,7 @@ WORKDIR /app
 COPY --from=builder /app/target/release/serene /usr/bin/serene
 
 # install required utilities and libraries
-# FIXME: update alpine for pacman 7.x.x
-RUN apk add --no-cache pacman --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community
-RUN apk add --no-cache git binutils nettle
+RUN apk add --no-cache git binutils nettle pacman
 
 # create local user
 RUN adduser -D --uid 1000 user
