@@ -39,6 +39,33 @@ async fn sign_repository(name: &str, dir: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// returns whether the repository already exists
+pub fn exists(name: &str, dir: &Path) -> bool {
+    dir.join(db_file(name)).exists()
+}
+
+/// initializes the pacman repository
+pub async fn init(name: &str, dir: &Path) -> anyhow::Result<()> {
+    // specifying no package args creates an empty repository
+    let mut command = Command::new("repo-add");
+    command.arg(db_file(name));
+
+    let output = command.current_dir(dir).output().await?;
+
+    if output.status.success() {
+        if crypto::should_sign_packages() {
+            sign_repository(name, dir).await?;
+        }
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "failed to initialize repo with `repo-add`: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
+/// adds a list of package files to the pacman repository
 pub async fn add(name: &str, packages: &Vec<String>, dir: &Path) -> anyhow::Result<()> {
     let mut command = Command::new("repo-add");
 
@@ -53,10 +80,14 @@ pub async fn add(name: &str, packages: &Vec<String>, dir: &Path) -> anyhow::Resu
         }
         Ok(())
     } else {
-        Err(anyhow!("failed to use repo-add: {}", String::from_utf8_lossy(&output.stderr).trim()))
+        Err(anyhow!(
+            "failed to add packages to repo with `repo-add`: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
     }
 }
 
+/// removes a list of package files from the pacman repository
 pub async fn remove(name: &str, packages: &Vec<String>, dir: &Path) -> anyhow::Result<()> {
     let mut command = Command::new("repo-remove");
 
@@ -72,7 +103,7 @@ pub async fn remove(name: &str, packages: &Vec<String>, dir: &Path) -> anyhow::R
         Ok(())
     } else {
         Err(anyhow!(
-            "failed to use repo-remove: {}",
+            "failed to remove packages from repo with `repo-remove`: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         ))
     }

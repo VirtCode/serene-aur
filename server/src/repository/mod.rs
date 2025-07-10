@@ -84,6 +84,15 @@ impl PackageRepository {
         // create directory here as many member functions require it to be present
         fs::create_dir_all(REPO_DIR).await.context("failed to create folder for repository")?;
 
+        // create pacman repository if not yet exists
+        if !manage::exists(&s.name, Path::new(REPO_DIR)) {
+            info!("creating empty pacman repository");
+            manage::init(&s.name, Path::new(REPO_DIR))
+                .await
+                .context("failed to initialize empty repository")?;
+        }
+
+        // load serene's repository tracking data
         s.load().await?;
 
         Ok(s)
