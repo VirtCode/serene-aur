@@ -1,106 +1,57 @@
 # serene-aur
-> *serene* is an easy to deploy, self-hosted, AUR build server that aims at replacing your AUR helper.
+[Setup](/docs/readme.md#setup) &ensp; • &ensp; [Documentation](/docs/readme.md) &ensp; • &ensp; [Issues](https://github.com/VirtCode/serene-aur/issues) &ensp; • &ensp; [Docker Image](https://github.com/VirtCode/serene-aur/pkgs/container/serene-aur)
+
+> *Serene* is an easy to deploy, self-hosted, AUR build server that aims at replacing your AUR helper.
 
 This project aims to solve some inconveniences when using AUR packages. It is often annoying having to **build your AUR packages on every device** when a new version arrives. Existing prebuilt repositories often don't quite do the trick as they **don't have all the software you need**. Current self-hosted solutions are **not flexible enough** and cumbersome to maintain.
 
-This is where *serene* comes in. It is a self-hosted package repository and build server which is intended to be really flexible and easy to use, to the point of it being able to replace an AUR helper. It makes heavy use of containerization for easier setup and clean builds. These are the main features:
+This is where *Serene* comes in. It is a self-hosted package repository and build server which is intended to be really flexible and easy to use, to the point of it being able to replace an AUR helper. It makes heavy use of containerization for easier setup and clean builds. These are the main features:
 
 - **Easy Hosting**: The whole setup is just one docker container, making it easy to host.
 - **Powerful CLI**: You can add, build, remove and diagnose the packages you want to build easily from your shell via the CLI.
 - **Flexibility**: Customize setup commands, building schedule, etc. on a per-package basis and even use custom non-aur repositories.
 
-Are you ready to host your own? Head to the [deploying](#deploying) section to deploy a server and install the [cli](#installation), then look at some basic [usage](#usage).
+Are you ready to host your own? Head to the the basic [setup instructions](/docs/readme.md#setup) in the documentation.
 
-## Usage
-This section briefly covers how one uses the system as an end user, via the included cli. See [installation](#installation) for information about how to deploy the server and install the CLI locally.
+## Workflow
+This section briefly covers how one uses the system as an end user via the included [CLI](/docs/usage/cli.md), so you can get a feel for it.
 
 Add a package from the [AUR](https://aur.archlinux.org) to the repository, so that it is built automatically:
 ```shell
 serene add my-package
 ```
 
-List all currently managed packages, their version and build status:
+Watch the package build by having a look at the real-time _live_ logs during the build:
 ```shell
-serene list
+serene info my-package logs
 ```
 
-Get more specific information about a package as well as the past builds:
+Check some metadata information about the package, as well as past build status:
 ```shell
 serene info my-package
 ```
 
-Setup commands to run before building the package:
+And finally, install the package normally via pacman:
 ```shell
-serene info my-package set prepare "add some keys && do something else"
+sudo pacman -Sy my-package
 ```
 
-Many more commands are found on the documentation for the CLI:
-
-**[<kbd>&ensp;<br>&ensp;CLI Documentation&ensp;<br>&ensp;</kbd>](./cli/README.md)**
-
-## State
-This project is still in its early stages, but already usable on a daily basis. There are also a couple of improvements and optimizations that still need to be implemented.
-Big, recently implemented features include:
-- [X] Entirely custom PKGBUILDs without a git repository
-- [X] Package signing
-- [X] Automatic AUR dependency resolving
-
-Refer to the [TODO File](TODO.md) for more features, tasks and enhancements and don't hesitate to contribute if interested.
+> Pro tip: This whole procedure can of course also be conveniently all done in one command with `serene add my-package --install`.
 
 ## Installation
-Installing serene involves two things, deploying the server, and installing a local CLI to conveniently interact with the server.
+_Serene_ is a complete build server. Because of that the setup is a bit more involved than a simple AUR helper. This means it consits of three fundamental steps:
+1. Deploying the _Serene Server_ on your server
+2. Installing the _Serene CLI_ on your host
+3. Configuring `pacman` to use _Serene_'s package repository
 
-### Deploying
-Here is a quick overview of hosting a serene server, based on the main branch. The server is just a single docker container, making it straightforward:
-1. First, **create an empty file** called `authorized_secrets` in your directory.
-2. Set up a reverse proxy for docker (e.g. traefik) to use SSL/TLS.
-3. Add the following service to your docker compose in the same directory:
-```yaml
-# docker-compose.yml > services
+You can find detailed setup instructions in the documentation.
 
-serene:
-  image: ghcr.io/virtcode/serene-aur:main
-  volumes:
-    - /var/run/docker.sock:/var/run/docker.sock
-    - ./authorized_secrets:/app/authorized_secrets
-  labels:
-    - "your traefik labels here (the server is open on 80)"
-```
+**[<kbd>&ensp;<br>&ensp;Setup Instructions&ensp;<br>&ensp;</kbd>](/docs/readme.md#setup)**
 
-Now you are done and can start your deployment. Note that the container **requires write access to the docker socket** so that it can spin up containers for building the package.
+## Documentation
+_Serene_ is now finally extensively documented. Example deployments, configuration options, and basic usage tips can all be found over there.  If you find anything missing from the docs, contributions are very welcome!
 
-##### Next Steps
-You have now deployed a basic server with default settings successfully. You are now ready to start building your first packages on your new server. To configure more advanced features like **automatic dependency resolving** or **package signing**, see the full server documentation:
-
-
-**[<kbd>&ensp;<br>&ensp;Server Documentation&ensp;<br>&ensp;</kbd>](./server/README.md)** &ensp; **[<kbd>&ensp;<br>&ensp;Runner Documentation&ensp;<br>&ensp;</kbd>](./runner/README.md)**
-
-### Installing the CLI
-To start using your server, you should install the corresponding cli to communicate with the server to download and build packages. You have the following options to install the cli:
-
-- **Build via makepkg**: You can download and build the corresponding [PKGBUILD](cli/PKGBUILD) manually on your system, and install the package.
-- **Download Manually**: Your server will automatically build the cli by default. If you have not yet added the server to your repositories, you can download the package manually by heading to `https://your-host/x86_64` and finding the package called `serene-cli`. Install it with pacman.
-- **Add the Repository**: As the cli is built by default, you could already add as a repository to pacman, as seen [below](#installing-only-the-repository). Now install `serene-cli` with pacman.
-- **Build Manually**: You can also build it completely manually from source.
-
-The CLI is available under `serene`. You can now run it in your terminal, and it will tell you the next steps. It'll walk you through adding the repository to your pacman config and adding your secret to your server. For all the other features, see the full documentation:
-
-**[<kbd>&ensp;<br>&ensp;CLI Documentation&ensp;<br>&ensp;</kbd>](./cli/README.md)**
-
-### Installing only the Repository
-If you want to use the repository without instructions from the cli, also quite easy. The hosted server can be used as a normal pacman repository, by adding it to `/etc/pacman.conf`:
-```ini
-[serene]
-SigLevel = Optional TrustAll
-Server = https://your-host/x86_64
-```
-*The SigLevel should only be set to `Optional TrustAll` when [package signing](./server/README.md#package-signing) is disabled for the repository*
-
-## Architecture
-Here's a *very* quick word about the architecture of *serene*:
-- **Server Container:** API and file Server for the repository. Manages all the packages and schedules.
-- **Runner Container:** Spun up by the Server Container as a sibling container on the host. Build only one package each.
-- **Local CLI:** Interacts with said API to add and manipulate added packages. Requires authentication via secret.
+**[<kbd>&ensp;<br>&ensp;Documentation&ensp;<br>&ensp;</kbd>](/docs/readme.md)**
 
 ## Disclaimer
 When hosting a repository with this project, this repository is **your** responsibility!

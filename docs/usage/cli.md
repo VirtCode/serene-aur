@@ -1,10 +1,8 @@
 # Command Line Interface
-The CLI is the main way to interact with a serene server. It uses the [API](../server/README.md#api) of the server to add and manipulate the packages that are managed by the server. It is not required to [just use the built packages](../README.md#installing-only-the-repository) from the server though, as this is purely done through pacman.
+The CLI is the main way to interact with Serene. It uses the API of the server to add and manipulate the packages that are managed by the server. Note that the CLI **has nothing to do with installing the packages**, this will be taken care of by normal `pacman` as serene offers an ordinary package repository.
 
-## Usage
-This section will cover some of the ways one can use the cli to interact with the server.
-
-To get exhaustive options and information about a (sub-) command, you should still refer to the `--help` page of that item, as only some options are shown here.
+## Overview
+This section serves as a small overview to get an idea of what the CLI is capable of. To get exhaustive options and information about a (sub-) command, you should still refer to the `--help` page of that item, as only some options are shown here.
 
 **Listing all packages:** To list all packages built by the server, their version and build status, use:
 ```shell
@@ -79,6 +77,9 @@ serene info my-package set flags "nocheck" "holdver"
 
 # Change whether the package is purely added as a dependency
 serene info my-package set dependency false
+
+# Mark the packages set prepare commands as private
+serene info my-package set private true
 ```
 
 **Manage the server**: To manage some server properties, you can use the manage subcommand:
@@ -99,32 +100,6 @@ serene manage key --machine
 # Prints the secret to add to the `authorized_secrets` file.
 serene secret
 ```
-
-## Building Manually
-There are various ways to build and install the cli on your own system. By default, the serene server builds a package for the cli automatically. This package can then be downloaded and installed, either through pacman, or manually. This is the recommended way, but the package can also be installed entirely manually:
-
-### Using the PKGBUILD
-A `PKGBUILD` for the cli is provided in this repository. It is used by the serene server when building the package, but can also be used manually. However, since it is not in a normal, empty repository, the workflow would look like this:
-```shell
-git clone https://github.com/VirtCode/serene-aur
-cd serene-aur/cli
-makepkg -irsc
-```
-
-Shell completions will be automatically installed alongside the package.
-
-### Building Directly
-You can also build the package directly using cargo. To do that, clone the repository and build it from the **root directory** of the package:
-```shell
-cargo build --release --bin serene-cli
-```
-Now, copy the built binary (at `target/release/serene-cli`) to your path, preferably as `serene`, as that is how the package will call the binary.
-
-You can generate shell completions for your current shell and add them manually. Use the following command to generate the completions:
-```shell
-serene completions
-```
-
 ## Configuration
 The cli does not offer much local configuration. It does set up everything needed automatically on the first startup, like prompting the user for the location of the server, generating a secret, etc. This makes it very easy to set up.
 
