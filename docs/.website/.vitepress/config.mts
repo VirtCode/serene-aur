@@ -14,7 +14,7 @@ export default defineConfig({
     "readme.md": "index.md",
   },
   base: "/serene-aur",
-  // cleanUrls: true,
+  cleanUrls: true,
   // we need to ignore dead links since there are some links referring to code files
   ignoreDeadLinks: true,
   themeConfig: {
