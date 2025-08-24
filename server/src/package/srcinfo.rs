@@ -98,7 +98,7 @@ impl SrcinfoGenerator {
         let container = self.runner.prepare_srcinfo_container(true).await?;
 
         self.runner.upload_inputs(&container, input).await?;
-        let status = self.runner.run(&container, None).await?;
+        let (status, logs) = self.runner.run(&container, None).await?;
 
         debug!("srcinfo generation finished with status {}", status.success);
 
@@ -106,7 +106,7 @@ impl SrcinfoGenerator {
             let mut output = self.runner.download_outputs(&container).await?;
             output.srcinfo().await
         } else {
-            Err(anyhow!("srcinfo generation container failed: {}", status.logs))
+            Err(anyhow!("srcinfo generation container failed: {}", logs))
         }
     }
 }

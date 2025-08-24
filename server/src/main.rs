@@ -25,6 +25,7 @@ use actix_web::web::Data;
 use actix_web::{App, HttpServer};
 use anyhow::Context;
 use config::INFO;
+use database::build::migrate_logs;
 use log::{error, info};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -37,7 +38,23 @@ async fn main() -> anyhow::Result<()> {
     info!("starting serene version {}", INFO.version);
 
     // initializing database
-    let db = database::connect().await?;
+    let mut db = database::connect().await?;
+
+    // we need to perform the log migration here as it might require to reopen the
+    // database
+    match migrate_logs(&db).await {
+        Ok(true) => {
+            info!("reopening database such that compaction has an effect");
+
+            db.close().await;
+            db = database::connect()
+                .await
+                .context("failed to reconnect to database after log migration")?;
+        }
+        Ok(false) => {}
+        Err(e) => error!("failed to migrate all build logs: {e:#}"),
+    }
+    let db = db;
 
     // initialize broadcast
     let broadcast = Broadcast::new();

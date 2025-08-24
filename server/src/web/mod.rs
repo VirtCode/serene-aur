@@ -1,7 +1,7 @@
 use crate::build::schedule::{BuildMeta, BuildScheduler};
 use crate::build::{BuildSummary, Builder};
 use crate::config::{CONFIG, INFO};
-use crate::database::Database;
+use crate::database::{self, Database};
 use crate::package;
 use crate::package::srcinfo::SrcinfoGenerator;
 use crate::package::{aur, source, Package};
@@ -275,14 +275,15 @@ pub async fn get_logs(
 ) -> actix_web::Result<impl Responder> {
     let (package, time) = path.into_inner();
 
+    let b = get_build_for(&package, &time, &db)
+        .await?
+        .ok_or_else(|| ErrorNotFound("package not found or no build at this time"))?;
+
     Ok(Json(
-        get_build_for(&package, &time, &db)
-            .await?
-            .and_then(|s| s.logs)
-            .map(|l| l.logs)
-            .ok_or_else(|| {
-                ErrorNotFound("package not found, no build at this time or it has no logs")
-            })?,
+        database::log::read(&b)
+            .await
+            .internal()?
+            .ok_or_else(|| ErrorNotFound("build does not have any logs"))?,
     ))
 }
 

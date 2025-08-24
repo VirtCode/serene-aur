@@ -1,6 +1,8 @@
-mod build;
+pub mod build;
+pub mod log;
 pub mod package;
 
+use ::log::info;
 use anyhow::Context;
 use anyhow::Result;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
@@ -12,6 +14,8 @@ pub type Database = SqlitePool;
 
 /// connects to the local sqlite database
 pub async fn connect() -> Result<Database> {
+    info!("connecting to the database");
+
     // connecting
     let pool = SqlitePool::connect_with(
         SqliteConnectOptions::new()

@@ -1,4 +1,4 @@
-use crate::database::Database;
+use crate::database::{self, Database};
 use crate::package::srcinfo::{SrcinfoGenerator, SrcinfoGeneratorInstance};
 use crate::package::Package;
 use crate::repository::{PackageRepository, PackageRepositoryInstance};
@@ -26,7 +26,7 @@ pub struct BuildSummary {
     pub reason: BuildReason,
 
     /// logs / status obtained from the build container
-    pub logs: Option<RunStatus>,
+    pub details: Option<RunStatus>,
     /// version that was built
     pub version: Option<String>,
 
@@ -41,7 +41,7 @@ impl BuildSummary {
         Self {
             package: package.base.clone(),
             state: BuildState::Pending,
-            logs: None,
+            details: None,
             version: None,
             started: Utc::now(),
             ended: None,
@@ -66,7 +66,7 @@ pub async fn cleanup_unfinished(db: &Database) -> anyhow::Result<()> {
         warn!("cleaning build for {}, as it is still active", summary.package);
 
         summary.end(Fatal(
-            "build was not finished or failed beyond fatally, then serene was restarted - check your logs!".to_owned(), 
+            "build was not finished or failed beyond fatally, then serene was restarted - check your logs!".to_owned(),
             if let Running(state) = &summary.state { *state } else { BuildProgress::Resolve }
         ));
 
@@ -111,6 +111,9 @@ impl Builder {
             warn!("removing package: {e:#}");
         }
 
+        // remove logs from filesystem
+        database::log::clean(package).await?;
+
         package.self_destruct().await?;
         package.delete(&self.db).await?;
 
@@ -148,9 +151,13 @@ impl Builder {
 
             let clean = package.clean || force_clean; // also clean here if force clean
             let (container, success) = match self.build(&mut package, clean).await {
-                Ok((status, container)) => {
+                Ok((status, logs, container)) => {
                     let next = status.success;
-                    summary.logs = Some(status);
+                    summary.details = Some(status);
+
+                    // write logs to disk
+                    database::log::write(&summary, logs).await?;
+
                     (container, next)
                 }
                 Err(e) => {
@@ -219,14 +226,14 @@ impl Builder {
         &self,
         package: &mut Package,
         clean: bool,
-    ) -> anyhow::Result<(RunStatus, ContainerId)> {
+    ) -> anyhow::Result<(RunStatus, String, ContainerId)> {
         let container = self.runner.prepare_build_container(package, clean).await?;
 
         self.runner.upload_inputs(&container, package.build_files().await?).await?;
 
-        let status = self.runner.run(&container, Some(package.base.clone())).await?;
+        let (status, logs) = self.runner.run(&container, Some(package.base.clone())).await?;
 
-        Ok((status, container))
+        Ok((status, logs, container))
     }
 
     /// publishes a given package to the repository

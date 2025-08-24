@@ -35,6 +35,7 @@ Internally, the container uses the following locations to store its stuff:
 - `/app/serene.db`: This is the *sqlite* database where all the builds, logs, etc. are stored about the different packages.
 - `/app/sources`: This is a directory structure that stores the `PKGBUILD`s which are copied to containers for building.
 - `/app/repository`: This is the repository containing the built packages. It is served as is for pacman to access.
+- `/app/logs`: This is the directory which contains the build logs for all packages.
 
 ### Backups
 It can be a good practice to back up your serene instance because when using it for long, you will have modified `PKGBUILD`s and different package-specific changes which are not available for download on the AUR. In the case you loose your server, you want to be able to restore a serene instance quickly.

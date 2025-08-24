@@ -34,7 +34,6 @@ const RUNNER_IMAGE_SRCINFO_ENTRY: &str = "./srcinfo.sh";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunStatus {
     pub success: bool,
-    pub logs: String,
 
     pub started: DateTime<Utc>,
     pub ended: DateTime<Utc>,
@@ -78,7 +77,7 @@ impl Runner {
         &self,
         container: &ContainerId,
         broadcast_target: Option<String>,
-    ) -> anyhow::Result<RunStatus> {
+    ) -> anyhow::Result<(RunStatus, String)> {
         let start = Utc::now();
 
         // start container
@@ -126,12 +125,14 @@ impl Runner {
         // get logs from log collector thread
         let logs = log_collector.await.unwrap_or_default();
 
-        Ok(RunStatus {
-            success: result.first().and_then(|r| r.as_ref().ok()).is_some(),
+        Ok((
+            RunStatus {
+                success: result.first().and_then(|r| r.as_ref().ok()).is_some(),
+                started: start,
+                ended: end,
+            },
             logs,
-            started: start,
-            ended: end,
-        })
+        ))
     }
 
     /// downloads the built directory from the container
