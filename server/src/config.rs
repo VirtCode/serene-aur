@@ -68,6 +68,8 @@ pub struct Config {
     pub resolve_ignore_failed: bool,
     /// maximal amount of concurrent builds allowed PER SESSION
     pub concurrent_builds: usize,
+    /// whether to build the CLI from latest commit instead of matching tag
+    pub edge_cli: bool,
 }
 
 impl Default for Config {
@@ -92,6 +94,7 @@ impl Default for Config {
 
             port: 80,
             build_cli: true,
+            edge_cli: false,
             own_repository_url: None,
 
             webhook_secret: None,
@@ -171,6 +174,7 @@ impl Config {
 
             port: Self::env_u16("PORT", default.port),
             build_cli: Self::env_bool("BUILD_CLI", default.build_cli),
+            edge_cli: Self::env_bool("EDGE_CLI", default.edge_cli),
             own_repository_url: Self::env_string_option("OWN_REPOSITORY_URL", default.own_repository_url),
 
             resolve_build_sequence: Self::env_bool("RESOLVE_BUILD_SEQUENCE", default.resolve_build_sequence),

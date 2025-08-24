@@ -1,4 +1,4 @@
-FROM rustlang/rust:nightly-alpine3.22 as builder
+FROM rustlang/rust:nightly-alpine3.22 AS builder
 
 WORKDIR /app
 
@@ -9,9 +9,8 @@ RUN apk add --no-cache nettle-dev clang clang-libclang pkgconfig
 RUN apk add --no-cache pacman-dev
 # install git for dynamic version
 RUN apk add --no-cache git
-
 # install sqlx cli
-RUN cargo install sqlx-cli --no-default-features --features rustls,sqlite
+RUN apk add --no-cache cargo-sqlx
 
 # run build
 COPY . .
@@ -23,7 +22,7 @@ ENV RUSTFLAGS -Ctarget-feature=-crt-static
 RUN cargo sqlx database setup --source server/migrations
 RUN cargo build --release --bin serene
 
-FROM alpine:3.22 as runner
+FROM alpine:3.22 AS runner
 
 WORKDIR /app
 
@@ -35,5 +34,9 @@ RUN apk add --no-cache git binutils nettle pacman
 
 # create local user
 RUN adduser -D --uid 1000 user
+
+# we want edge cli per default if we are a development image
+ARG DEVELOPMENT=false
+ENV EDGE_CLI=${DEVELOPMENT}
 
 CMD serene

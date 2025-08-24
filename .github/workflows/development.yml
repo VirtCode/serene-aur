@@ -5,6 +5,7 @@ on:
     branches: ['main']
     paths: ["server/**", ".github/workflows/publish.yml"]
   pull_request:
+    paths: ["server/**", ".github/workflows/publish.yml"]
   workflow_dispatch:
 
 env:

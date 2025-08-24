@@ -1,4 +1,4 @@
-use crate::config;
+use crate::config::{self, CONFIG, INFO};
 use crate::package::git;
 use crate::package::source::{Source, SourceImpl, SrcinfoWrapper, PKGBUILD};
 use crate::runner::archive::InputArchive;
@@ -9,31 +9,32 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
+const CLI_PKGBUILD: &str = include_str!("../../../../cli/PKGBUILD");
+const CLI_PKGBUILD_REPLACE: &str = "#-serene-cli-source-do-not-remove";
+
 /// this is a custom source for the serene cli
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CliSource {
-    last_commit: String,
+    /// depending on the mode, this is either the tag or latest commit
+    /// we track the latest commit here, because the source should not be devel
+    #[serde(default)]
+    state: String,
 }
 
 impl CliSource {
     pub fn new() -> Self {
-        Self { last_commit: "".to_owned() }
+        Self { state: "".to_owned() }
     }
 
     pub fn migrated(last_commit: String) -> Self {
-        Self { last_commit }
+        Self { state: last_commit }
     }
 }
 
 #[typetag::serde]
 #[async_trait]
 impl SourceImpl for CliSource {
-    async fn initialize(&mut self, folder: &Path) -> anyhow::Result<()> {
-        debug!("initializing cli source");
-
-        git::clone(config::SOURCE_REPOSITORY, folder).await?;
-        self.last_commit = git::find_local_commit(folder).await?;
-
+    async fn initialize(&mut self, _folder: &Path) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -46,22 +47,51 @@ impl SourceImpl for CliSource {
     }
 
     fn get_state(&self) -> String {
-        self.last_commit.clone()
+        self.state.clone()
     }
 
-    async fn update(&mut self, folder: &Path) -> anyhow::Result<()> {
-        debug!("updating cli source");
+    async fn update(&mut self, _folder: &Path) -> anyhow::Result<()> {
+        if CONFIG.edge_cli {
+            debug!("updating edge cli source");
 
-        // pull repo
-        git::pull(folder).await?;
-        self.last_commit = git::find_local_commit(folder).await?;
+            // check upstream for changes
+            self.state = git::find_remote_commit(config::SOURCE_REPOSITORY).await?;
+        } else {
+            debug!("ensuring normal cli source");
+
+            // use version that is currently running
+            self.state = INFO.version.clone();
+        }
 
         Ok(())
     }
 
-    async fn get_pkgbuild(&self, folder: &Path) -> anyhow::Result<String> {
-        fs::read_to_string(folder.join("cli").join("PKGBUILD"))
-            .context("failed to read PKGBUILD in serene-aur git repository")
+    async fn get_pkgbuild(&self, _folder: &Path) -> anyhow::Result<String> {
+        if CONFIG.edge_cli {
+            Ok(CLI_PKGBUILD.to_string())
+        } else {
+            let mut pkgbuild = CLI_PKGBUILD.to_string();
+
+            let tag = INFO.version.as_str();
+            let version = tag.strip_prefix("v").unwrap_or(tag);
+
+            // override source and version
+            pkgbuild = pkgbuild.replace(
+                CLI_PKGBUILD_REPLACE,
+                &format!(
+                    r#"
+                    source=("git+https://github.com/VirtCode/serene-aur.git#tag={tag}")
+                    pkgver={version}
+                    pkgdesc="$pkgdesc (server tagged version)"
+                    "#
+                ),
+            );
+
+            // remove pkgver function because it doesn't change
+            pkgbuild = pkgbuild.replace("pkgver()", "_pkgver()");
+
+            Ok(pkgbuild)
+        }
     }
 
     async fn get_srcinfo(&self, _folder: &Path) -> anyhow::Result<Option<SrcinfoWrapper>> {
@@ -73,11 +103,11 @@ impl SourceImpl for CliSource {
         archive: &mut InputArchive,
         folder: &Path,
     ) -> anyhow::Result<()> {
-        archive.append_file(&folder.join("cli").join(PKGBUILD), Path::new(PKGBUILD)).await
+        archive.write_file(&self.get_pkgbuild(folder).await?, Path::new(PKGBUILD), true).await
     }
 }
 
 /// create a new cli souce
 pub fn new() -> Source {
-    Source::new(Box::new(CliSource::new()), true)
+    Source::new(Box::new(CliSource::new()), false)
 }

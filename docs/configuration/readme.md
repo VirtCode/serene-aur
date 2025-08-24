@@ -18,6 +18,10 @@ NAME=serene
 # whether the serene-cli is added and built automatically
 BUILD_CLI=true
 
+# whether the serene-cli should be built from the `main` branch instead of
+# a known tag compatible with the server
+EDGE_CLI=false
+
 # http url to use to access its own repository
 # this is used by the runner containers to access the repository for dependencies
 # it is easiest to set this to the url the repo is accessible with from the outside (e.g. https://my.tld/x86_64)

@@ -11,6 +11,8 @@ source=("git+https://github.com/VirtCode/serene-aur.git")
 md5sums=('SKIP')
 options=(!lto) # see https://github.com/briansmith/ring/issues/1444
 
+#-serene-cli-source-do-not-remove
+
 # install under serene, not serene-cli
 _binary_name="serene"
 

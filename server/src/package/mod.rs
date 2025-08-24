@@ -164,7 +164,15 @@ pub async fn try_add_cli(
     srcinfo_generator: &SrcinfoGeneratorInstance,
 ) -> anyhow::Result<()> {
     // is the package already added?
-    if let Some(pkg) = Package::find(CLI_PACKAGE_NAME, db).await? {
+    if let Some(mut pkg) = Package::find(CLI_PACKAGE_NAME, db).await? {
+        // this is basically a migration for the new cli source
+        if pkg.source.devel {
+            debug!("ensuring serene-cli package is not devel");
+
+            pkg.source.devel = false;
+            pkg.change_sources(db).await?;
+        }
+
         debug!("update serene-cli now in case of an update");
         scheduler.run(vec![pkg], BuildMeta::normal(BuildReason::Schedule)).await?;
 
@@ -291,7 +299,7 @@ impl Package {
         let pkgbuild = self.source.get_pkgbuild(&self.get_folder()).await?;
         let state = self.source.get_state();
 
-        if self.source.devel {
+        if self.source.devel || self.base == CLI_PACKAGE_NAME {
             // upgrade devel package srcinfo to reflect version and rel
             srcinfo = reported;
         } else if srcinfo.base.pkgver != reported.base.pkgver {
