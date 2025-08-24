@@ -13,8 +13,8 @@ export default defineConfig({
     ":section/readme.md": ":section/index.md",
     "readme.md": "index.md",
   },
-  base: "/serene-aur/docs",
-  cleanUrls: true,
+  base: "/serene-aur",
+  // cleanUrls: true,
   // we need to ignore dead links since there are some links referring to code files
   ignoreDeadLinks: true,
   themeConfig: {
