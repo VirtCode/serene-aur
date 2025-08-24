@@ -1,12 +1,11 @@
-name: Build and Publish Server Image
+name: Development Image
 
 on:
   push:
     branches: ['main']
     paths: ["server/**", ".github/workflows/publish.yml"]
+  pull_request:
   workflow_dispatch:
-  release:
-    types: ['published']
 
 env:
   REGISTRY: ghcr.io
@@ -22,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # we need this for git versioning
           fetch-depth: 0
@@ -40,12 +39,16 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: server/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: DEVELOPMENT=true

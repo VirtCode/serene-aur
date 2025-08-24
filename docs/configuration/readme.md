@@ -2,8 +2,8 @@
 To use Serene effectively for your own needs, you should configure it. Most configuration is done using environment variables so it is easy to use with docker.
 
 There are a couple of important features which require some configuration to work.
-- Enabling proper [dependency resolving](./dependency-resolving) (recommended).
-- Making use of [package signing](./package-signing).
+- Enabling proper [dependency resolving](./dependency-resolving.md) (recommended).
+- Making use of [package signing](./package-signing.md).
 - Using [webhooks](./webhooks.md) for automation.
 
 The rest are small tweaks which are relatively self-explanatory and are documented below. Note that the options involved in the above features are documented here again too.

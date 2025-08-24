@@ -1,8 +1,9 @@
-name: Build and Publish Runner Image
+name: Nightly Runner Image
 
+# this will run on
 on:
   push:
-    branches: ['main']
+    tags: ['*']
   workflow_dispatch:
   schedule:
     - cron: "0 22 * * *"
@@ -21,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # we need this to get the tag
           fetch-depth: 0
@@ -29,6 +30,9 @@ jobs:
 
       - name: Get latest tag
         run: echo "tag=$(git describe --tags --abbrev=0)" >> "$GITHUB_ENV"
+
+      - name: Checkout latest tag
+        run: git checkout ${{ env.tag }}
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -44,12 +48,11 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=schedule
-            type=ref,event=branch
             type=raw,value=edge-${{ env.tag }}
 
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: runner
           push: true
