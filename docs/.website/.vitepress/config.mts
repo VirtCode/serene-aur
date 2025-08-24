@@ -10,13 +10,13 @@ export default defineConfig({
   srcDir: "../",
   srcExclude: [".website/**"],
   rewrites: {
-    ":section/readme.md": ":section/index.md",
+    // only rewrite main readme file since there are no backlinks to it
+    // the problem with backlinks is that they need to contain the rewritten
+    // link as can be read here: https://vitepress.dev/guide/routing#route-rewrites
     "readme.md": "index.md",
   },
   base: "/serene-aur",
   cleanUrls: true,
-  // we need to ignore dead links since there are some links referring to code files
-  ignoreDeadLinks: true,
   themeConfig: {
     editLink: {
       pattern: "https://github.com/VirtCode/serene-aur/edit/main/docs/:path",
@@ -34,33 +34,36 @@ export default defineConfig({
       { text: "Introduction", link: "/" },
       {
         text: "Usage",
+        base: "/usage/",
         items: [
-          { text: "Overview", link: "/usage/" },
-          { text: "Command Line Interface", link: "/usage/cli" },
-          { text: "Package Sources", link: "/usage/package-sources" },
-        ],
-      },
-      {
-        text: "Deployment",
-        items: [
-          { text: "Overview", link: "/deployment/" },
-          { text: "Using Host Docker", link: "/deployment/host-docker" },
-          {
-            text: "Using Docker In Docker",
-            link: "/deployment/docker-in-docker",
-          },
+          { text: "Overview", link: "readme" },
+          { text: "Command Line Interface", link: "cli" },
+          { text: "Package Sources", link: "package-sources" },
         ],
       },
       {
         text: "Configuration",
+        base: "/configuration/",
         items: [
-          { text: "Overview", link: "/configuration/" },
+          { text: "Overview", link: "readme" },
           {
             text: "Dependency Resolving",
-            link: "/configuration/dependency-resolving",
+            link: "dependency-resolving",
           },
-          { text: "Package Signing", link: "/configuration/package-signing" },
-          { text: "Webhooks", link: "/configuration/webhooks" },
+          { text: "Package Signing", link: "package-signing" },
+          { text: "Webhooks", link: "webhooks" },
+        ],
+      },
+      {
+        text: "Deployment",
+        base: "/deployment/",
+        items: [
+          { text: "Overview", link: "readme" },
+          { text: "Using Host Docker", link: "host-docker" },
+          {
+            text: "Using Docker In Docker",
+            link: "docker-in-docker",
+          },
         ],
       },
     ],

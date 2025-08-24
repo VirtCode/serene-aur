@@ -1,5 +1,5 @@
 # serene-aur
-[Setup](/docs/readme.md#setup) &ensp; • &ensp; [Documentation](/docs/readme.md) &ensp; • &ensp; [Issues](https://github.com/VirtCode/serene-aur/issues) &ensp; • &ensp; [Docker Image](https://github.com/VirtCode/serene-aur/pkgs/container/serene-aur)
+[Setup](https://virtcode.github.io/serene-aur#setup) &ensp; • &ensp; [Documentation](https://virtcode.github.io/serene-aur) &ensp; • &ensp; [Issues](https://github.com/VirtCode/serene-aur/issues) &ensp; • &ensp; [Docker Image](https://github.com/VirtCode/serene-aur/pkgs/container/serene-aur)
 
 > *Serene* is an easy to deploy, self-hosted, AUR build server that aims at replacing your AUR helper.
 
@@ -11,10 +11,10 @@ This is where *Serene* comes in. It is a self-hosted package repository and buil
 - **Powerful CLI**: You can add, build, remove and diagnose the packages you want to build easily from your shell via the CLI.
 - **Flexibility**: Customize setup commands, building schedule, etc. on a per-package basis and even use custom non-aur repositories.
 
-Are you ready to host your own? Head to the the basic [setup instructions](/docs/readme.md#setup) in the documentation.
+Are you ready to host your own? Head to the the basic [setup instructions](https://virtcode.github.io/serene-aur#setup) in the documentation.
 
 ## Workflow
-This section briefly covers how one uses the system as an end user via the included [CLI](/docs/usage/cli.md), so you can get a feel for it.
+This section briefly covers how one uses the system as an end user via the included [CLI](https://virtcode.github.io/serene-aur/usage/cli), so you can get a feel for it.
 
 Add a package from the [AUR](https://aur.archlinux.org) to the repository, so that it is built automatically:
 ```shell
@@ -46,12 +46,12 @@ _Serene_ is a complete build server. Because of that the setup is a bit more inv
 
 You can find detailed setup instructions in the documentation.
 
-**[<kbd>&ensp;<br>&ensp;Setup Instructions&ensp;<br>&ensp;</kbd>](/docs/readme.md#setup)**
+**[<kbd>&ensp;<br>&ensp;Setup Instructions&ensp;<br>&ensp;</kbd>](https://virtcode.github.io/serene-aur#setup)**
 
 ## Documentation
 _Serene_ is now finally extensively documented. Example deployments, configuration options, and basic usage tips can all be found over there.  If you find anything missing from the docs, contributions are very welcome!
 
-**[<kbd>&ensp;<br>&ensp;Documentation&ensp;<br>&ensp;</kbd>](/docs/readme.md)**
+**[<kbd>&ensp;<br>&ensp;Documentation&ensp;<br>&ensp;</kbd>](https://virtcode.github.io/serene-aur)**
 
 ## Disclaimer
 When hosting a repository with this project, this repository is **your** responsibility!

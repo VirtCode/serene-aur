@@ -6,7 +6,7 @@ Webhooks are disabled by default. To enable webhooks, you will need to set the `
 
 ## Using Webhooks
 If you have enabled webhooks you can now proceed to create a _secret_ for a specific package. This _webhook secret_ will only work to trigger webhooks for the package it is being created for. Note that _webhook secrets_ are stateless and are **bound to the user that has created it**. So if this user is removed from the `authorized_secrets` their _webhook secrets_ will no longer work. To create a webhook secret, you can use the [CLI](../usage/cli.md):
-```
+```shell
 serene manage webhook <my-package>
 ```
 
