@@ -1,5 +1,5 @@
 # Serene Documentation
-Welcome to the documentation for Serene. This folder contains most of what you need to know to run and maintain an instance of serene yourself. If you find anything here incomplete, don't hesitate to contribute!
+Welcome to the documentation for Serene. This page contains most of what you need to know to run and maintain an instance of serene yourself. If you find anything here incomplete, don't hesitate to contribute!
 
 The documentation is split into roughly three parts:
 - [Usage](./usage/readme.md): This covers how you use serene as an end user to build and maintain your packages.

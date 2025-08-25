@@ -27,7 +27,7 @@ When using this compose file, you should change the following:
 ```yaml
 services:
   serene:
-    image: ghcr.io/virtcode/serene-aur:main
+    image: ghcr.io/virtcode/serene-aur:latest
     restart: unless-stopped
 
     # we set an explicit container name so our build container can reach it
