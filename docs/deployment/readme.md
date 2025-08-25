@@ -28,11 +28,11 @@ The **[CLI](../usage/cli.md)** will generate such a line for a secret that it wi
 ## Versioning
 It is heavily recommended that you use the release version of Serene. This means using the docker image either tagged with a version `vX.X.X` or `latest` which will point to the latest version. When you are using a tagged version, Serene will ensure that relevant components are in sync:
 - It will use a runner image that is compatible with the current version.
-- The [CLI](./usage/cli.md) that the server builds will also match the version of the server (you can change this with the `EDGE_CLI` [config variable](../configuration/readme.md)).
+- The [CLI](../usage/cli.md) that the server builds will also match the version of the server (you can change this with the `EDGE_CLI` [config variable](../configuration/readme.md)).
 
 Make sure you **update your instance timely when a new release comes out**. This is because GitHub will only build new runner images for the latest release. While this should not directly lead to any problems, you might have a lot of overhead because each build container first needs to be updated to the latest arch linux packages.
 
-If you are feeling adventurous you can also use the `main` branch. For that, use a docker image tagged with `main`. Note that updates between these versions might not go smoothly without manual intervention, so be careful and know what you are doing. Note that when using such an image, the [CLI](./usage/cli.md) will by default also be built from the `main` branch.
+If you are feeling adventurous you can also use the `main` branch. For that, use a docker image tagged with `main`. Note that updates between these versions might not go smoothly without manual intervention, so be careful and know what you are doing. Note that when using such an image, the [CLI](../usage/cli.md) will by default also be built from the `main` branch.
 
 ## Container Content
 The actual Serene server container is as lightweight as possible and based on alpine. Many things are obviously stored on the container's filesystem. Based on your setup, you might want to mount some things outside of the container and potentially onto other volumes.
