@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{Context, Result};
 use colored::Colorize;
 use rand::distributions::{Alphanumeric, DistString};
 use serde::{Deserialize, Serialize};
@@ -9,14 +9,25 @@ use std::process::exit;
 use std::{env, fs};
 
 const CONFIG_FILE: &str = "serene.yml";
+const SECRET_FILE: &str = "serene/secret.txt";
 
 /// gets the file the configuration is stored at
-fn file() -> PathBuf {
+fn config_file() -> PathBuf {
     Path::new(
         &env::var("XDG_CONFIG_HOME")
             .unwrap_or_else(|_| format!("{}/.config", env::var("HOME").expect("$HOME not set?"))),
     )
     .join(CONFIG_FILE)
+}
+
+/// gets the file the secret is stored in
+fn secret_file() -> PathBuf {
+    Path::new(
+        &env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
+            format!("{}/.local/share", env::var("HOME").expect("$HOME not set?"))
+        }),
+    )
+    .join(SECRET_FILE)
 }
 
 /// generates a fresh secret
@@ -29,78 +40,87 @@ fn default_elevator() -> String {
     "sudo".to_string()
 }
 
+/// get default root elevator
+fn secret_placeholder() -> String {
+    "empty".to_string()
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Config {
-    pub secret: String,
     pub url: String,
-    #[serde(default = "default_elevator")]
+    #[serde(default = "secret_placeholder", skip_serializing)]
+    pub secret: String,
+
+    #[serde(default = "default_elevator", skip_serializing)]
     pub elevator: String,
 }
 
 impl Config {
-    /// reads or creates a config
-    pub fn create() -> anyhow::Result<Self> {
-        let file = file();
-
-        if file.exists() {
-            let string = fs::read_to_string(&file).context("failed to read configuration file")?;
-
-            Ok(serde_yaml::from_str(&string).context("failed to deserialize configuration file")?)
-        } else {
-            let config = Config::intro()?;
-
-            let string =
-                serde_yaml::to_string(&config).context("failed to serialize configuration file")?;
-
-            // create .config if doesn't exist
-            if let Some(parent) = file.parent() {
-                if !parent.exists() {
-                    fs::create_dir_all(parent).context("failed to create config directory")?;
-                }
-            }
-
-            fs::write(&file, string).context("failed to save new configuration file")?;
-
-            exit(0);
-        }
+    /// checks whether the config exists
+    pub fn exists() -> bool {
+        config_file().is_file()
     }
 
-    /// prints the intro sequence which walks the user through adding the secret
-    fn intro() -> anyhow::Result<Self> {
-        println!("Welcome to {}!", "serene".bold());
+    /// creates a empty config with only a url
+    pub fn empty(url: String) -> Self {
+        Self { secret: secret_placeholder(), url, elevator: secret_placeholder() }
+    }
 
-        println!();
-        println!("1. In order to use this cli, you need to host the corresponding build server.");
-        println!("Please enter the url to that server:");
-        let mut url = String::new();
-        stdin().read_line(&mut url).context("couldn't read line from stdin")?;
-        url = url.trim().to_owned();
+    /// reads or creates a config
+    pub fn read() -> anyhow::Result<Self> {
+        let string =
+            fs::read_to_string(&config_file()).context("failed to read configuration file")?;
 
-        println!();
-        println!(
-            "2. Great, now add the following line to its {} file:",
-            "authorized_secrets".italic()
-        );
+        let mut config: Self =
+            serde_yaml::from_str(&string).context("failed to deserialize configuration file")?;
 
-        let secret = generate_secret();
-        let config = Self::new(secret, url);
-        config.print_secret(true);
-
-        println!();
-        println!("3. To now use the repository with your pacman, add the following to your pacman configuration:");
-        println!("[serene]                        # or something else if you've changed that");
-        println!("SigLevel = Optional TrustAll    # needed when package signing is disabled");
-        println!("Server = {}/{}", &config.url, env::consts::ARCH);
-
-        println!();
-        println!("After that, you're all set and ready to go!");
+        // read secret from file
+        // yes, this means you can't use "empty" as your secret
+        // and this is indeed a bit sketchy but has the most ergonomic result
+        if config.secret == secret_placeholder() {
+            config.secret = Self::read_or_generate_secret()?;
+        }
 
         Ok(config)
     }
 
-    /// creates a new config with default values
-    fn new(secret: String, url: String) -> Self {
-        Self { secret, url, elevator: default_elevator() }
+    pub fn write(self) -> anyhow::Result<Self> {
+        let file = config_file();
+
+        let string =
+            serde_yaml::to_string(&self).context("failed to serialize configuration file")?;
+
+        // create .config if doesn't exist
+        if let Some(parent) = file.parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent).context("failed to create config directory")?;
+            }
+        }
+
+        fs::write(&file, string).context("failed to save new configuration file")?;
+
+        // now read saved config (and generate secret if required)
+        Self::read()
+    }
+
+    fn read_or_generate_secret() -> Result<String> {
+        let file = secret_file();
+
+        if file.exists() {
+            fs::read_to_string(&file)
+                .map(|s| s.trim().to_string())
+                .context("failed to read secret file")
+        } else {
+            if let Some(parent) = file.parent() {
+                if !parent.exists() {
+                    fs::create_dir_all(parent).context("failed to create secret directory")?;
+                }
+            }
+
+            let secret = generate_secret();
+            fs::write(&file, &secret).context("failed to store new secret")?;
+            Ok(secret)
+        }
     }
 
     /// prints the hashed secret to stdout together with host and username

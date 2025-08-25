@@ -6,7 +6,11 @@ To enable package signing you'll have to provide the server container with a pri
 Also note that if the signing is enabled after the initial setup of the server **only new package builds will be signed. Old packages need to be rebuilt in order to get signed.**
 
 ## Using the signatures in Pacman
-If you have successfully set up package signing, you'll still have to make `pacman` verify it. This can be done in three simple steps:
+If you have successfully set up package signing, you'll still have to make `pacman` verify it.
+
+When you are setting up a new host, the onboarding procedure of the [CLI](../usage/cli.md) will walk you through setting up signatures automatically, if they are enabled on your server.
+
+However, it can also easily be done manually done in three simple steps:
 1. Obtain the public key. You can do this via `serene manage key` if you have the [CLI](../usage/cli.md) installed, or you can download it directly from the `/key` api endpoint.
 2. Import the key into your `pacman` keyring. See the corresponding [arch wiki section](https://wiki.archlinux.org/title/Pacman/Package_signing#Adding_unofficial_keys).
 3. Tighten the `SigLevel` in your pacman config. Remove the line `SigLevel = Optional TrustAll` from the pacman config if you have added it during [setup](../readme.md#3.-configuring-pacman). See the [arch wiki section](https://wiki.archlinux.org/title/Pacman/Package_signing#Configuring_pacman) for more information about it.

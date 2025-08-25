@@ -101,16 +101,18 @@ serene manage key --machine
 serene secret
 ```
 ## Configuration
-The cli does not offer much local configuration. It does set up everything needed automatically on the first startup, like prompting the user for the location of the server, generating a secret, etc. This makes it very easy to set up.
+The CLI does not offer much local configuration. It does set up everything needed automatically on the first startup, like prompting the user for the location of the server, generating a secret, etc. This makes it very easy to set up.
 
-This configuration is stored at `~/.config/serene.yml` (or wherever your xdg-config-home is) as YAML. It contains the following attributes:
+This configuration is stored at `~/.config/serene.yml` (or wherever your `XDG_CONFIG_HOME` is) as YAML. It contains the following attributes and defaults:
 ```yaml
-# Local secret used by the cli in plain text.
-secret: [my-secret]
+# url of the server that is used
+url: <my-server-url>
 
-# Url of the server that is used.
-url: [my-server-url]
+# root elevator binary that is used
+elevator: sudo
 ```
+
+The secret is stored seperately at `~/.local/share/serene/secret.txt` as plain text. This is done such that you can easier version-control your Serene config as part of some dotfiles. If you have started to use Serene on an older version, your secret might be still stored in the config with the `secret:` attribute. Secrets stored there will override the one in the secret file, but using that is discouraged.
 
 ## Shell Completions
 As seen in the [Building Manually](#building-manually) section, the cli includes shell completions. These will be installed automatically for most shells (unless you're [building directly](#building-directly)). Make sure to enable them in your preferred shell.

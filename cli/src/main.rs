@@ -4,6 +4,7 @@ mod action;
 mod command;
 mod complete;
 mod config;
+mod intro;
 pub mod log;
 mod table;
 mod web;
@@ -13,11 +14,14 @@ use crate::config::Config;
 use clap::Parser;
 
 fn main() -> anyhow::Result<()> {
-    // load config
-    let mut config = Config::create()?;
+    // do intro on first run
+    if !Config::exists() {
+        intro::intro()?;
+        return Ok(());
+    }
 
-    // parse command
     let args = Args::parse();
+    let mut config = Config::read()?;
 
     if let Some(host) = args.server {
         config.url = host;

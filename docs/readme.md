@@ -68,12 +68,12 @@ So to obtain your CLI for the first time, do one of the following:
 The CLI is now installed and should be available as `serene`. Run `serene --help` to check that your installation is working. You can run any other command and it will walk you through your next steps. For more usage, head to the [CLI Section](./usage/cli.md).
 
 #### 3. Configuring Pacman
-The CLI will walk you through adding the repository to pacman if you first open it. But you can also only use the package repository, by adding it to `/etc/pacman.conf`:
+The last step is to configure pacman to use your new repository. **This can be done via the CLI as you have now installed it.** It will walk you through the whole process and will also help setting up [package signing](./configuration/package-signing.md). So it is recommended to use that.
+
+You can also set it up without the CLI tho, by adding the following to `/etc/pacman.conf`. *The SigLevel should only be set to `Never` when [package signing](./configuration/package-signing.md) is disabled for the repository. Consider setting it up.*:
 
 ```ini
 [serene]
-SigLevel = Optional TrustAll
+SigLevel = Never
 Server = https://your-domain/x86_64
 ```
-
-*The SigLevel should only be set to `Optional TrustAll` when [package signing](./configuration/package-signing.md) is disabled for the repository. Consider setting it up.*
