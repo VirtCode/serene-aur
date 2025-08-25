@@ -4,9 +4,9 @@
 - [ ] more efficient queries for the web handlers
 - [ ] combine DB and broadcast to one "storage" object
 - [ ] `serene check` command to compare output of `pacman -Qm`
-- [ ] on-boarding screen when first using the cli, with config to configure pacman, validate server connection
+- [X] on-boarding screen when first using the cli, with config to configure pacman, validate server connection
 - [ ] rebuild cleaned when non-clean containers fail
 - [ ] purge logs after a certain age
 - [ ] create `serene manage purge` command which removes all deps that are no longer needed
 - [ ] set packager for build packages
-- [ ] store logs out side of db because this is a huge performance bottleneck
+- [X] store logs out side of db because this is a huge performance bottleneck

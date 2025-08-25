@@ -104,11 +104,7 @@ impl SrcinfoGenerator {
 
         if status.success {
             let mut output = self.runner.download_outputs(&container).await?;
-            let srcinfo = output.srcinfo().await?;
-
-            println!("{}", srcinfo.source);
-
-            Ok(srcinfo)
+            output.srcinfo().await
         } else {
             Err(anyhow!("srcinfo generation container failed: {}", logs))
         }

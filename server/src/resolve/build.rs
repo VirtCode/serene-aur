@@ -176,7 +176,7 @@ impl<'a> BuildResolver<'a> {
     pub async fn finish_fatally(&mut self, message: &str) -> anyhow::Result<()> {
         for (_, summary) in &mut self.packages {
             summary.end(BuildState::Fatal(message.to_string(), BuildProgress::Resolve));
-            summary.save(self.db).await?;
+            summary.change(self.db).await?;
         }
 
         Ok(())
