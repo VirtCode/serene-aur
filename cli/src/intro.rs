@@ -218,6 +218,13 @@ pub fn import_pacman_key(config: &Config, intro: bool) -> Result<bool> {
         println!("You will now have to sign the imported key yourself.");
         println!("To do that, run `pacman-key --list-keys` and identify the server's key.");
         println!("Then, run `pacman-key --lsign-key <found-key-id>` to trust your key locally.");
+
+        println!();
+        println!(
+            "After that, you are almost done. Now you probably need to update your pacman config."
+        );
+        println!("{}", "Remove the `SigLevel` directive in the corresponding repository from `/etc/pacman.conf`.".bold());
+        println!("Otherwise, `pacman` might still ignore the signatures.")
     }
 
     Ok(true)

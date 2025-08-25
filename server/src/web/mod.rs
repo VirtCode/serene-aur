@@ -414,8 +414,14 @@ pub async fn get_signature_public_key(_: AuthRead) -> actix_web::Result<impl Res
 #[get("/webhook/package/{name}/secret")]
 pub async fn get_webhook_secret(
     auth: AuthWrite,
+    db: Data<Database>,
     package: Path<String>,
 ) -> actix_web::Result<impl Responder> {
+    let _ = Package::find(&package, &db)
+        .await
+        .internal()?
+        .ok_or_else(|| ErrorNotFound(format!("package with base {} is not added", &package)))?;
+
     create_webhook_secret(&package, &serene_data::secret::hash(auth.get_secret())).map(Json)
 }
 

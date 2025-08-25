@@ -118,17 +118,16 @@ pub enum Action {
         what: Option<InfoCommand>,
     },
 
-    /// prints the current secret
-    Secret {
-        /// print the secret in a machine-readable way
-        #[clap(short, long)]
-        machine: bool,
+    /// manage things about the server
+    Server {
+        #[clap(subcommand)]
+        manage: ServerSubcommand,
     },
 
-    /// manage things related to the server
-    Manage {
+    /// set up things on the current host
+    Host {
         #[clap(subcommand)]
-        manage: ManageSubcommand,
+        manage: HostSubcommand,
     },
 
     #[command(hide = true)]
@@ -169,7 +168,7 @@ pub enum InfoCommand {
 }
 
 #[derive(Subcommand)]
-pub enum ManageSubcommand {
+pub enum ServerSubcommand {
     /// get info about the server
     Info,
 
@@ -189,6 +188,19 @@ pub enum ManageSubcommand {
         #[clap(short, long)]
         machine: bool,
     },
+}
+
+#[derive(Subcommand)]
+pub enum HostSubcommand {
+    /// get the secret of the current host
+    Secret {
+        /// print the secret in a machine-readable way
+        #[clap(short, long)]
+        machine: bool,
+    },
+
+    /// configure package signature verification for the server
+    Signatures,
 }
 
 #[derive(Subcommand)]

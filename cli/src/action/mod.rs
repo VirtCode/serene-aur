@@ -5,9 +5,10 @@ use crate::action::procedures::{
     add, build, build_all, build_info, build_logs, info, list, pkgbuild, remove, set_setting,
     signing_key, subscribe_build_logs, webhook_secret,
 };
-use crate::command::{Action, InfoCommand, ManageSubcommand};
+use crate::command::{Action, HostSubcommand, InfoCommand, ServerSubcommand};
 use crate::complete::generate_completions;
 use crate::config::Config;
+use crate::intro;
 use crate::log::Log;
 use clap_complete::Shell;
 use colored::Colorize;
@@ -15,17 +16,25 @@ use procedures::server_info;
 
 pub fn run(config: &Config, action: Action) {
     match action {
-        Action::Secret { machine } => {
-            if machine {
-                config.print_secret(false)
-            } else {
-                println!(
-                    "Add this line to the {} of your target server to trust this machine:",
-                    "authorized_secrets".italic()
-                );
-                config.print_secret(true);
+        Action::Host { manage } => match manage {
+            HostSubcommand::Secret { machine } => {
+                if machine {
+                    config.print_secret(false)
+                } else {
+                    println!(
+                        "Add this line to the {} of your target server to trust this machine:",
+                        "authorized_secrets".italic()
+                    );
+                    config.print_secret(true);
+                }
             }
-        }
+            HostSubcommand::Signatures => {
+                if let Err(e) = intro::import_pacman_key(config, false) {
+                    eprintln!();
+                    eprintln!("Failed to complete key setup: {e:#}");
+                }
+            }
+        },
 
         Action::Add {
             what,
@@ -85,12 +94,12 @@ pub fn run(config: &Config, action: Action) {
             }
             Some(InfoCommand::Set { property }) => set_setting(config, &name, property),
         },
-        Action::Manage { manage } => match manage {
-            ManageSubcommand::Webhook { name, machine } => {
+        Action::Server { manage } => match manage {
+            ServerSubcommand::Webhook { name, machine } => {
                 webhook_secret(config, &name, machine);
             }
-            ManageSubcommand::Info => server_info(config),
-            ManageSubcommand::Key { machine } => signing_key(config, machine),
+            ServerSubcommand::Info => server_info(config),
+            ServerSubcommand::Key { machine } => signing_key(config, machine),
         },
         Action::Completions => {
             let Some(shell) = Shell::from_env() else {

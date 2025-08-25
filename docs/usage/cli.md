@@ -82,24 +82,28 @@ serene info my-package set dependency false
 serene info my-package set private true
 ```
 
-**Manage the server**: To manage some server properties, you can use the manage subcommand:
+**Manage the server**: To manage some server properties, you can use the server subcommand:
 
 ```shell
 # See general server information
-serene manage info
+serene server info
 
 # Request and print the webhook secret for the package `my-package`
-serene manage webhook my-package
+serene server webhook my-package
 
 # Get the public key of the server easily, in a machine-readable way
-serene manage key --machine
+serene server key --machine
 ```
 
-**Print the local secret of the CLI:** To print the local secret again, run the following:
+**Configure your host:** To make things easier on your host, you can use the host subcommand:
 ```shell
 # Prints the secret to add to the `authorized_secrets` file.
 serene secret
+
+# Walks you thorugh setting up package signature verification on your host.
+serene host signatures
 ```
+
 ## Configuration
 The CLI does not offer much local configuration. It does set up everything needed automatically on the first startup, like prompting the user for the location of the server, generating a secret, etc. This makes it very easy to set up.
 

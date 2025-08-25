@@ -593,6 +593,11 @@ pub fn signing_key(c: &Config, machine: bool) {
                 );
 
                 println!(
+                    "You can also let this CLI import it semi-automatically for you with:\n\
+                     `serene host signatures`\n"
+                );
+
+                println!(
                     "You can hide this message with the `-m` flag to pipe the key somewhere,\n\
                      i.e. `serene manage key -m > serene-key.pub`\n"
                 );
