@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #![feature(iter_intersperse)]
 
 mod action;

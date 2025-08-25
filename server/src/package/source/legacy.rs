@@ -53,7 +53,7 @@ impl LegacySource {
             LegacySource::NormalSource { last_commit, .. } => last_commit.clone(),
             LegacySource::SingleSource { pkgbuild, devel, last_source_commits, .. } => {
                 // yes, this is technically for secrets
-                let mut string = secret::hash(&pkgbuild);
+                let mut string = secret::hash(pkgbuild);
 
                 if *devel {
                     for commit in last_source_commits.values() {
@@ -110,7 +110,7 @@ impl LegacySource {
             LegacySource::NormalSource { repository, last_commit } => {
                 Self::migrate_git_source(folder, repository, last_commit, None).await
             }
-            LegacySource::SingleSource { pkgbuild, srcinfo, devel, last_source_commits } => {
+            LegacySource::SingleSource { pkgbuild, devel, last_source_commits, .. } => {
                 debug!("migrating a raw source");
                 Ok(Source::migrated(
                     Box::new(RawSource::new(&pkgbuild)),

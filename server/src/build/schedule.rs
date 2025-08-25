@@ -1,9 +1,9 @@
 use crate::build::session::BuildSession;
-use crate::build::{Builder, BuilderInstance};
+use crate::build::BuilderInstance;
 use crate::database::Database;
 use crate::package::srcinfo::SrcinfoGeneratorInstance;
 use crate::package::Package;
-use crate::web::broadcast::{Broadcast, BroadcastInstance};
+use crate::web::broadcast::BroadcastInstance;
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
@@ -14,7 +14,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::select;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{mpsc, Mutex};
 
 /// metadata associated with a build
 /// can be used to override stuff like clean

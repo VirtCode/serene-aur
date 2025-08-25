@@ -7,7 +7,6 @@ use actix_web::error::{
 use actix_web::http::header::AUTHORIZATION;
 use actix_web::web::Query;
 use actix_web::{FromRequest, HttpRequest};
-use futures::FutureExt;
 use serene_data::secret;
 use std::collections::HashMap;
 use std::future::Future;

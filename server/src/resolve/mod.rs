@@ -84,7 +84,7 @@ impl AurResolver {
 
     /// resolves a package, but returns the raw results
     /// see Self::resolve_package
-    pub async fn resolve_package_raw(&mut self, package: &str) -> anyhow::Result<Actions> {
+    pub async fn resolve_package_raw(&mut self, package: &str) -> anyhow::Result<Actions<'_>> {
         debug!("resolving dependencies of package {}", &package);
 
         let own = PkgbuildRepo { name: "serene", pkgs: self.local.iter().collect() };

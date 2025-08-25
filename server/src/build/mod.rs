@@ -1,9 +1,9 @@
 use crate::database::{self, Database};
-use crate::package::srcinfo::{SrcinfoGenerator, SrcinfoGeneratorInstance};
+use crate::package::srcinfo::SrcinfoGeneratorInstance;
 use crate::package::Package;
-use crate::repository::{PackageRepository, PackageRepositoryInstance};
-use crate::runner::{ContainerId, RunStatus, Runner, RunnerInstance};
-use crate::web::broadcast::{Broadcast, BroadcastInstance};
+use crate::repository::PackageRepositoryInstance;
+use crate::runner::{ContainerId, RunStatus, RunnerInstance};
+use crate::web::broadcast::BroadcastInstance;
 use chrono::{DateTime, Utc};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,6 @@ use serene_data::build::BuildProgress::{Build, Clean, Publish, Update};
 use serene_data::build::BuildState::{Failure, Fatal, Running, Success};
 use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 pub mod schedule;
 pub mod session;

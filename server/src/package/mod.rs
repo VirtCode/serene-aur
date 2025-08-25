@@ -6,11 +6,9 @@ use crate::package::source::Source;
 use crate::package::srcinfo::{SrcinfoGeneratorInstance, SrcinfoWrapper};
 use crate::resolve::AurResolver;
 use crate::runner;
-use crate::runner::archive;
 use crate::runner::archive::InputArchive;
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Utc};
-use hyper::Body;
 use log::{debug, info, warn};
 use serene_data::build::{BuildReason, BuildState};
 use serene_data::package::MakepkgFlag;
@@ -103,7 +101,7 @@ async fn add(
     let mut packages = vec![(path, srcinfo, source, replace)];
 
     for dep in actions.iter_aur_pkgs().map(|p| &p.pkg) {
-        let mut source = source::aur::new(&dep, false);
+        let mut source = source::aur::new(dep, false);
 
         let (path, srcinfo) = checkout(&mut source, temp, srcinfo_generator)
             .await
@@ -338,12 +336,8 @@ impl Package {
 
         let rel = &srcinfo.base.pkgrel;
         let version = &srcinfo.base.pkgver;
-        let epoch = srcinfo
-            .base
-            .epoch
-            .as_ref()
-            .map(|s| format!("{}:", s))
-            .unwrap_or_else(|| "".to_string());
+        let epoch =
+            srcinfo.base.epoch.as_ref().map(|s| format!("{s}:")).unwrap_or_else(|| "".to_string());
 
         Ok(srcinfo
             .pkgs
@@ -408,7 +402,7 @@ impl Package {
 }
 
 /// selects the built architecture from a list of architectures
-fn select_arch(available: &Vec<String>) -> String {
+fn select_arch(available: &[String]) -> String {
     // system can only build either itself or any
     if available.iter().any(|s| s == &CONFIG.architecture) {
         CONFIG.architecture.to_owned()

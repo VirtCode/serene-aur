@@ -1,5 +1,3 @@
-use futures::FutureExt;
-
 use crate::config::Config;
 use std::{fs::read_to_string, path::PathBuf, process::Command};
 

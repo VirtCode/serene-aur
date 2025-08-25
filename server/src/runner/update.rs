@@ -1,11 +1,9 @@
 use crate::config::CONFIG;
-use crate::runner::{Runner, RunnerInstance};
+use crate::runner::RunnerInstance;
 use anyhow::Context;
 use chrono::Utc;
 use log::{debug, error, info};
 use std::str::FromStr;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// Schedules the pulling of the runner image
 pub struct ImageScheduler {

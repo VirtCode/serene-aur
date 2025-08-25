@@ -1,11 +1,8 @@
 use anyhow::{Context, Result};
-use colored::Colorize;
 use rand::distributions::{Alphanumeric, DistString};
 use serde::{Deserialize, Serialize};
 use serene_data::secret;
-use std::io::stdin;
 use std::path::{Path, PathBuf};
-use std::process::exit;
 use std::{env, fs};
 
 const CONFIG_FILE: &str = "serene.yml";
@@ -69,7 +66,7 @@ impl Config {
     /// reads or creates a config
     pub fn read() -> anyhow::Result<Self> {
         let string =
-            fs::read_to_string(&config_file()).context("failed to read configuration file")?;
+            fs::read_to_string(config_file()).context("failed to read configuration file")?;
 
         let mut config: Self =
             serde_yaml::from_str(&string).context("failed to deserialize configuration file")?;

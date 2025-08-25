@@ -5,16 +5,13 @@ pub mod legacy;
 pub mod raw;
 
 use crate::package;
-use crate::package::srcinfo::{SrcinfoGenerator, SrcinfoGeneratorInstance, SrcinfoWrapper};
+use crate::package::srcinfo::{SrcinfoGeneratorInstance, SrcinfoWrapper};
 use crate::runner::archive::InputArchive;
 use anyhow::Context;
 use async_trait::async_trait;
 use dyn_clone::{clone_trait_object, DynClone};
-use log::debug;
 use serde::{Deserialize, Serialize};
-use srcinfo::Srcinfo;
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::path::Path;
 use std::str::FromStr;
 use tokio::fs;
@@ -64,7 +61,7 @@ pub trait SourceImpl: Sync + Send + DynClone {
                 .await
                 .context("failed to read .SRCINFO")
                 .and_then(|s| SrcinfoWrapper::from_str(&s).context("failed to parse .SRCINFO"))
-                .map(|a| Some(a))
+                .map(Some)
         } else {
             Ok(None)
         }

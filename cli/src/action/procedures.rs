@@ -655,7 +655,7 @@ pub fn subscribe_build_logs(c: &Config, package: &str, explicit: bool, linger: b
             BroadcastEvent::Change(state) => {
                 println!("{} {}", "### package build is".italic().dimmed(), state.colored_passive())
             }
-            BroadcastEvent::Log(data) => print!("{}", data),
+            BroadcastEvent::Log(data) => print!("{data}"),
         }
 
         false // stay attached
@@ -706,10 +706,9 @@ pub fn set_setting(c: &Config, package: &str, setting: SettingsSubcommand) {
                 log.next(&format!("reverting to default schedule for package {package}"));
                 None
             } else if let Ok(description) = describe_cron_timezone_hack(&cron) {
-                log.next(&format!(
-                    "setting custom schedule '{}' for package {package}",
-                    description
-                ));
+                log.next(
+                    &format!("setting custom schedule '{description}' for package {package}",),
+                );
                 Some(cron)
             } else {
                 log.fail("invalid cron string provided");

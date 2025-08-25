@@ -4,9 +4,8 @@ pub mod update;
 use crate::config::{CONFIG, INFO};
 use crate::package::Package;
 use crate::runner::archive::{InputArchive, OutputArchive};
-use crate::web::broadcast::{Broadcast, BroadcastInstance};
+use crate::web::broadcast::BroadcastInstance;
 use anyhow::Context;
-use async_tar::Archive;
 use bollard::container::{
     Config, CreateContainerOptions, DownloadFromContainerOptions, ListContainersOptions,
     LogsOptions, StartContainerOptions, UploadToContainerOptions, WaitContainerOptions,
@@ -14,11 +13,9 @@ use bollard::container::{
 use bollard::image::{CreateImageOptions, PruneImagesOptions};
 use bollard::{Docker, API_DEFAULT_VERSION};
 use chrono::{DateTime, Utc};
-use futures_util::{AsyncRead, StreamExt, TryStreamExt};
-use hyper::body::HttpBody;
+use futures_util::{AsyncRead, StreamExt};
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
-use std::future::Future;
 use std::sync::Arc;
 use std::vec;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -225,7 +222,7 @@ impl Runner {
             self.clean(&id).await.context("could not remove container whilst update")?;
         }
 
-        Ok(self.create_container(name, entrypoint).await?)
+        self.create_container(name, entrypoint).await
     }
 
     /// finds an already created container under a name
@@ -238,9 +235,10 @@ impl Runner {
             }))
             .await?;
 
-        if let Some(s) = summary.iter().find(|s| {
-            s.names.as_ref().map(|v| v.contains(&format!("/{}", name))).unwrap_or_default()
-        }) {
+        if let Some(s) = summary
+            .iter()
+            .find(|s| s.names.as_ref().map(|v| v.contains(&format!("/{name}"))).unwrap_or_default())
+        {
             Ok(Some(s.id.clone().context("container does not have id")?))
         } else {
             Ok(None)
@@ -314,7 +312,7 @@ impl Runner {
     /// cleans the container, i.e. removes it
     pub async fn clean(&self, container: &ContainerId) -> anyhow::Result<()> {
         self.docker
-            .remove_container(&container, None)
+            .remove_container(container, None)
             .await
             .context("failed to remove container whilst cleaning")
     }

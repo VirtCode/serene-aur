@@ -1,16 +1,12 @@
 use crate::build::BuildSummary;
-use crate::database::{self, Database, DatabaseConversion};
-use crate::package::Package;
+use crate::database::{Database, DatabaseConversion};
 use crate::runner::RunStatus;
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, NaiveDateTime, Utc};
-use log::{debug, info, trace, warn};
+use log::{debug, info, trace};
 use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use sqlx::{query, query_as};
-use std::process::exit;
 use std::str::FromStr;
-use std::time::Duration;
-use tokio::time::sleep;
 
 const STATE_PENDING: &str = "pending";
 const STATE_CANCELLED: &str = "cancelled";
@@ -270,7 +266,7 @@ pub async fn migrate_logs(db: &Database) -> Result<bool> {
     .fetch_all(db)
     .await?;
 
-    if records.len() == 0 {
+    if records.is_empty() {
         trace!("no builds with logs, skipping log migration");
         return Ok(false);
     }

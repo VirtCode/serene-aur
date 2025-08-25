@@ -48,7 +48,7 @@ impl Log {
         if atty::is(atty::Stream::Stdout) {
             println!("{} {}", "✗".red().bold(), what);
         } else {
-            eprintln!("error: {}", what)
+            eprintln!("error: {what}")
         }
     }
 
@@ -56,7 +56,7 @@ impl Log {
         if atty::is(atty::Stream::Stdout) {
             println!("{} {}", "~".yellow().bold(), what);
         } else {
-            eprintln!("warn: {}", what)
+            eprintln!("warn: {what}")
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::build::schedule::BuildMeta;
-use crate::build::{BuildSummary, Builder, BuilderInstance};
+use crate::build::{BuildSummary, BuilderInstance};
 use crate::config::CONFIG;
 use crate::database::Database;
 use crate::package::Package;
@@ -11,7 +11,7 @@ use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::oneshot;
 
 pub struct BuildSession<'a> {
     packages: Vec<(Package, BuildSummary, HashSet<String>)>,

@@ -1,6 +1,5 @@
 use crate::package::srcinfo::SrcinfoWrapper;
 use anyhow::{anyhow, Context};
-use async_std::io::Read;
 use async_std::path::PathBuf;
 use async_tar::{Archive, Builder, Entries, Header};
 use futures_util::{AsyncRead, AsyncReadExt, StreamExt};
@@ -50,10 +49,10 @@ impl<R: AsyncRead + Unpin> OutputArchive<R> {
     }
 
     /// extract list of files to the given location
-    pub async fn extract(&mut self, files: &Vec<String>, to: &Path) -> anyhow::Result<()> {
+    pub async fn extract(&mut self, files: &[String], to: &Path) -> anyhow::Result<()> {
         let tar_dir = PathBuf::from(RUNNER_IMAGE_BUILD_ARCHIVE_PACKAGE_DIR);
 
-        let mut paths: Vec<PathBuf> = files.into_iter().map(|s| tar_dir.join(s)).collect();
+        let mut paths: Vec<PathBuf> = files.iter().map(|s| tar_dir.join(s)).collect();
 
         while let Some(Ok(mut entry)) = self.entries.next().await {
             let path = entry.path()?.to_path_buf();

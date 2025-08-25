@@ -2,7 +2,6 @@ use crate::database::{Database, DatabaseConversion};
 use crate::package::source::legacy::LegacySource;
 use crate::package::srcinfo::{SrcinfoGeneratorInstance, SrcinfoWrapper};
 use crate::package::{Package, SOURCE_FOLDER};
-use actix_web_lab::sse::Data;
 use anyhow::{Context, Result};
 use chrono::NaiveDateTime;
 use log::info;

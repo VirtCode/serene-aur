@@ -46,7 +46,7 @@ impl SourceImpl for RawSource {
         Ok(self.pkgbuild.clone())
     }
 
-    async fn get_srcinfo(&self, folder: &Path) -> anyhow::Result<Option<SrcinfoWrapper>> {
+    async fn get_srcinfo(&self, _folder: &Path) -> anyhow::Result<Option<SrcinfoWrapper>> {
         Ok(None)
     }
 

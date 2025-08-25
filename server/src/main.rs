@@ -1,4 +1,4 @@
-#![feature(extract_if)]
+#![allow(non_local_definitions, dead_code)]
 #![feature(type_alias_impl_trait)]
 
 pub mod package;
@@ -28,7 +28,7 @@ use config::INFO;
 use database::build::migrate_logs;
 use log::{error, info};
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -49,9 +49,7 @@ pub async fn source_latest_version(
 
         // we only support git urls, other urls are either static or not supported (like
         // hg+, etc.)
-        if url.starts_with("git+") {
-            let git_url = &url["git+".len()..];
-
+        if let Some(git_url) = url.strip_prefix("git+") {
             // we insert with the `git_url` for backwards compatibility
             commits.insert(git_url.to_owned(), git::find_remote_commit(git_url).await?);
         }

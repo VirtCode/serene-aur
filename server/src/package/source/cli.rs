@@ -2,11 +2,9 @@ use crate::config::{self, CONFIG, INFO};
 use crate::package::git;
 use crate::package::source::{Source, SourceImpl, SrcinfoWrapper, PKGBUILD};
 use crate::runner::archive::InputArchive;
-use anyhow::Context;
 use async_trait::async_trait;
 use log::debug;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::Path;
 
 const CLI_PKGBUILD: &str = include_str!("../../../../cli/PKGBUILD");

@@ -117,6 +117,6 @@ pub fn table<const COUNT: usize>(
             .intersperse(sep.to_string())
             .collect::<String>();
 
-        println!("{}", row);
+        println!("{row}");
     }
 }

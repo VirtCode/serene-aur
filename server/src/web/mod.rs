@@ -22,7 +22,7 @@ use serene_data::package::{
 };
 use serene_data::SereneInfo;
 use std::str::FromStr;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 
 mod auth;
 pub mod broadcast;
@@ -72,7 +72,7 @@ pub async fn add(
             let package = aur::info(name)
                 .await
                 .internal()?
-                .ok_or_else(|| ErrorNotFound(format!("aur package '{}' does not exist", name)))?;
+                .ok_or_else(|| ErrorNotFound(format!("aur package '{name}' does not exist")))?;
 
             source::aur::new(&package, false) // TODO: support the devel flag
         }
@@ -214,7 +214,7 @@ pub async fn build(
     for package in &body.packages {
         packages.push(
             Package::find(package, &db).await.internal()?.ok_or_else(|| {
-                ErrorNotFound(format!("package with base {} is not added", package))
+                ErrorNotFound(format!("package with base {package} is not added"))
             })?,
         )
     }

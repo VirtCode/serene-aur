@@ -65,7 +65,7 @@ impl CHVStatus {
                 if c == '%' {
                     let n = chars.next().context("unexpected end of string")?;
                     let m = chars.next().context("unexpected end of string")?;
-                    let n = u8::from_str_radix(&format!("{}{}", n, m), 16)
+                    let n = u8::from_str_radix(&format!("{n}{m}"), 16)
                         .context("failed to parse hex value")?;
                     r.push(n as char);
                 } else if c == '+' {
@@ -100,7 +100,7 @@ impl CHVStatus {
         card_info
             .raw()
             .find_map(|(keyword, value)| match keyword.as_str() {
-                "CHV-STATUS" => Some(Self::from_string(&value)),
+                "CHV-STATUS" => Some(Self::from_string(value)),
                 _ => None,
             })
             .transpose()
@@ -158,7 +158,7 @@ async fn get_agent_keypair() -> anyhow::Result<gpg_agent::KeyPair> {
                 Some(chv_status) if chv_status.chvretry[0] == 1 => Err(anyhow::anyhow!(
                     "user PIN has one retry left, refusing to use it to avoid lockout"
                 )),
-                Some(chv_status) => Err(anyhow::anyhow!("card is locked")),
+                Some(_chv_status) => Err(anyhow::anyhow!("card is locked")),
                 None => {
                     warn!("Failed to get CHVStatus from card info");
                     Ok(())
@@ -167,7 +167,7 @@ async fn get_agent_keypair() -> anyhow::Result<gpg_agent::KeyPair> {
         }
     }
 
-    let keypair = agent.keypair(&key).context("Failed to create keypair")?;
+    let keypair = agent.keypair(key).context("Failed to create keypair")?;
 
     match &CONFIG.sign_key_password {
         Some(password) => {
