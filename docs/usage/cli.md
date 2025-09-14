@@ -121,6 +121,6 @@ The secret is stored seperately at `~/.local/share/serene/secret.txt` as plain t
 ## Shell Completions
 As seen in the [Building Manually](#building-manually) section, the cli includes shell completions. These will be installed automatically for most shells (unless you're [building directly](#building-directly)). Make sure to enable them in your preferred shell.
 
-Some shells (currently only Bash) also feature dynamic completions. This means you can complete package names for commands like `serene info` or `serene build`. The names that can be completed are sourced from a cache file, which is updated every time `serene list` is invoked. This avoids unintended network usage when just completing your command, but might not be totally accurate.
+Some shells (currently only Bash anz Zsh) also feature dynamic completions. This means you can complete package names for commands like `serene info` or `serene build`. The names that can be completed are sourced from a cache file, which is updated every time `serene list` is invoked. This avoids unintended network usage when just completing your command, but might not be totally accurate.
 
 So if your package completions are not up-to-date, make sure your shell supports them and run `serene list` to update the completions in the background. Contributions for support for other shells are welcomed.
