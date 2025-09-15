@@ -22,24 +22,51 @@ pub fn generate_completions(
     let mut output =
         String::from_utf8_lossy(&buffer.into_inner().unwrap_or(Vec::new())).to_string();
 
-    // yes this currently only supports bash, feel free to contribute other shells!
-    if matches!(shell, Shell::Bash) {
-        for (tokens, multiple) in PACKAGE_COMPLETION_COMMANDS {
-            let search = format!("{binary}__{})", tokens.replace(" ", "__")); // case in big switch
+    match shell {
+        Shell::Bash => {
+            for (tokens, multiple) in PACKAGE_COMPLETION_COMMANDS {
+                let search = format!("{binary}__{})", tokens.replace(" ", "__")); // case in big switch
 
-            if let Some(pos) = output
-                .find(&search)
-                .and_then(|pos| output[pos..].find("opts=").map(|n| pos + n))
-                .and_then(|pos| output[pos..].find("\n").map(|n| pos + n + 1))
-            {
-                output.insert_str(
-                    pos,
-                    &package_completion_bash(tokens.split(" ").count() as u32 + 1, multiple),
-                );
-            } else if warnings {
-                println!("cargo:error=did not find '{search}' in completions, did the completions change?");
+                if let Some(pos) = output
+                    .find(&search)
+                    .and_then(|pos| output[pos..].find("opts=").map(|n| pos + n))
+                    .and_then(|pos| output[pos..].find("\n").map(|n| pos + n + 1))
+                {
+                    output.insert_str(
+                        pos,
+                        &package_completion_bash(tokens.split(" ").count() as u32 + 1, multiple),
+                    );
+                } else if warnings {
+                    println!("cargo:error=did not find '{search}' in completions, did the completions change?");
+                }
             }
         }
+        Shell::Zsh => {
+            let mut pos: usize = 0;
+            while let Some(found) = output[pos..]
+                .find(":name")
+                .and_then(|found| output[(pos + found)..].find(":'").map(|n| pos + found + n + 1))
+            {
+                output.insert_str(found, "_serene_packages");
+                pos = found;
+            }
+            if pos > 0 {
+                output.push_str(r#"
+                    (( $+functions[_serene_packages] )) ||
+                    _serene_packages() {
+                        local cache_file="${XDG_CACHE_HOME:-$HOME/.cache}/serene-package-completions.txt"
+                        if [[ -f $cache_file ]]; then
+                            compadd -- $(< "$cache_file")
+                        fi
+                    }
+                "#);
+            } else if warnings {
+                println!(
+                    "cargo:error=did not find ':name' in completions, did the completions change?"
+                );
+            }
+        }
+        _ => {} // feel free to contribute other shells!
     }
 
     output
