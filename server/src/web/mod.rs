@@ -1,15 +1,16 @@
 use crate::build::schedule::{BuildMeta, BuildScheduler};
 use crate::build::{BuildSummary, Builder};
-use crate::config::{CONFIG, INFO};
+use crate::config::{CLI_PACKAGE_NAME, CONFIG, INFO};
 use crate::database::{self, Database};
 use crate::package;
 use crate::package::srcinfo::SrcinfoGenerator;
 use crate::package::{aur, source, Package};
 use crate::repository::crypto::{get_public_key_bytes, should_sign_packages};
+use crate::repository::PackageRepositoryInstance;
 use crate::web::auth::{AuthRead, AuthWrite};
 use crate::web::broadcast::Broadcast;
 use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound};
-use actix_web::web::{Data, Json, Path, Query};
+use actix_web::web::{Data, Json, Path, Query, Redirect};
 use actix_web::{delete, get, post, Responder};
 use auth::{create_webhook_secret, AuthWebhook};
 use chrono::DateTime;
@@ -445,4 +446,42 @@ pub async fn build_webhook(
         .internal()?;
 
     Ok(empty_response())
+}
+
+#[get("/cli")]
+pub async fn get_cli_package(
+    repository: Data<PackageRepositoryInstance>,
+) -> actix_web::Result<impl Responder> {
+    let repository = repository.lock().await;
+    if let Some(filename) = repository.package_file(CLI_PACKAGE_NAME) {
+        // should serene ever support multiple architectures we should get the
+        // architecture based on the http user-agent header (in which pacman includes
+        // the host architecture) => alternatively we could move the /cli
+        // endpoint to /<arch>/cli
+        Ok(Redirect::to(format!("/{}/{filename}", CONFIG.architecture)).temporary())
+    } else {
+        Err(ErrorNotFound(format!(
+            "package '{CLI_PACKAGE_NAME}' does not exist or is not yet built"
+        )))
+    }
+}
+
+#[get("/{arch}/package/{name}")]
+pub async fn get_package_by_name(
+    path: Path<(String, String)>,
+    repository: Data<PackageRepositoryInstance>,
+) -> actix_web::Result<impl Responder> {
+    let (arch, package) = path.into_inner();
+    // should serene ever support multiple architectures we could match the provided
+    // architecture against the available architectures. At the moment allowing to
+    // provide an architecture is a bit useless.
+    if arch != CONFIG.architecture {
+        Err(ErrorBadRequest(format!("architecture '{arch}' is not supported by this server")))?
+    }
+    let repository = repository.lock().await;
+    if let Some(filename) = repository.package_file(&package) {
+        Ok(Redirect::to(format!("/{arch}/{filename}")).temporary())
+    } else {
+        Err(ErrorNotFound(format!("package '{package}' does not exist or is not yet built")))
+    }
 }
