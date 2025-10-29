@@ -61,7 +61,7 @@ After having successfully set up a server, you probably want to install the CLI 
 
 So to obtain your CLI for the first time, do one of the following:
 - **Build on your host**: You can download and build and install the [PKGBUILD](https://github.com/VirtCode/serene-aur/tree/main/cli/PKGBUILD) manually.
-- **Download Manually**: Your server will automatically build the CLI by default. If you have not yet added the server to your repositories, you can download and install the package manually using `pacman -U https://your-domain/cli`.
+- **Download Manually**: Your server will automatically build the CLI by default. If you have not yet added the server to your repositories, you can download the package manually using `curl --follow https://your-domain/[arch]/package/serene-cli -o /tmp/serene-cli` where `[arch]` is the architecture of your system (e.g. `x86_64`) and then install it with `pacman -U /tmp/serene-cli`.
 - **Add the repository**: As the cli is built by default, you could already add as a repository to pacman, as seen [below](#3.-configuring-pacman). Now install `serene-cli` via pacman.
 - **Build manually**: Of course you can build the CLI from source manually too.
 

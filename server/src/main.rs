@@ -160,7 +160,6 @@ async fn main() -> anyhow::Result<()> {
             .service(web::get_webhook_secret)
             .service(web::build_webhook)
             .service(web::get_signature_public_key)
-            .service(web::get_cli_package)
     })
     .bind(("0.0.0.0", CONFIG.port))?
     .run()

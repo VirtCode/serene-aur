@@ -1,6 +1,6 @@
 use crate::build::schedule::{BuildMeta, BuildScheduler};
 use crate::build::{BuildSummary, Builder};
-use crate::config::{CLI_PACKAGE_NAME, CONFIG, INFO};
+use crate::config::{CONFIG, INFO};
 use crate::database::{self, Database};
 use crate::package;
 use crate::package::srcinfo::SrcinfoGenerator;
@@ -446,24 +446,6 @@ pub async fn build_webhook(
         .internal()?;
 
     Ok(empty_response())
-}
-
-#[get("/cli")]
-pub async fn get_cli_package(
-    repository: Data<PackageRepositoryInstance>,
-) -> actix_web::Result<impl Responder> {
-    let repository = repository.lock().await;
-    if let Some(filename) = repository.package_file(CLI_PACKAGE_NAME) {
-        // should serene ever support multiple architectures we should get the
-        // architecture based on the http user-agent header (in which pacman includes
-        // the host architecture) => alternatively we could move the /cli
-        // endpoint to /<arch>/cli
-        Ok(Redirect::to(format!("/{}/{filename}", CONFIG.architecture)).temporary())
-    } else {
-        Err(ErrorNotFound(format!(
-            "package '{CLI_PACKAGE_NAME}' does not exist or is not yet built"
-        )))
-    }
 }
 
 #[get("/{arch}/package/{name}")]
