@@ -57,15 +57,19 @@ After choosing a deployment, make sure you read through the [Deployment Section]
 After setup, check that your server is running by heading to `https://your-domain`. You should see basic version information there if everything worked.
 
 #### 2. Installing the CLI
-After having successfully set up a server, you probably want to install the CLI to communicate with the server to add and build packages. There are different approaches on obtaining the CLI for a first time. Note that afterwards, your own build server will build the CLI automatically and you can install it via pacman with `serene-cli`.
+After having successfully set up a server, you probably want to install the CLI to communicate with the server to add and build packages. You'll only need to do this step once on your host, as afterwards your own build server will build the CLI automatically (which can take some time) and you can install it via pacman. With your server running for a while, run:
 
-So to obtain your CLI for the first time, do one of the following:
+```
+curl -LSs https://your-domain/x86_64/package/serene-cli -o /tmp/serene-cli && sudo pacman -U /tmp/serene-cli
+```
+
+The CLI is now installed and should be available as `serene`. Run `serene --help` to check that your installation is working. Future updates will be taken care of by pacman as you'll now add your repository. You can run any other command and it will walk you through your next steps. For more usage, head to the [CLI Section](./usage/cli.md).
+
+Alternatively, you can use one of the following methods to install the cli:
 - **Build on your host**: You can download and build and install the [PKGBUILD](https://github.com/VirtCode/serene-aur/tree/main/cli/PKGBUILD) manually.
-- **Download Manually**: Your server will automatically build the CLI by default. If you have not yet added the server to your repositories, you can download the package manually using `curl --follow https://your-domain/[arch]/package/serene-cli -o /tmp/serene-cli` where `[arch]` is the architecture of your system (e.g. `x86_64`) and then install it with `pacman -U /tmp/serene-cli`.
+- **Download Manually**: Your server will automatically build the CLI by default. You can quickly retrieve it using the redirect at `https://your-domain/[arch]/package/serene-cli`.
 - **Add the repository**: As the cli is built by default, you could already add as a repository to pacman, as seen [below](#3.-configuring-pacman). Now install `serene-cli` via pacman.
 - **Build manually**: Of course you can build the CLI from source manually too.
-
-The CLI is now installed and should be available as `serene`. Run `serene --help` to check that your installation is working. You can run any other command and it will walk you through your next steps. For more usage, head to the [CLI Section](./usage/cli.md).
 
 #### 3. Configuring Pacman
 The last step is to configure pacman to use your new repository. **This can be done via the CLI as you have now installed it.** It will walk you through the whole process and will also help setting up [package signing](./configuration/package-signing.md). So it is recommended to use that.
