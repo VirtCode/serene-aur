@@ -140,6 +140,9 @@ async fn main() -> anyhow::Result<()> {
             .app_data(Data::from(builder.clone()))
             .app_data(Data::from(broadcast.clone()))
             .app_data(Data::from(srcinfo_generator.clone()))
+            .app_data(Data::new(repository.clone()))
+            // package by name needs to have precedence over repository::webservice
+            .service(web::get_package_by_name)
             .service(repository::webservice())
             .service(web::info)
             .service(web::add)

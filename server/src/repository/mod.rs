@@ -230,4 +230,14 @@ impl PackageRepository {
 
         Ok(())
     }
+
+    /// filename of the built version of a package
+    pub fn package_file(&self, name: &str) -> Option<String> {
+        for (_, packages) in &self.bases {
+            if let Some(package) = packages.iter().find(|package| package.name == name) {
+                return Some(package.file.clone());
+            }
+        }
+        None
+    }
 }
