@@ -245,7 +245,7 @@ impl Package {
 
             dependency,
             clean: !source.devel,
-            enabled: true,
+            enabled: CONFIG.scheduling_default,
             private: false,
             schedule: None,
             prepare: None,
@@ -272,7 +272,7 @@ impl Package {
                 if self.source.devel {
                     &CONFIG.schedule_devel
                 } else {
-                    &CONFIG.schedule_default
+                    &CONFIG.schedule_normal
                 }
             })
             .clone()

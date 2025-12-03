@@ -30,6 +30,10 @@ OWN_REPOSITORY_URL=none
 # optional password to unlock the private key used for package signing
 SIGN_KEY_PASSWORD=none
 
+# whether to set newly added packages to build automatically
+# this corresponds to the default value of the "enable" setting in the cli
+SCHEDULING_DEFAULT=true
+
 # default schedules for checking and building the packages
 # for devel packages (i.e. -git) a separate option exists, it is the normal one if unset
 SCHEDULE=0 0 0 * * *
@@ -90,4 +94,7 @@ PORT=80
 
 # the architecture that is targeted
 ARCH=[architecture of server]
+
+# disable the package scheduling, so packages won't build automatically
+SCHEDULING_DISABLED=false
 ```

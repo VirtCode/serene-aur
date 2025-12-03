@@ -52,13 +52,13 @@ pub struct BuildScheduler {
 
 impl BuildScheduler {
     /// creates a new scheduler
-    pub async fn new(
+    pub fn new(
         builder: BuilderInstance,
         db: Database,
         broadcast: BroadcastInstance,
         srcinfo_generator: SrcinfoGeneratorInstance,
-    ) -> anyhow::Result<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             builder,
             db,
             broadcast,
@@ -66,7 +66,7 @@ impl BuildScheduler {
             signal: None,
             jobs: Arc::new(Mutex::new(HashMap::new())),
             lock: Arc::new(Mutex::new(HashSet::new())),
-        })
+        }
     }
 
     /// runs a one-shot build for a package

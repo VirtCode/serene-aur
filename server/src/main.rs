@@ -26,7 +26,7 @@ use actix_web::{App, HttpServer};
 use anyhow::Context;
 use config::INFO;
 use database::build::migrate_logs;
-use log::{error, info};
+use log::{error, info, warn};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -85,9 +85,7 @@ async fn main() -> anyhow::Result<()> {
         db.clone(),
         broadcast.clone(),
         srcinfo_generator.clone(),
-    )
-    .await
-    .context("failed to start package scheduler")?;
+    );
 
     // creating image scheduler
     let image_scheduler = ImageScheduler::new(runner.clone());
@@ -120,14 +118,19 @@ async fn main() -> anyhow::Result<()> {
             .context(format!("failed to start schedule for package {}", &package.base))?;
     }
 
-    if config::CONFIG.build_cli {
+    if CONFIG.build_cli {
         if let Err(e) = package::try_add_cli(&db, &mut schedule, &srcinfo_generator).await {
             error!("failed to add cli package: {e:#}")
         }
     }
 
     image_scheduler.start().await?;
-    schedule.start().await?;
+
+    if !CONFIG.scheduling_disabled {
+        schedule.start().await?;
+    } else {
+        warn!("skipping starting the package scheduler, packages will not be built automatically");
+    }
 
     let schedule = Arc::new(Mutex::new(schedule));
 

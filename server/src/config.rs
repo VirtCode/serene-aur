@@ -36,8 +36,12 @@ pub struct Config {
     pub repository_name: String,
     /// password for private key used for signatures
     pub sign_key_password: Option<String>,
+    /// disable scheduling of package builds alltogether
+    pub scheduling_disabled: bool,
+    /// whether packaged are scheduled ("enabled") by default
+    pub scheduling_default: bool,
     /// default scheduling of packages
-    pub schedule_default: String,
+    pub schedule_normal: String,
     /// scheduling of development packages
     pub schedule_devel: String,
     /// schedule for pulling the runner image
@@ -81,7 +85,10 @@ impl Default for Config {
             repository_name: "serene".to_string(),
             sign_key_password: None,
 
-            schedule_default: "0 0 0 * * *".to_string(), // 00:00 UTC every day
+            scheduling_disabled: false,
+            scheduling_default: true,
+
+            schedule_normal: "0 0 0 * * *".to_string(), // 00:00 UTC every day
             schedule_devel: "0 0 0 * * *".to_string(),
             schedule_image: "0 0 0 * * *".to_string(),
 
@@ -161,9 +168,12 @@ impl Config {
             repository_name: Self::env_string("NAME", default.repository_name),
             sign_key_password: Self::env_string_option("SIGN_KEY_PASSWORD", default.sign_key_password),
 
+            scheduling_disabled: Self::env_bool("SCHEDULING_DISABLED", default.scheduling_disabled),
+            scheduling_default: Self::env_bool("SCHEDULING_DEFAULT", default.scheduling_default),
+
             schedule_image: Self::env_string("SCHEDULE_IMAGE", default.schedule_image),
             schedule_devel: Self::env_string( "SCHEDULE_DEVEL", Self::env_string("SCHEDULE", default.schedule_devel)),
-            schedule_default: Self::env_string("SCHEDULE", default.schedule_default),
+            schedule_normal: Self::env_string("SCHEDULE", default.schedule_normal),
 
             container_prefix: Self::env_string("RUNNER_PREFIX", default.container_prefix),
             container_srcinfo_name: Self::env_string("RUNNER_SRCINFO_NAME", default.container_srcinfo_name),
