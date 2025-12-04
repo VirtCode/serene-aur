@@ -101,10 +101,15 @@ impl BuildScheduler {
         Ok(())
     }
 
-    /// schedules the builds for a package
+    /// schedules the builds for a package if it is enabled
     pub async fn schedule(&mut self, package: &Package) -> anyhow::Result<()> {
-        info!("scheduling recurring build for package {}", &package.base);
         self.unschedule(package).await?;
+
+        if !package.enabled {
+            return Ok(())
+        }
+
+        info!("scheduling recurring build for package {}", &package.base);
 
         Self::schedule_into(&[package.clone()], &self.jobs).await;
         if let Some(signal) = &mut self.signal {

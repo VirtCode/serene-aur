@@ -111,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
     repository::remove_orphan_signature().await;
 
     // schedule packages (which are enabled)
-    for package in Package::find_all(&db).await?.iter().filter(|p| p.enabled) {
+    for package in Package::find_all(&db).await?.iter() {
         schedule
             .schedule(package)
             .await
