@@ -152,6 +152,7 @@ pub fn add(
     what: &str,
     replace: bool,
     noresolve: bool,
+    skipbuild: bool,
     file: bool,
     custom: bool,
     pkgbuild: bool,
@@ -198,7 +199,10 @@ pub fn add(
     };
 
     // add package on server
-    let info = match add_package(c, PackageAddRequest { replace, source, resolve: !noresolve }) {
+    let info = match add_package(
+        c,
+        PackageAddRequest { replace, source, build: !skipbuild, resolve: !noresolve },
+    ) {
         Ok(info) => info,
         Err(e) => {
             log.fail(&e.msg());

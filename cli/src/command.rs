@@ -42,6 +42,10 @@ pub enum Action {
         #[clap(short, long)]
         noresolve: bool,
 
+        /// skip the initial build after addidng
+        #[clap(short, long, conflicts_with = "logs")]
+        skipbuild: bool,
+
         /// read the contents for <WHAT> from a file
         #[clap(short, long)]
         file: bool,

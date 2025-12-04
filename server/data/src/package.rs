@@ -3,12 +3,20 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
+fn true_default() -> bool {
+    true
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct PackageAddRequest {
     /// replace package of the same name
     pub replace: bool,
     /// resolve dependencies while adding
+    #[serde(default = "true_default")]
     pub resolve: bool,
+    /// build the package immediately after adding
+    #[serde(default = "true_default")]
+    pub build: bool,
     /// source of the package
     pub source: PackageAddSource,
 }

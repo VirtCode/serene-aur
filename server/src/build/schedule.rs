@@ -106,7 +106,7 @@ impl BuildScheduler {
         self.unschedule(package).await?;
 
         if !package.enabled {
-            return Ok(())
+            return Ok(());
         }
 
         info!("scheduling recurring build for package {}", &package.base);

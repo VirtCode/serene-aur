@@ -101,10 +101,12 @@ pub async fn add(
             scheduler.schedule(p).await.internal()?;
         }
 
-        scheduler
-            .run(packages, BuildMeta::new(BuildReason::Initial, body.resolve, true, false))
-            .await
-            .internal()?;
+        if body.build {
+            scheduler
+                .run(packages, BuildMeta::new(BuildReason::Initial, body.resolve, true, false))
+                .await
+                .internal()?;
+        }
     }
 
     Ok(Json(response))
