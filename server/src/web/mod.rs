@@ -70,12 +70,24 @@ pub async fn add(
     // get repo and devel tag
     let source = match &body.0.source {
         PackageAddSource::Aur { name } => {
-            let package = aur::info(name)
-                .await
-                .internal()?
-                .ok_or_else(|| ErrorNotFound(format!("aur package '{name}' does not exist")))?;
+            let base = if CONFIG.aur_github_mirror {
+                let exists = aur::check_exists_mirror(name).await.internal()?;
 
-            source::aur::new(&package, false) // TODO: support the devel flag
+                if !exists {
+                    return Err(ErrorNotFound(format!("aur package with base '{name}' does not exists (you must speficy the base because the github mirror is being used)")));
+                }
+
+                name.clone()
+            } else {
+                let package = aur::info(name)
+                    .await
+                    .internal()?
+                    .ok_or_else(|| ErrorNotFound(format!("aur package '{name}' does not exist")))?;
+
+                package.package_base
+            };
+
+            source::aur::new(&base, false) // TODO: support the devel flag
         }
         PackageAddSource::Git { url, devel } => source::git::new(url, *devel),
         PackageAddSource::Raw { pkgbuild: src, devel } => source::raw::new(src, *devel),

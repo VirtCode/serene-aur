@@ -5,12 +5,20 @@ use log::debug;
 use raur::{Package, Raur};
 use std::collections::HashMap;
 
+pub const GITHUB_MIRROR: &str = "https://github.com/archlinux/aur";
+
 /// finds a package in the aur
 pub async fn info(name: &str) -> anyhow::Result<Option<Package>> {
     let raur = raur::Handle::new();
     let pkg = raur.info(&[name]).await?;
 
     Ok(pkg.into_iter().next())
+}
+
+/// checks whether the package with a given base exists
+/// using the experimental github mirror
+pub async fn check_exists_mirror(base: &str) -> anyhow::Result<bool> {
+    git::find_remote_ref(GITHUB_MIRROR, &format!("refs/heads/{base}")).await.map(|a| a.is_some())
 }
 
 /// get whether a package is a devel package
