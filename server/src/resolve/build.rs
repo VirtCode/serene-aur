@@ -60,7 +60,8 @@ impl<'a> BuildResolver<'a> {
     pub async fn resolve(
         &mut self,
     ) -> anyhow::Result<Vec<(Package, BuildSummary, HashSet<String>)>> {
-        let mut resolver = AurResolver::next(self.db, self.packages.iter().map(|(p, _)| p)).await?;
+        let mut resolver =
+            AurResolver::next(self.db, self.packages.iter().map(|(p, _)| p), false).await?;
 
         // resolve packages
         debug!("starting to resolve all packages for build");
@@ -72,22 +73,13 @@ impl<'a> BuildResolver<'a> {
         debug!("parsing resolve infos");
         let mut status = Vec::new();
         for info in infos.into_iter() {
+            debug_assert!(info.aur.is_empty()); // we use the stub resolver
+
             let result = if !info.missing.is_empty() {
-                // totally missing deps
+                let mut result =
+                    Status::Failure(format!("missing dependencies: {}", info.missing.join(", ")));
 
-                Status::Failure(format!(
-                    "could not resolve dependencies: {}",
-                    info.missing.join(", ")
-                ))
-            } else if !info.aur.is_empty() {
-                // missing deps from aur
-
-                let mut result = Status::Failure(format!(
-                    "missing dependencies from the AUR: {}",
-                    info.aur.iter().cloned().collect::<Vec<_>>().join(", ")
-                ));
-
-                for pkg in &info.aur {
+                for pkg in &info.missing {
                     if Package::has(pkg, self.db).await? {
                         result = Status::Failure(format!(
                             "dependency {pkg} is added but has never built successfully"

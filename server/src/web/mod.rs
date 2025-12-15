@@ -70,7 +70,8 @@ pub async fn add(
     // get repo and devel tag
     let source = match &body.0.source {
         PackageAddSource::Aur { name } => {
-            let base = if CONFIG.aur_github_mirror {
+            let base = if !CONFIG.aur_resolve_adding {
+                // we only use the github mirror if add resolving is not enabled
                 let exists = aur::check_exists_mirror(name).await.internal()?;
 
                 if !exists {

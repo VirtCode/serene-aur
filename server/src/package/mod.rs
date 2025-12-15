@@ -86,7 +86,7 @@ async fn add(
     }
 
     // resolve deps - this already resolves transitive deps
-    let mut resolver = AurResolver::with(db, &srcinfo).await?;
+    let mut resolver = AurResolver::with(db, &srcinfo, CONFIG.aur_resolve_adding).await?;
     let actions = resolver.resolve_package_raw(&srcinfo.base.pkgbase).await?;
 
     if !actions.missing.is_empty() {
