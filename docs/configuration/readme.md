@@ -5,6 +5,7 @@ There are a couple of important features which require some configuration to wor
 - Enabling proper [dependency resolving](./dependency-resolving.md) (recommended).
 - Making use of [package signing](./package-signing.md).
 - Using [webhooks](./webhooks.md) for automation.
+- Switch to the [GitHub mirror](./github-mirror.md) in case of AUR outages.
 
 The rest are small tweaks which are relatively self-explanatory and are documented below. Note that the options involved in the above features are documented here again too.
 
@@ -29,6 +30,14 @@ OWN_REPOSITORY_URL=none
 
 # optional password to unlock the private key used for package signing
 SIGN_KEY_PASSWORD=none
+
+# use the experimental github mirror instead to get aur package sources
+# this can be used to still add and update packages if the AUR is inaccessible
+AUR_GITHUB_MIRROR=false
+
+# use the aur to add and resolve dependencies when adding a package
+# otherwise missing dependencies will result in an error
+AUR_RESOLVE_ADDING=true
 
 # whether to set newly added packages to build automatically
 # this corresponds to the default value of the "enable" setting in the cli

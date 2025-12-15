@@ -1,7 +1,7 @@
-use crate::database::Database;
 use crate::package::srcinfo::SrcinfoWrapper;
 use crate::package::Package;
 use crate::resolve::sync::create_and_sync;
+use crate::{database::Database, resolve::stub::StubAur};
 use alpm::Alpm;
 use anyhow::Context;
 use aur_depends::{Actions, Flags, PkgbuildRepo, Resolver};
@@ -10,6 +10,7 @@ use srcinfo::Srcinfo;
 use std::collections::HashSet;
 
 pub mod build;
+pub mod stub;
 pub mod sync;
 
 /// information returned from the aur-resolve resolver
@@ -25,7 +26,7 @@ pub struct ResolveInfo {
 pub struct AurResolver {
     repos: Alpm,
 
-    aur: raur::Handle,
+    aur: Option<raur::Handle>,
     aur_cache: raur::Cache,
 
     local: Vec<Srcinfo>,
@@ -34,7 +35,7 @@ pub struct AurResolver {
 impl AurResolver {
     /// create a new resolver with packages in their current states, unless they
     /// are contained in the iterator next
-    pub async fn next<'a, T>(db: &Database, next: T) -> anyhow::Result<Self>
+    pub async fn next<'a, T>(db: &Database, next: T, aur: bool) -> anyhow::Result<Self>
     where
         T: Iterator<Item = &'a Package>,
     {
@@ -56,11 +57,11 @@ impl AurResolver {
             }
         }
 
-        Self::new(added).await
+        Self::new(added, aur).await
     }
 
     /// create a new resolver with an additional added package
-    pub async fn with(db: &Database, srcinfo: &SrcinfoWrapper) -> anyhow::Result<Self> {
+    pub async fn with(db: &Database, srcinfo: &SrcinfoWrapper, aur: bool) -> anyhow::Result<Self> {
         let mut all: Vec<Srcinfo> = Package::find_all(db)
             .await?
             .into_iter()
@@ -69,14 +70,14 @@ impl AurResolver {
 
         all.push(srcinfo.clone().into());
 
-        Self::new(all).await
+        Self::new(all, aur).await
     }
 
     /// create a new resolver with a given local repo
-    async fn new(local: Vec<Srcinfo>) -> anyhow::Result<Self> {
+    async fn new(local: Vec<Srcinfo>, aur: bool) -> anyhow::Result<Self> {
         Ok(Self {
             repos: create_and_sync().await?,
-            aur: raur::Handle::new(),
+            aur: if aur { Some(raur::Handle::new()) } else { None },
             aur_cache: HashSet::new(),
             local,
         })
@@ -89,11 +90,19 @@ impl AurResolver {
 
         let own = PkgbuildRepo { name: "serene", pkgs: self.local.iter().collect() };
 
-        let mut actions = Resolver::new(&self.repos, &mut self.aur_cache, &self.aur, Flags::new()) // TODO: what can we change with these flags?
-            .pkgbuild_repos(vec![own])
-            .resolve_targets(&[package])
-            .await
-            .context("failed to resolve deps for package")?;
+        let result = if let Some(aur) = &self.aur {
+            Resolver::new(&self.repos, &mut self.aur_cache, aur, Flags::new()) // TODO: what can we change with these flags?
+                .pkgbuild_repos(vec![own])
+                .resolve_targets(&[package])
+                .await
+        } else {
+            Resolver::new(&self.repos, &mut self.aur_cache, &StubAur, Flags::new())
+                .pkgbuild_repos(vec![own])
+                .resolve_targets(&[package])
+                .await
+        };
+
+        let mut actions = result.context("failed to resolve deps for package")?;
 
         // we have to remove the package itself base from missing, as it is listed under
         // missing on split packages which don't contain a member of the same name

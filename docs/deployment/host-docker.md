@@ -30,7 +30,7 @@ services:
     image: ghcr.io/virtcode/serene-aur:latest
     restart: unless-stopped
 
-    # we set an explicit container name so our build container can reach it
+    # we set an explicit container name so our build containers can reach it
     container_name: serene
 
     environment:

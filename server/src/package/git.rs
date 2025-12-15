@@ -2,16 +2,28 @@ use anyhow::anyhow;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::path::Path;
+use tokio::process::Command;
 
 // clone a repository using git
-pub async fn clone(repository: &str, directory: &Path) -> anyhow::Result<()> {
-    let status = tokio::process::Command::new("git")
-        .arg("clone")
-        .arg(repository)
-        .arg(".")
-        .current_dir(directory)
-        .output()
-        .await?;
+pub async fn clone(
+    repository: &str,
+    directory: &Path,
+    branch: Option<String>,
+) -> anyhow::Result<()> {
+    let mut command = Command::new("git");
+    command.arg("clone");
+
+    // if we want a specific branch, only fetch that one
+    if let Some(branch) = branch {
+        command.arg("--single-branch").arg("--branch").arg(branch);
+    }
+
+    command.arg(repository);
+
+    // make sure working directory is fine
+    command.arg(".").current_dir(directory);
+
+    let status = command.output().await?;
 
     if status.status.success() {
         Ok(())
@@ -22,8 +34,7 @@ pub async fn clone(repository: &str, directory: &Path) -> anyhow::Result<()> {
 
 // pull in a repository with git
 pub async fn pull(directory: &Path) -> anyhow::Result<()> {
-    let status =
-        tokio::process::Command::new("git").arg("pull").current_dir(directory).output().await?;
+    let status = Command::new("git").arg("pull").current_dir(directory).output().await?;
 
     if status.status.success() {
         Ok(())
@@ -33,12 +44,8 @@ pub async fn pull(directory: &Path) -> anyhow::Result<()> {
 }
 
 pub async fn find_local_commit(directory: &Path) -> anyhow::Result<String> {
-    let status = tokio::process::Command::new("git")
-        .arg("rev-parse")
-        .arg("HEAD")
-        .current_dir(directory)
-        .output()
-        .await?;
+    let status =
+        Command::new("git").arg("rev-parse").arg("HEAD").current_dir(directory).output().await?;
 
     if status.status.success() {
         Ok(String::from_utf8_lossy(&status.stdout).trim().to_owned())
@@ -78,18 +85,6 @@ pub async fn find_remote_commit(url: &str) -> anyhow::Result<String> {
         return Ok(commit.to_string());
     }
 
-    // query git
-    let status = tokio::process::Command::new("git").arg("ls-remote").arg(remote).output().await?;
-
-    if !status.status.success() {
-        return Err(anyhow!(
-            "failed to check remote for {remote}: {}",
-            String::from_utf8_lossy(&status.stderr)
-        ));
-    }
-
-    let response = String::from_utf8_lossy(&status.stdout).to_string();
-
     // target ref to get version for
     let target = if let Some(tag) = fragments.get("tag") {
         format!("refs/tags/{tag}")
@@ -99,15 +94,38 @@ pub async fn find_remote_commit(url: &str) -> anyhow::Result<String> {
         "HEAD".to_owned()
     };
 
-    for line in response.split('\n') {
-        let mut split = line.split_whitespace();
+    find_remote_ref(remote, &target)
+        .await?
+        .ok_or(anyhow!("failed to find ref '{target}' of remote '{remote}'"))
+}
 
-        if let (Some(commit), Some(what)) = (split.next(), split.next()) {
-            if what == target {
-                return Ok(commit.to_owned());
-            }
-        }
+/// performs an ls-remote for a specific ref and returns its hash if found
+pub async fn find_remote_ref(remote: &str, refstr: &str) -> anyhow::Result<Option<String>> {
+    // query git
+    let status = Command::new("git").arg("ls-remote").arg(remote).arg(refstr).output().await?;
+
+    if !status.status.success() {
+        return Err(anyhow!(
+            "failed to check remote for {remote}: {}",
+            String::from_utf8_lossy(&status.stderr)
+        ));
     }
 
-    Err(anyhow!("failed to find ref '{target}' of remote '{remote}'"))
+    let response = String::from_utf8_lossy(&status.stdout).to_string();
+    let line = response.trim();
+
+    // no response, the ref does not exist
+    if response.is_empty() {
+        return Ok(None);
+    }
+
+    let mut split = line.split_whitespace();
+
+    if let (Some(commit), Some(what)) = (split.next(), split.next()) {
+        debug_assert!(what == refstr); // otherwise git ain't working correctly
+
+        Ok(Some(commit.to_owned()))
+    } else {
+        Err(anyhow!("response for ls-remote for {remote} and {refstr} was malformed: {response}"))
+    }
 }

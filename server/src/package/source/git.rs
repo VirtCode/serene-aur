@@ -28,7 +28,7 @@ impl SourceImpl for GitSource {
     async fn initialize(&mut self, folder: &Path) -> anyhow::Result<()> {
         debug!("initializing git source for {}", self.repository);
 
-        git::clone(&self.repository, folder).await?;
+        git::clone(&self.repository, folder, None).await?;
         self.last_commit = git::find_local_commit(folder).await?;
 
         Ok(())

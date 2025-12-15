@@ -14,7 +14,7 @@ Another important distinction that is to be made are `devel` sources. Each of th
 This documentation entry will now go over the different sources and how you can use them with the [CLI](./cli.md). For more information about the specifics of the commands used, refer to the [CLI documentation](./cli.md).
 
 ### AUR Source
-To add a package from the AUR is very straight forward with the [CLI]. Just use the `add` command without any special arguments using the AUR package name:
+To add a package from the AUR is very straight forward with the [CLI](./cli.md). Just use the `add` command without any special arguments using the AUR package name:
 ```shell
 serene add <my-aur-package>
 ```

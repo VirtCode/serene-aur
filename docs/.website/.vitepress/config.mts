@@ -46,12 +46,10 @@ export default defineConfig({
         base: "/configuration/",
         items: [
           { text: "Overview", link: "readme" },
-          {
-            text: "Dependency Resolving",
-            link: "dependency-resolving",
-          },
+          { text: "Dependency Resolving", link: "dependency-resolving" },
           { text: "Package Signing", link: "package-signing" },
           { text: "Webhooks", link: "webhooks" },
+          { text: "GitHub Mirror", link: "github-mirror" },
         ],
       },
       {
@@ -60,10 +58,7 @@ export default defineConfig({
         items: [
           { text: "Overview", link: "readme" },
           { text: "Using Host Docker", link: "host-docker" },
-          {
-            text: "Using Docker In Docker",
-            link: "docker-in-docker",
-          },
+          { text: "Using Docker In Docker", link: "docker-in-docker" },
         ],
       },
     ],

@@ -36,6 +36,10 @@ pub struct Config {
     pub repository_name: String,
     /// password for private key used for signatures
     pub sign_key_password: Option<String>,
+    /// use the experimental aur github mirror instead of the RPC
+    pub aur_github_mirror: bool,
+    /// resolve dependencies using the aur RPC when adding packages
+    pub aur_resolve_adding: bool,
     /// disable scheduling of package builds alltogether
     pub scheduling_disabled: bool,
     /// whether packaged are scheduled ("enabled") by default
@@ -84,6 +88,9 @@ impl Default for Config {
             architecture: env::consts::ARCH.to_string(),
             repository_name: "serene".to_string(),
             sign_key_password: None,
+
+            aur_github_mirror: false,
+            aur_resolve_adding: true,
 
             scheduling_disabled: false,
             scheduling_default: true,
@@ -167,6 +174,9 @@ impl Config {
             architecture: Self::env_string("ARCH", default.architecture),
             repository_name: Self::env_string("NAME", default.repository_name),
             sign_key_password: Self::env_string_option("SIGN_KEY_PASSWORD", default.sign_key_password),
+
+            aur_github_mirror: Self::env_bool("AUR_GITHUB_MIRROR", default.aur_github_mirror),
+            aur_resolve_adding: Self::env_bool("AUR_RESOLVE_ADDING", default.aur_resolve_adding),
 
             scheduling_disabled: Self::env_bool("SCHEDULING_DISABLED", default.scheduling_disabled),
             scheduling_default: Self::env_bool("SCHEDULING_DEFAULT", default.scheduling_default),

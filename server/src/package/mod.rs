@@ -86,7 +86,7 @@ async fn add(
     }
 
     // resolve deps - this already resolves transitive deps
-    let mut resolver = AurResolver::with(db, &srcinfo).await?;
+    let mut resolver = AurResolver::with(db, &srcinfo, CONFIG.aur_resolve_adding).await?;
     let actions = resolver.resolve_package_raw(&srcinfo.base.pkgbase).await?;
 
     if !actions.missing.is_empty() {
@@ -101,7 +101,7 @@ async fn add(
     let mut packages = vec![(path, srcinfo, source, replace)];
 
     for dep in actions.iter_aur_pkgs().map(|p| &p.pkg) {
-        let mut source = source::aur::new(dep, false);
+        let mut source = source::aur::new(&dep.package_base, false);
 
         let (path, srcinfo) = checkout(&mut source, temp, srcinfo_generator)
             .await
