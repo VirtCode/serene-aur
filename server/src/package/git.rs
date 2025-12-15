@@ -102,7 +102,7 @@ pub async fn find_remote_commit(url: &str) -> anyhow::Result<String> {
 /// performs an ls-remote for a specific ref and returns its hash if found
 pub async fn find_remote_ref(remote: &str, refstr: &str) -> anyhow::Result<Option<String>> {
     // query git
-    let status = Command::new("git").arg("ls-remote").arg(remote).output().await?;
+    let status = Command::new("git").arg("ls-remote").arg(remote).arg(refstr).output().await?;
 
     if !status.status.success() {
         return Err(anyhow!(
