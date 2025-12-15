@@ -40,6 +40,8 @@ pub struct Config {
     pub aur_github_mirror: bool,
     /// resolve dependencies using the aur RPC when adding packages
     pub aur_resolve_adding: bool,
+    /// timeout for requests made to the aur RPC in milliseconds
+    pub aur_request_timeout: usize,
     /// disable scheduling of package builds alltogether
     pub scheduling_disabled: bool,
     /// whether packaged are scheduled ("enabled") by default
@@ -91,6 +93,7 @@ impl Default for Config {
 
             aur_github_mirror: false,
             aur_resolve_adding: true,
+            aur_request_timeout: 10000,
 
             scheduling_disabled: false,
             scheduling_default: true,
@@ -177,6 +180,7 @@ impl Config {
 
             aur_github_mirror: Self::env_bool("AUR_GITHUB_MIRROR", default.aur_github_mirror),
             aur_resolve_adding: Self::env_bool("AUR_RESOLVE_ADDING", default.aur_resolve_adding),
+            aur_request_timeout: Self::env_usize("AUR_REQUEST_TIMEOUT", default.aur_request_timeout),
 
             scheduling_disabled: Self::env_bool("SCHEDULING_DISABLED", default.scheduling_disabled),
             scheduling_default: Self::env_bool("SCHEDULING_DEFAULT", default.scheduling_default),

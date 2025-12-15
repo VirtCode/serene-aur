@@ -106,4 +106,7 @@ ARCH=[architecture of server]
 
 # disable the package scheduling, so packages won't build automatically
 SCHEDULING_DISABLED=false
+
+# timeout that is used to connect to the AUR RPC, in milliseconds
+AUR_REQUEST_TIMEOUT=10000
 ```

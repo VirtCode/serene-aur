@@ -1,5 +1,5 @@
 use crate::package::srcinfo::SrcinfoWrapper;
-use crate::package::Package;
+use crate::package::{aur, Package};
 use crate::resolve::sync::create_and_sync;
 use crate::{database::Database, resolve::stub::StubAur};
 use alpm::Alpm;
@@ -77,7 +77,7 @@ impl AurResolver {
     async fn new(local: Vec<Srcinfo>, aur: bool) -> anyhow::Result<Self> {
         Ok(Self {
             repos: create_and_sync().await?,
-            aur: if aur { Some(raur::Handle::new()) } else { None },
+            aur: if aur { Some(aur::handle()?) } else { None },
             aur_cache: HashSet::new(),
             local,
         })

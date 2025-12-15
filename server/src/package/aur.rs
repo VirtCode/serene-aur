@@ -1,16 +1,27 @@
 use crate::config::CONFIG;
 use crate::package::git;
 use crate::package::srcinfo::SrcinfoWrapper;
+use anyhow::Context;
 use log::debug;
 use raur::{Package, Raur};
-use std::collections::HashMap;
+use reqwest::Client;
+use std::{collections::HashMap, time::Duration};
 
 pub const GITHUB_MIRROR: &str = "https://github.com/archlinux/aur";
 
+/// creates a handle that should be used to connect to the aur
+pub fn handle() -> anyhow::Result<raur::Handle> {
+    Ok(raur::Handle::new_with_client(
+        Client::builder()
+            .timeout(Duration::from_millis(CONFIG.aur_request_timeout as u64))
+            .build()
+            .context("failed to build aur client")?,
+    ))
+}
+
 /// finds a package in the aur
 pub async fn info(name: &str) -> anyhow::Result<Option<Package>> {
-    let raur = raur::Handle::new();
-    let pkg = raur.info(&[name]).await?;
+    let pkg = handle()?.info(&[name]).await?;
 
     Ok(pkg.into_iter().next())
 }
