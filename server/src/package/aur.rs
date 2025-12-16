@@ -1,8 +1,8 @@
 use crate::config::CONFIG;
 use crate::package::git;
 use crate::package::srcinfo::SrcinfoWrapper;
-use anyhow::Context;
-use log::debug;
+use anyhow::{anyhow, Context};
+use log::{debug, warn};
 use raur::{Package, Raur};
 use reqwest::Client;
 use std::{collections::HashMap, time::Duration};
@@ -21,9 +21,22 @@ pub fn handle() -> anyhow::Result<raur::Handle> {
 
 /// finds a package in the aur
 pub async fn info(name: &str) -> anyhow::Result<Option<Package>> {
-    let pkg = handle()?.info(&[name]).await?;
+    let handle = handle()?;
 
-    Ok(pkg.into_iter().next())
+    for t in 0..=CONFIG.aur_request_retries {
+        match handle.info(&[name]).await {
+            Ok(pkg) => return Ok(pkg.into_iter().next()),
+
+            Err(e) if t == CONFIG.aur_request_retries => {
+                return Err(anyhow!(e));
+            }
+            Err(e) => {
+                warn!("info request failed on aur rpc, retrying: {e:#}");
+            }
+        }
+    }
+
+    unreachable!("the loop always returns on the last iteration");
 }
 
 /// checks whether the package with a given base exists
