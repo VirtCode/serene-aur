@@ -4,8 +4,11 @@ The AUR has an [experimental GitHub mirror](https://github.com/archlinux/aur) wh
 
 Serene supports (as of `v0.4.3`) using this mirror instead of the official AUR infrastructure for its [AUR sources](../usage/package-sources.md#aur-source), so that updates can still be done during service outages. Additionally this mechanism can be used to work around rate-limiting if your build server is very large. In fact, you can configure serene to not use the official AUR infrastructure at all anymore.
 
+> [!NOTE]
+> Using the GitHub mirror is only recommended if you encounter issues with the official AUR servers. So for example if they are down or you encounter serious rate-limiting issues. Whilst using the mirror (for [package sources](#package-sources)) in general works just as well, it is explicitly marked as _experimental_ so it might change at some point without warning.
+
 ## Package Sources
-One part where the GitHub mirror can be used is for [AUR package sources](../usage/package-sources.md#aur-source). This means that Serene will use the GitHub mirror instead of the AUR repositories to obtain the source files for AUR packages. Checks for new versions will also no longer be done over the [aurweb RPC](https://wiki.archlinux.org/title/Aurweb_RPC_interface) and use the mirror instead too. Note that using the mirror for pacakge sources will still provide all functionality.
+The most important part where the GitHub mirror can be used is for [AUR package sources](../usage/package-sources.md#aur-source). This means that Serene will use the GitHub mirror instead of the AUR repositories to obtain the source files for AUR packages. Checks for new versions will also no longer be done over the [aurweb RPC](https://wiki.archlinux.org/title/Aurweb_RPC_interface) and use the mirror instead. Using the mirror for pacakge sources will still provide all functionality.
 
 To activate this, set the `AUR_GITHUB_MIRROR` [configuration variable](./readme.md) to `true`. This will automatically apply to all your currently used [AUR sources](../usage/package-sources.md#aur-source) and will migrate them the next time they are used. Of course you can also disable it again to revert back to using the official AUR infrastructure.
 
