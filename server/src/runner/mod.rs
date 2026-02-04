@@ -11,11 +11,12 @@ use bollard::container::{
     LogsOptions, StartContainerOptions, UploadToContainerOptions, WaitContainerOptions,
 };
 use bollard::image::{CreateImageOptions, PruneImagesOptions};
-use bollard::{Docker, API_DEFAULT_VERSION};
+use bollard::{API_DEFAULT_VERSION, Docker};
 use chrono::{DateTime, Utc};
 use futures_util::{AsyncRead, StreamExt};
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -216,6 +217,14 @@ impl Runner {
                     break 'check;
                 }
 
+                let env = config.env.unwrap_or_default();
+                if let Some(packager) = &CONFIG.packager
+                    && !env.contains(&format!("PACKAGER={packager}"))
+                {
+                    info!("updating container {name}, because packager has changed");
+                    break 'check;
+                }
+
                 return Ok(id);
             }
 
@@ -247,9 +256,15 @@ impl Runner {
 
     /// creates a new container given name and entry point
     async fn create_container(&self, name: &str, entrypoint: &str) -> anyhow::Result<ContainerId> {
+        let mut envs = HashMap::new();
+        if let Some(packager) = &CONFIG.packager {
+            envs.insert("PACKAGER", packager);
+        }
+
         let config = Config {
             image: Some(target_docker_image()),
             entrypoint: Some(vec![entrypoint.to_owned()]),
+            env: Some(envs.into_iter().map(|(key, value)| format!("{key}={value}")).collect()),
             ..Default::default()
         };
 

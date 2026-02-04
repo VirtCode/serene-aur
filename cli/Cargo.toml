@@ -1,7 +1,7 @@
 [package]
 name = "serene-cli"
 version = "0.0.0"
-edition = "2021"
+edition = "2024"
 
 [build-dependencies]
 clap = { version = "4.4.11", features = ["derive"] }
@@ -40,3 +40,7 @@ chrono = { version = "0.4.31", features = ["serde"] }
 reqwest-eventsource = { version = "0.6.0" }
 futures = "0.3.30"
 tokio = "1.37.0"
+
+[lints.clippy]
+too_many_arguments = "allow"
+result_large_err = "allow"

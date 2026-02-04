@@ -8,5 +8,5 @@
 - [ ] rebuild cleaned when non-clean containers fail
 - [ ] purge logs after a certain age
 - [ ] create `serene manage purge` command which removes all deps that are no longer needed
-- [ ] set packager for build packages
+- [x] set packager for build packages
 - [X] store logs out side of db because this is a huge performance bottleneck

@@ -88,10 +88,10 @@ impl Config {
             serde_yaml::to_string(&self).context("failed to serialize configuration file")?;
 
         // create .config if doesn't exist
-        if let Some(parent) = file.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent).context("failed to create config directory")?;
-            }
+        if let Some(parent) = file.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent).context("failed to create config directory")?;
         }
 
         fs::write(&file, string).context("failed to save new configuration file")?;
@@ -108,10 +108,10 @@ impl Config {
                 .map(|s| s.trim().to_string())
                 .context("failed to read secret file")
         } else {
-            if let Some(parent) = file.parent() {
-                if !parent.exists() {
-                    fs::create_dir_all(parent).context("failed to create secret directory")?;
-                }
+            if let Some(parent) = file.parent()
+                && !parent.exists()
+            {
+                fs::create_dir_all(parent).context("failed to create secret directory")?;
             }
 
             let secret = generate_secret();

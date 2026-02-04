@@ -1,17 +1,17 @@
 [package]
 name = "serene"
 version = "0.0.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 serene-data = { path = "data" }
 
 # interact with the aur
-alpm = "4.0.1"
-alpm-utils = "4.0.1"
+alpm = "5.0.2"
+alpm-utils = "5.0.0"
 raur = { version = "7.0.0", default-features = false, features = ["async", "rustls-tls"] }
-aur-depends = { version = "4.0.0", default-features = false, features = ["rustls-tls"] }
-srcinfo = "1.1.0"
+aur-depends = { version = "5.0.0", default-features = false, features = ["rustls-tls"] }
+srcinfo = "2.1.0"
 reqwest = { version = "0.11.9", default-features = false }
 
 # async
@@ -60,3 +60,6 @@ lazy_static = "1.4.0"
 # crypto
 sequoia-openpgp = { version = "1.21.1" }
 sequoia-gpg-agent = { version = "0.4.2" }
+
+[lints.clippy]
+new_without_default = "allow"

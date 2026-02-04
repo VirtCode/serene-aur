@@ -5,6 +5,7 @@ use log::debug;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use srcinfo::Srcinfo;
+use std::fmt::Display;
 use std::ops::Deref;
 use std::path::Path;
 use std::str::FromStr;
@@ -27,9 +28,9 @@ impl FromStr for SrcinfoWrapper {
     }
 }
 
-impl ToString for SrcinfoWrapper {
-    fn to_string(&self) -> String {
-        self.source.clone()
+impl Display for SrcinfoWrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.source)
     }
 }
 
@@ -41,9 +42,9 @@ impl Deref for SrcinfoWrapper {
     }
 }
 
-impl Into<Srcinfo> for SrcinfoWrapper {
-    fn into(self) -> Srcinfo {
-        self.inner
+impl From<SrcinfoWrapper> for Srcinfo {
+    fn from(value: SrcinfoWrapper) -> Self {
+        value.inner
     }
 }
 

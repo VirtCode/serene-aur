@@ -71,8 +71,8 @@ pub async fn source_latest_version(
         .base
         .source
         .iter()
-        .filter(|f| f.arch.as_ref().map(|a| a == &CONFIG.architecture).unwrap_or(true)) // only include relevant archs
-        .flat_map(|s| &s.vec)
+        .filter(|f| f.arch().as_ref().map(|a| a == &CONFIG.architecture).unwrap_or(true)) // only include relevant archs
+        .flat_map(|s| s.values())
     {
         let url_start = src.find("::").map(|i| i + 2).unwrap_or(0);
         let url = &src[url_start..];
