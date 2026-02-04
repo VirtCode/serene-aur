@@ -111,7 +111,7 @@ impl BuildScheduler {
 
         info!("scheduling recurring build for package {}", &package.base);
 
-        Self::schedule_into(&[package.clone()], &self.jobs).await;
+        Self::schedule_into(std::slice::from_ref(package), &self.jobs).await;
         if let Some(signal) = &mut self.signal {
             signal.send(()).await.context("failed to signal rescheduling")?;
         }
@@ -210,7 +210,7 @@ impl BuildScheduler {
                     debug!("blocking until woken with reschedule");
 
                     // block until we receive something
-                    if let None = rx.recv().await {
+                    if rx.recv().await.is_none() {
                         break;
                     }
                 }

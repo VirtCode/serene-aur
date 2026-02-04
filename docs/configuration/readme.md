@@ -89,6 +89,10 @@ RESOLVE_IGNORE_FAILED=false
 # maximal amount of packages which can build concurrently
 # this is a limit on a per-session basis, i.e. per schedule target or manual trigger
 CONCURRENT_BUILDS=5
+
+# optional name which can be used to set a packager in the built package metadata
+# it should follow the "John Doe <john@example.com>" format to allow GPG key lookup through WKD
+PACKAGER=none
 ```
 
 ## Advanced Options

@@ -387,7 +387,7 @@ impl Package {
 
     /// returns all currently-known members of the package
     pub fn get_packages(&self) -> Vec<String> {
-        self.srcinfo.as_ref().map(|s| s.names().map(|s| s.to_owned()).collect()).unwrap_or_default()
+        self.srcinfo.as_ref().map(|s| s.pkgnames().map(|s| s.to_owned()).collect()).unwrap_or_default()
     }
 
     /// returns the description of the package from the srcinfo if there is any

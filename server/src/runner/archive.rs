@@ -81,7 +81,6 @@ pub struct InputArchive {
     builder: Builder<Vec<u8>>,
 }
 
-#[allow(clippy::new_without_default)]
 impl InputArchive {
     pub fn new() -> Self {
         let buffer = vec![];

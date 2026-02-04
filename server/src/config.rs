@@ -82,6 +82,8 @@ pub struct Config {
     pub concurrent_builds: usize,
     /// whether to build the CLI from latest commit instead of matching tag
     pub edge_cli: bool,
+    /// optional name of packager set in package metadata
+    pub packager: Option<String>,
 }
 
 impl Default for Config {
@@ -124,6 +126,8 @@ impl Default for Config {
             concurrent_builds: 5,
 
             sync_mirror: "https://mirror.init7.net/archlinux/{repo}/os/{arch}".to_string(),
+
+            packager: None,
         }
     }
 }
@@ -212,6 +216,8 @@ impl Config {
             webhook_secret: Self::env_string_option("WEBHOOK_SECRET", default.webhook_secret),
 
             sync_mirror: Self::env_string("SYNC_MIRROR", default.sync_mirror),
+
+            packager: Self::env_string_option("PACKAGER", default.packager)
         }
     }
 }

@@ -13,7 +13,7 @@ When you are setting up a new host, the onboarding procedure of the [CLI](../usa
 If you are already using Serene on a host, you can also use the [CLI](../usage/cli.md) to guide you through importing the server's key on your machine. Make sure you **don't forget to also update the `SigLevel`** in your pacman config.
 
 However, it can also easily be done manually done in three simple steps:
-1. Obtain the public key. You can do this via `serene manage key` if you have the [CLI](../usage/cli.md) installed, or you can download it directly from the `/key` api endpoint.
+1. Obtain the public key. You can do this via `serene server key` if you have the [CLI](../usage/cli.md) installed, or you can download it directly from the `/key` api endpoint.
 2. Import the key into your `pacman` keyring. See the corresponding [arch wiki section](https://wiki.archlinux.org/title/Pacman/Package_signing#Adding_unofficial_keys).
 3. Tighten the `SigLevel` in your pacman config. Remove the line `SigLevel = Optional TrustAll` from the pacman config if you have added it during [setup](../readme.md#3.-configuring-pacman). See the [arch wiki section](https://wiki.archlinux.org/title/Pacman/Package_signing#Configuring_pacman) for more information about it.
 

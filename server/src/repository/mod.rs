@@ -1,8 +1,8 @@
 use crate::config::CONFIG;
-use crate::package::{Package, PACKAGE_EXTENSION};
+use crate::package::{PACKAGE_EXTENSION, Package};
 use crate::runner::archive::OutputArchive;
 use actix_files::Files;
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use futures_util::AsyncRead;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
@@ -36,17 +36,16 @@ pub async fn remove_orphan_signature() {
                 && e.path().to_string_lossy().ends_with(format!("{PACKAGE_EXTENSION}.sig").as_str())
         })
         .for_each(|entry| {
-            if let Some(path) = entry.path().file_stem() {
-                if !Path::new(REPO_DIR).join(path).exists() {
-                    if let Err(e) = std::fs::remove_file(entry.path()) {
-                        warn!(
-                            "failed to delete orphan signature file from repository ({e}): {}",
-                            entry.path().to_string_lossy()
-                        );
-                    } else {
-                        deleted += 1;
-                    }
-                }
+            if let Some(path) = entry.path().file_stem()
+                && !Path::new(REPO_DIR).join(path).exists()
+                && let Err(e) = std::fs::remove_file(entry.path())
+            {
+                warn!(
+                    "failed to delete orphan signature file from repository ({e}): {}",
+                    entry.path().to_string_lossy()
+                );
+            } else {
+                deleted += 1;
             }
         });
 
@@ -155,13 +154,13 @@ impl PackageRepository {
                 }
 
                 let signature_path = manage::sig_path(&package_path);
-                if signature_path.exists() {
-                    if let Err(e) = fs::remove_file(&signature_path).await {
-                        warn!(
-                            "failed to delete signature file from repository ({e}): {}.sig",
-                            entry.file
-                        );
-                    }
+                if signature_path.exists()
+                    && let Err(e) = fs::remove_file(&signature_path).await
+                {
+                    warn!(
+                        "failed to delete signature file from repository ({e}): {}.sig",
+                        entry.file
+                    );
                 }
             }
         }
@@ -233,7 +232,7 @@ impl PackageRepository {
 
     /// filename of the built version of a package
     pub fn package_file(&self, name: &str) -> Option<String> {
-        for (_, packages) in &self.bases {
+        for packages in self.bases.values() {
             if let Some(package) = packages.iter().find(|package| package.name == name) {
                 return Some(package.file.clone());
             }

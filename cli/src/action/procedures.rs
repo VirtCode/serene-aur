@@ -35,10 +35,8 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool, just_listen: bool) {
     let mut log = match subscribe_events(c, base, |_package, event| {
         match event {
             BroadcastEvent::Log(msg) => {
-                if !started && !quiet {
-                    if let Some(log) = log.replace(None) {
-                        log.succeed("package build started successfully")
-                    }
+                if !started && !quiet && let Some(log) = log.replace(None) {
+                    log.succeed("package build started successfully")
                 }
 
                 if !quiet {

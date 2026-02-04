@@ -169,7 +169,7 @@ impl Source {
             // we need to sort the revisions to arrive at the same string every time,
             // because the hashmap is non-deterministic
             let mut revs = self.devel_revisions.iter().collect::<Vec<_>>();
-            revs.sort_by(|(a, _), (b, _)| a.cmp(b));
+            revs.sort_by_key(|(a, _)| *a);
 
             for (_, commit) in revs {
                 string.push_str(commit);

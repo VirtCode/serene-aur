@@ -81,7 +81,7 @@ impl CHVStatus {
         let parts = unescape(s)
             .context("failed to unescape CHVStatus")?
             .split_ascii_whitespace()
-            .map(|part| u32::from_str_radix(part, 10))
+            .map(|part| part.parse::<u32>())
             .collect::<Result<Vec<_>, _>>()
             .context("failed to parse CHVStatus")?;
 

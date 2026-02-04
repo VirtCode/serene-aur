@@ -68,7 +68,7 @@ fn initialize_alpm() -> Result<Alpm> {
             .with_context(|| format!("failed to add server to database '{db}' of libalpm"))?;
     }
 
-    Ok(Alpm::from(alpm))
+    Ok(alpm)
 }
 
 /// updates the sync databases of a libalmp reference

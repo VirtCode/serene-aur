@@ -237,7 +237,7 @@ impl Builder {
 
     /// publishes a given package to the repository
     async fn publish(&self, package: &mut Package, container: &ContainerId) -> anyhow::Result<()> {
-        let mut output = self.runner.download_outputs(&container).await?;
+        let mut output = self.runner.download_outputs(container).await?;
 
         let srcinfo = output.srcinfo().await?;
         package.upgrade(srcinfo).await?;

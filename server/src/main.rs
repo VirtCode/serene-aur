@@ -118,10 +118,8 @@ async fn main() -> anyhow::Result<()> {
             .context(format!("failed to start schedule for package {}", &package.base))?;
     }
 
-    if CONFIG.build_cli {
-        if let Err(e) = package::try_add_cli(&db, &mut schedule, &srcinfo_generator).await {
-            error!("failed to add cli package: {e:#}")
-        }
+    if CONFIG.build_cli && let Err(e) = package::try_add_cli(&db, &mut schedule, &srcinfo_generator).await {
+        error!("failed to add cli package: {e:#}")
     }
 
     image_scheduler.start().await?;
