@@ -36,16 +36,15 @@ pub async fn remove_orphan_signature() {
                 && e.path().to_string_lossy().ends_with(format!("{PACKAGE_EXTENSION}.sig").as_str())
         })
         .for_each(|entry| {
-            if let Some(path) = entry.path().file_stem()
-                && !Path::new(REPO_DIR).join(path).exists()
-                && let Err(e) = std::fs::remove_file(entry.path())
-            {
-                warn!(
-                    "failed to delete orphan signature file from repository ({e}): {}",
-                    entry.path().to_string_lossy()
-                );
-            } else {
-                deleted += 1;
+            if let Some(path) = entry.path().file_stem() && !Path::new(REPO_DIR).join(path).exists() {
+                if let Err(e) = std::fs::remove_file(entry.path()) {
+                    warn!(
+                        "failed to delete orphan signature file from repository ({e}): {}",
+                        entry.path().to_string_lossy()
+                    );
+                } else {
+                    deleted += 1;
+                }
             }
         });
 
