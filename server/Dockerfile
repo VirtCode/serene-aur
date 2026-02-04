@@ -1,4 +1,4 @@
-FROM rustlang/rust:nightly-alpine3.22 AS builder
+FROM rustlang/rust:nightly-alpine3.23 AS builder
 
 WORKDIR /app
 
@@ -17,12 +17,12 @@ COPY . .
 ENV DATABASE_URL=sqlite:///app/database.db
 
 # we have to disable static linking, otherwise sequoia won't build under alpine with nettle backend
-ENV RUSTFLAGS -Ctarget-feature=-crt-static
+ENV RUSTFLAGS=-Ctarget-feature=-crt-static
 
 RUN cargo sqlx database setup --source server/migrations
 RUN cargo build --release --bin serene
 
-FROM alpine:3.22 AS runner
+FROM alpine:3.23 AS runner
 
 WORKDIR /app
 
@@ -36,7 +36,7 @@ RUN apk add --no-cache git binutils nettle pacman
 RUN adduser -D --uid 1000 user
 
 # we want edge cli per default if we are a development image
-ARG DEVELOPMENT=false
+ARG DEVELOPMENT false
 ENV EDGE_CLI=${DEVELOPMENT}
 
-CMD serene
+CMD [ "serene" ]
