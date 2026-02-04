@@ -59,11 +59,7 @@ impl Broadcast {
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
-            if !receivers.is_empty() {
-                Some((package.clone(), receivers))
-            } else {
-                None
-            }
+            if !receivers.is_empty() { Some((package.clone(), receivers)) } else { None }
         }))
         .await
         .into_iter()
@@ -156,6 +152,10 @@ impl Broadcast {
 
     /// create a sse event for a package and an event
     fn create_event(package: &str, event: BroadcastEvent) -> Option<Event> {
-        serde_json::to_string(&event).map(|event| Event::Data(Data::new(event).event(package))).ok()
+        serde_json::to_value(&event)
+            .map(|value| {
+                Event::Data(Data::new(value["data"].to_string()).id(package).event(event.name()))
+            })
+            .ok()
     }
 }
