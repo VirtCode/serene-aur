@@ -86,8 +86,18 @@ where
     eventsource(c, &format!("package/{package}/build/logs/subscribe"), |event| {
         if let Event::Message(event) = event {
             // ignore unknown events
-            if let Ok(brd) = serde_json::from_str(&event.data) {
-                return callback(event.event, brd);
+
+            let Ok(data_value) = serde_json::from_str(&event.data) else {
+                return false;
+            };
+
+            let event_json = serde_json::Value::Object(serde_json::Map::from_iter([
+                (String::from("event"), serde_json::Value::String(event.event)),
+                (String::from("data"), data_value)
+            ]));
+
+            if let Ok(brd) = serde_json::from_value(event_json) {
+                return callback(event.id, brd);
             }
         }
 

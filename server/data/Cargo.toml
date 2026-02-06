@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 # serialization
-serde = { version = "1.0.193", features = ["derive"]}
+serde = { version = "1.0.193", features = ["derive"] }
 chrono = { version = "0.4.31", features = ["serde"] }
 
 # secret

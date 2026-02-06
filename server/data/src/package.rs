@@ -174,7 +174,7 @@ pub struct PackageInfo {
 
 /// All events which can be emitted by the broadcast for a package
 #[derive(Serialize, Deserialize, Display, Clone)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase", tag = "event", content = "data")]
 pub enum BroadcastEvent {
     /// Change in the package build state
     Change(BuildState),
@@ -182,4 +182,15 @@ pub enum BroadcastEvent {
     Log(String),
     /// Ping to the event subscriber
     Ping,
+}
+
+impl BroadcastEvent {
+    /// Name of the SSE event
+    pub fn name(&self) -> &'static str {
+        match self {
+            BroadcastEvent::Change { .. } => "change",
+            BroadcastEvent::Log { .. } => "log",
+            BroadcastEvent::Ping => "ping",
+        }
+    }
 }
