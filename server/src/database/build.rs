@@ -1,7 +1,8 @@
 use crate::build::BuildSummary;
 use crate::database::{Database, DatabaseConversion};
 use crate::runner::RunStatus;
-use anyhow::{anyhow, Context, Result};
+use crate::runner::stats::CgroupStats;
+use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use log::{debug, info, trace};
 use serene_data::build::{BuildProgress, BuildReason, BuildState};
@@ -37,6 +38,12 @@ struct BuildRecord {
     run_logs: Option<String>,
     run_started: Option<NaiveDateTime>,
     run_ended: Option<NaiveDateTime>,
+
+    mem_peak: Option<i64>,
+    cpu_user: Option<i64>,
+    cpu_system: Option<i64>,
+    io_tbr: Option<i64>,
+    io_tbw: Option<i64>,
 }
 
 impl DatabaseConversion<BuildRecord> for BuildSummary {
@@ -66,6 +73,12 @@ impl DatabaseConversion<BuildRecord> for BuildSummary {
             run_logs: None,
             run_started: self.details.as_ref().map(|s| s.started.naive_utc()),
             run_ended: self.details.as_ref().map(|s| s.ended.naive_utc()),
+
+            mem_peak: self.stats.as_ref().and_then(|s| s.mem_peak.map(|i| i as i64)),
+            cpu_user: self.stats.as_ref().and_then(|s| s.cpu_user.map(|i| i as i64)),
+            cpu_system: self.stats.as_ref().and_then(|s| s.cpu_system.map(|i| i as i64)),
+            io_tbr: self.stats.as_ref().and_then(|s| s.io_tbr.map(|i| i as i64)),
+            io_tbw: self.stats.as_ref().and_then(|s| s.io_tbw.map(|i| i as i64)),
         })
     }
 
@@ -88,6 +101,14 @@ impl DatabaseConversion<BuildRecord> for BuildSummary {
             _ => return Err(anyhow!("no valid state representation found")),
         };
 
+        let stats = CgroupStats {
+            mem_peak: other.mem_peak.map(|i| i as usize),
+            cpu_user: other.cpu_user.map(|i| i as usize),
+            cpu_system: other.cpu_system.map(|i| i as usize),
+            io_tbr: other.io_tbr.map(|i| i as usize),
+            io_tbw: other.io_tbw.map(|i| i as usize),
+        };
+
         Ok(BuildSummary {
             package: other.package,
             reason: BuildReason::from_str(&other.reason).unwrap_or(BuildReason::Unknown),
@@ -95,6 +116,7 @@ impl DatabaseConversion<BuildRecord> for BuildSummary {
             version: other.version,
             started: other.started.and_utc(),
             ended: other.ended.map(|d| d.and_utc()),
+            stats: Some(stats),
             details: match (other.run_success, other.run_started, other.run_ended) {
                 (Some(success), Some(started), Some(ended)) => {
                     Some(RunStatus { success, started: started.and_utc(), ended: ended.and_utc() })
@@ -214,10 +236,10 @@ impl BuildSummary {
         let record = self.create_record()?;
 
         query!(r#"
-            INSERT INTO build (package, started, ended, state, progress, fatal, version, run_success, run_logs, run_started, run_ended, reason)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            INSERT INTO build (package, started, ended, state, progress, fatal, version, run_success, run_logs, run_started, run_ended, reason, mem_peak, cpu_system, cpu_user, io_tbr, io_tbw)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         "#,
-            record.package, record.started, record.ended, record.state, record.progress, record.fatal, record.version, record.run_success, record.run_logs, record.run_started, record.run_ended, record.reason
+            record.package, record.started, record.ended, record.state, record.progress, record.fatal, record.version, record.run_success, record.run_logs, record.run_started, record.run_ended, record.reason, record.mem_peak, record.cpu_system, record.cpu_user, record.io_tbr, record.io_tbw
         )
             .execute(db).await?;
 
@@ -229,10 +251,10 @@ impl BuildSummary {
 
         query!(r#"
             UPDATE build
-            SET ended = $2, state = $3, progress = $4, fatal = $5, version = $6, run_success = $7, run_logs = $8, run_started = $9, run_ended = $10
+            SET ended = $2, state = $3, progress = $4, fatal = $5, version = $6, run_success = $7, run_logs = $8, run_started = $9, run_ended = $10, mem_peak = $11, cpu_system = $12, cpu_user = $13, io_tbr = $14, io_tbw = $15
             WHERE started = $1
         "#,
-            record.started, record.ended, record.state, record.progress, record.fatal, record.version, record.run_success, record.run_logs, record.run_started, record.run_ended
+            record.started, record.ended, record.state, record.progress, record.fatal, record.version, record.run_success, record.run_logs, record.run_started, record.run_ended, record.mem_peak, record.cpu_system, record.cpu_user, record.io_tbr, record.io_tbw
         )
             .execute(db).await?;
 

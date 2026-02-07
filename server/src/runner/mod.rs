@@ -1,4 +1,5 @@
 pub mod archive;
+pub mod stats;
 pub mod update;
 
 use crate::config::{CONFIG, INFO};

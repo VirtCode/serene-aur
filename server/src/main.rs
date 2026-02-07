@@ -1,5 +1,6 @@
 #![allow(non_local_definitions, dead_code)]
 #![feature(type_alias_impl_trait)]
+#![feature(str_as_str)]
 
 pub mod package;
 pub mod runner;
@@ -12,14 +13,14 @@ mod resolve;
 mod web;
 
 use crate::build::schedule::BuildScheduler;
-use crate::build::{cleanup_unfinished, Builder};
+use crate::build::{Builder, cleanup_unfinished};
 use crate::config::CONFIG;
 use crate::database::package::migrate_sources;
 use crate::package::srcinfo::SrcinfoGenerator;
-use crate::package::{migrate_build_state, Package};
+use crate::package::{Package, migrate_build_state};
 use crate::repository::PackageRepository;
-use crate::runner::update::ImageScheduler;
 use crate::runner::Runner;
+use crate::runner::update::ImageScheduler;
 use crate::web::broadcast::Broadcast;
 use actix_web::web::Data;
 use actix_web::{App, HttpServer};
@@ -118,7 +119,9 @@ async fn main() -> anyhow::Result<()> {
             .context(format!("failed to start schedule for package {}", &package.base))?;
     }
 
-    if CONFIG.build_cli && let Err(e) = package::try_add_cli(&db, &mut schedule, &srcinfo_generator).await {
+    if CONFIG.build_cli
+        && let Err(e) = package::try_add_cli(&db, &mut schedule, &srcinfo_generator).await
+    {
         error!("failed to add cli package: {e:#}")
     }
 

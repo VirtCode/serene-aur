@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 #![feature(iter_intersperse)]
+#![feature(f128)]
 
 mod action;
 mod command;

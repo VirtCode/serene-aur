@@ -10,6 +10,13 @@ sudo pacman -Suy --noconfirm
 message "running per-package preparation commands"
 . ./serene-prepare.sh
 
+# dependency sync
+message "synchronizing dependencies"
+makepkg --syncdeps --nobuild --noconfirm
+
+# collect stats before build
+(. /app/stats.sh > /app/target/.stats-before.json)
+
 # build
 message "starting package build"
 # read additional flags
@@ -17,7 +24,10 @@ FLAGS=$(cat makepkg-flags)
 echo "running with custom flags: $FLAGS"
 
 # run makepkg
-makepkg --syncdeps --force --noconfirm $FLAGS
+makepkg --force --noconfirm $FLAGS
+
+# collect stats after build
+(. /app/stats.sh > /app/target/.stats-after.json)
 
 # also add built version, primarily for devel packages
 message "collecting package information"

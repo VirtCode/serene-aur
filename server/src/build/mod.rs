@@ -1,7 +1,8 @@
 use crate::database::{self, Database};
-use crate::package::srcinfo::SrcinfoGeneratorInstance;
 use crate::package::Package;
+use crate::package::srcinfo::SrcinfoGeneratorInstance;
 use crate::repository::PackageRepositoryInstance;
+use crate::runner::stats::CgroupStats;
 use crate::runner::{ContainerId, RunStatus, RunnerInstance};
 use crate::web::broadcast::BroadcastInstance;
 use chrono::{DateTime, Utc};
@@ -33,6 +34,10 @@ pub struct BuildSummary {
     pub started: DateTime<Utc>,
     /// end time of the build
     pub ended: Option<DateTime<Utc>>,
+
+    /// container cgroup stats of the build
+    #[serde(flatten)]
+    pub stats: Option<CgroupStats>,
 }
 
 impl BuildSummary {
@@ -44,6 +49,7 @@ impl BuildSummary {
             version: None,
             started: Utc::now(),
             ended: None,
+            stats: None,
             reason,
         }
     }
@@ -171,7 +177,7 @@ impl Builder {
                 self.broadcast.change(&package.base, summary.state.clone()).await;
 
                 match self.publish(&mut package, &container).await {
-                    Ok(()) => {}
+                    Ok(build_stats) => summary.stats = Some(build_stats),
                     Err(e) => {
                         break 'run Fatal(format!("{e:#}"), Publish);
                     }
@@ -201,11 +207,7 @@ impl Builder {
                 }
             }
 
-            if success {
-                Success
-            } else {
-                Failure
-            }
+            if success { Success } else { Failure }
         };
 
         summary.end(state);
@@ -236,13 +238,21 @@ impl Builder {
     }
 
     /// publishes a given package to the repository
-    async fn publish(&self, package: &mut Package, container: &ContainerId) -> anyhow::Result<()> {
+    async fn publish(
+        &self,
+        package: &mut Package,
+        container: &ContainerId,
+    ) -> anyhow::Result<CgroupStats> {
         let mut output = self.runner.download_outputs(container).await?;
 
         let srcinfo = output.srcinfo().await?;
         package.upgrade(srcinfo).await?;
 
-        self.repository.lock().await.publish(package, output).await
+        let (stats_before, stats_after) = output.build_stats().await?;
+        let build_stats = stats_after - stats_before;
+
+        self.repository.lock().await.publish(package, output).await?;
+        Ok(build_stats)
     }
 
     /// cleans a given container
