@@ -1,5 +1,6 @@
 use crate::package::srcinfo::SrcinfoWrapper;
-use anyhow::{anyhow, Context};
+use crate::runner::stats::CgroupStats;
+use anyhow::{Context, anyhow};
 use async_std::path::PathBuf;
 use async_tar::{Archive, Builder, Entries, Header};
 use futures_util::{AsyncRead, AsyncReadExt, StreamExt};
@@ -8,6 +9,8 @@ use std::path::Path;
 use std::str::FromStr;
 
 const RUNNER_IMAGE_BUILD_ARCHIVE_SRCINFO: &str = "target/.SRCINFO";
+const RUNNER_IMAGE_BUILD_STATS_BEFORE: &str = "target/.stats-before.json";
+const RUNNER_IMAGE_BUILD_STATS_AFTER: &str = "target/.stats-after.json";
 const RUNNER_IMAGE_BUILD_ARCHIVE_PACKAGE_DIR: &str = "target/";
 
 /// this is an archive which can only be read from and is based on a stream
@@ -18,6 +21,15 @@ where
     entries: Entries<R>,
 }
 
+/// Order in which files are read by docker engine:
+/// - https://github.com/moby/moby/blob/1b48d9602cbea7e18e570c5674644191e0275fa7/daemon/archive_unix.go#L75
+/// - https://github.com/moby/go-archive/blob/263611f5f0914b2a153d86dae2042d13be6a88c4/archive.go#L693
+/// - https://pkg.go.dev/path/filepath#WalkDir
+///
+/// Thus the order in which "things" need to be extracted from the archive
+/// 1. .SRCINFO file
+/// 2. .stats-before.json and .stats-after.json files
+/// 3. any other file
 impl<R: AsyncRead + Unpin> OutputArchive<R> {
     pub fn new(input: R) -> anyhow::Result<Self> {
         let archive = Archive::new(input);
@@ -26,12 +38,8 @@ impl<R: AsyncRead + Unpin> OutputArchive<R> {
     }
 
     /// read the srcinfo from the archive, this should be called before
-    /// extracting files
+    /// [`OutputArchive::build_stats`] and before extracting files
     pub async fn srcinfo(&mut self) -> anyhow::Result<SrcinfoWrapper> {
-        // we assume here that due to the filename of .SRCINFO, we will read this file
-        // first however, we have read it just from VERSION for a long time, and it
-        // did still work - WTF?
-
         while let Some(Ok(mut entry)) = self.entries.next().await {
             if entry.path()?.to_string_lossy() == RUNNER_IMAGE_BUILD_ARCHIVE_SRCINFO {
                 let mut srcinfo = String::new();
@@ -46,6 +54,53 @@ impl<R: AsyncRead + Unpin> OutputArchive<R> {
         }
 
         Err(anyhow!("could not find .SRCINFO file in archive from container"))
+    }
+
+    /// read the build stats files from the archive, this should be called
+    /// after [`OutputArchive::srcinfo`] and before extracting files
+    pub async fn build_stats(&mut self) -> anyhow::Result<(CgroupStats, CgroupStats)> {
+        let mut stats_before = None;
+        let mut stats_after = None;
+
+        let mut buffer = String::new();
+
+        while let Some(Ok(mut entry)) = self.entries.next().await {
+            let path = entry.path()?;
+            match path.to_string_lossy().as_str() {
+                RUNNER_IMAGE_BUILD_STATS_BEFORE => {
+                    entry.read_to_string(&mut buffer).await.context(
+                        "could not read .stats-before.json file from archive from container",
+                    )?;
+                    stats_before = Some(
+                        serde_json::from_str::<CgroupStats>(&buffer)
+                            .context("could not parse .stats-before.json file")?,
+                    );
+                    log::debug!("parsed before-build stats from archive from container");
+                    buffer.clear();
+                }
+                RUNNER_IMAGE_BUILD_STATS_AFTER => {
+                    entry.read_to_string(&mut buffer).await.context(
+                        "could not read .stats-after.json file from archive from container",
+                    )?;
+                    stats_after = Some(
+                        serde_json::from_str::<CgroupStats>(&buffer)
+                            .context("could not parse .stats-after.json file")?,
+                    );
+                    log::debug!("parsed after-build stats from archive from container");
+                    buffer.clear();
+                }
+                _ => {}
+            }
+
+            if stats_before.is_some() && stats_after.is_some() {
+                // we need to first check with `is_some` because using `let Some(...)` we would
+                // move the value in every iteration
+                #[allow(clippy::unnecessary_unwrap)]
+                return Ok((stats_before.expect("is checked"), stats_after.expect("is checked")));
+            }
+        }
+
+        Err(anyhow!("could not find all stats files in archive from container"))
     }
 
     /// extract list of files to the given location

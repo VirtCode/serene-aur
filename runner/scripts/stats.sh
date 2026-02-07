@@ -3,14 +3,16 @@
 cd /sys/fs/cgroup
 
 # peak memory usage (bytes)
+# see https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files
 if [ -f "memory.peak" ]; then MEMORY_PEAK=$(cat memory.peak); else MEMORY_PEAK="null"; fi
 
-# user cpu time (us)
+# user and system cpu time (us)
+# see https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files
 if [ -f "cpu.stat" ]; then USER_USEC=$(cat cpu.stat | grep user_usec | sed 's/ /\n/g' | sed -n '2 p'); else USER_USEC="null"; fi
-# system cpu time (us)
 if [ -f "cpu.stat" ]; then SYSTEM_USEC=$(cat cpu.stat | grep system_usec | sed 's/ /\n/g' | sed -n '2 p'); else SYSTEM_USEC="null"; fi
 
 # total bytes read/written (bytes)
+# see https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files
 if [ -f "io.stat" ]; then
     TOTAL_RBYTES=0
     TOTAL_WBYTES=0

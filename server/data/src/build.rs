@@ -64,6 +64,17 @@ pub struct BuildInfo {
     pub started: DateTime<Utc>,
     /// end time of the build
     pub ended: Option<DateTime<Utc>>,
+
+    /// peak memory usage in bytes
+    pub mem_peak: Option<usize>,
+    /// total cpu time spent in user mode in microseconds
+    pub cpu_user: Option<usize>,
+    /// total cpu time spent in system mode in microseconds
+    pub cpu_system: Option<usize>,
+    /// total io bytes read
+    pub io_tbr: Option<usize>,
+    /// total io bytes written
+    pub io_tbw: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, EnumString, Display, Clone, Copy)]

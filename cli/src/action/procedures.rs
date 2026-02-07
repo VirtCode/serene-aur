@@ -1,11 +1,12 @@
 use crate::action::pacman;
+use crate::action::util::{bytes_str, duration_str};
 use crate::command::SettingsSubcommand;
 use crate::complete::save_completions;
 use crate::config::Config;
 use crate::log::Log;
-use crate::table::{ago, table, Column};
+use crate::table::{Column, ago, table};
 use crate::web::data::{
-    describe_cron_timezone_hack, BuildProgressFormatter, BuildReasonFormatter, BuildStateFormatter,
+    BuildProgressFormatter, BuildReasonFormatter, BuildStateFormatter, describe_cron_timezone_hack,
 };
 use crate::web::requests::{
     add_package, build_all_packages, build_package, get_build, get_build_logs, get_builds,
@@ -25,6 +26,7 @@ use std::env::consts::ARCH;
 use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
+use std::time::Duration;
 
 /// waits for a package to build and then installs it
 fn wait_and_install(c: &Config, base: &str, quiet: bool, just_listen: bool) {
@@ -35,7 +37,10 @@ fn wait_and_install(c: &Config, base: &str, quiet: bool, just_listen: bool) {
     let mut log = match subscribe_events(c, base, |_package, event| {
         match event {
             BroadcastEvent::Log(msg) => {
-                if !started && !quiet && let Some(log) = log.replace(None) {
+                if !started
+                    && !quiet
+                    && let Some(log) = log.replace(None)
+                {
                     log.succeed("package build started successfully")
                 }
 
@@ -532,6 +537,46 @@ pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
                     println!("{:<8} {}", "message:", msg)
                 }
                 _ => {}
+            }
+
+
+            if b.mem_peak.is_some() || b.cpu_system.is_some() || b.cpu_user.is_some() || b.io_tbr.is_some() || b.io_tbw.is_some() {
+                println!("\nbuild stats:")
+            }
+            if let Some(mem_peak) = b.mem_peak {
+                println!("  {:<12} {}", "peak memory:", bytes_str(mem_peak))
+            }
+            if b.cpu_user.is_some() || b.cpu_system.is_some() {
+                let mut line = String::new();
+                let both = b.cpu_user.is_some() && b.cpu_system.is_some();
+                let mut total = Duration::from_micros(0);
+
+                if let Some(cpu_user) = b.cpu_user {
+                    let duration = Duration::from_micros(cpu_user as u64);
+                    line += format!("{} user", duration_str(duration)).as_str();
+                    total += duration;
+                }
+                if both {
+                    line += ", ";
+                }
+                if let Some(cpu_system) = b.cpu_system {
+                    let duration = Duration::from_micros(cpu_system as u64);
+                    line += format!("{} system", duration_str(duration)).as_str();
+                    total += duration;
+                }
+
+                if both {
+                    println!("  {:<12} {} ({})", "cpu time:", duration_str(total), line)
+                } else {
+                    println!("  {:<12} {}", "cpu time:", line)
+                }
+            }
+
+            if b.io_tbr.is_some() || b.io_tbw.is_some() {
+                let total_read = b.io_tbr.map(bytes_str).unwrap_or("???".bright_black().to_string());
+                let total_write = b.io_tbw.map(bytes_str).unwrap_or("???".bright_black().to_string());
+
+                println!("  {:<12} {} read, {} written", "io:", total_read, total_write)
             }
         }
         Err(e) => log.fail(&e.msg()),
