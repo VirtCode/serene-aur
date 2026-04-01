@@ -46,9 +46,7 @@ pub fn intro() -> Result<()> {
     println!(
         "It's running Serene {} and is up for {}.",
         info.version,
-        ago::coarse(Utc::now() - info.started, false, false, false)
-            .unwrap_or(String::from("now"))
-            .trim()
+        ago::coarse(Utc::now() - info.started, false, false, false).unwrap_or(String::from("now"))
     );
 
     // write config now

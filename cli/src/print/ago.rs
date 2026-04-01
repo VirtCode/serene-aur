@@ -10,16 +10,16 @@ const SECOND_NS: i64 = 1000 * MILLISECOND_NS;
 const MILLISECOND_NS: i64 = 1000 * MICROSECOND_NS;
 const MICROSECOND_NS: i64 = 1000;
 
-const UNITS: &[(&str, &str, i64)] = &[
-    ("years", "Y", YEAR_NS),
-    ("months", "M", MONTH_NS),
-    ("weeks", "w", WEEK_NS),
-    ("days", "d", DAY_NS),
-    ("hours", "h", HOUR_NS),
-    ("minutes", "m", MINUTE_NS),
-    ("seconds", "s", SECOND_NS),
-    ("milliseconds", "ms", MILLISECOND_NS),
-    ("microseconds", "us", MICROSECOND_NS),
+const UNITS: &[(&str, &str, &str, i64)] = &[
+    ("year", "years", "Y", YEAR_NS),
+    ("month", "months", "M", MONTH_NS),
+    ("week", "weeks", "w", WEEK_NS),
+    ("day", "days", "d", DAY_NS),
+    ("hour", "hours", "h", HOUR_NS),
+    ("minute", "minutes", "m", MINUTE_NS),
+    ("second", "seconds", "s", SECOND_NS),
+    ("millisecond", "milliseconds", "ms", MILLISECOND_NS),
+    ("microsecond", "microseconds", "us", MICROSECOND_NS),
 ];
 
 /// get the coarse string elements for a duration.
@@ -33,10 +33,14 @@ pub fn coarse_raw(
     let ns = duration.num_nanoseconds().unwrap_or_default();
     let units_slice = if show_subsec { UNITS } else { &UNITS[..4] };
 
-    for (long_suffix, short_suffix, unit_ns) in units_slice {
+    for (long_suffix, long_suffix_plural, short_suffix, unit_ns) in units_slice {
         if ns >= *unit_ns {
             let count = ns as f32 / *unit_ns as f32;
-            return Some(if short { (*short_suffix, count) } else { (*long_suffix, count) });
+            return Some(if short {
+                (*short_suffix, count)
+            } else {
+                (if count > 1.0 { *long_suffix_plural } else { *long_suffix }, count)
+            });
         }
     }
 
@@ -68,12 +72,15 @@ pub fn fine(duration: Duration, short: bool, show_subsec: bool) -> String {
 
     let format_strs = units_slice
         .iter()
-        .filter_map(|(long_suffix, short_suffix, unit_ns)| {
+        .filter_map(|(long_suffix, long_suffix_plural, short_suffix, unit_ns)| {
             if ns >= *unit_ns {
                 let count = ns / *unit_ns;
                 ns -= count * *unit_ns;
                 if short {
-                    Some(format!("{count} {long_suffix}"))
+                    Some(format!(
+                        "{count} {}",
+                        if count > 1 { long_suffix_plural } else { long_suffix }
+                    ))
                 } else {
                     Some(format!("{count}{short_suffix}"))
                 }
