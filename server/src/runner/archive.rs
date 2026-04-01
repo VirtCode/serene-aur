@@ -8,6 +8,9 @@ use hyper::Body;
 use std::path::Path;
 use std::str::FromStr;
 
+// DON'T CHANGE THOSE NAMES WITHOUT READING THE DOC
+// COMMENT ON THE `OutputArchive` `impl` FIRST.
+
 const RUNNER_IMAGE_BUILD_ARCHIVE_SRCINFO: &str = "target/.SRCINFO";
 const RUNNER_IMAGE_BUILD_STATS_BEFORE: &str = "target/.stats-before.json";
 const RUNNER_IMAGE_BUILD_STATS_AFTER: &str = "target/.stats-after.json";

@@ -1,10 +1,11 @@
 use crate::action::pacman;
-use crate::action::util::{bytes_str, duration_str};
 use crate::command::SettingsSubcommand;
 use crate::complete::save_completions;
 use crate::config::Config;
 use crate::log::Log;
-use crate::table::{Column, ago, table};
+use crate::print::ago::{coarse, fine};
+use crate::print::table::{Column, table};
+use crate::print::{ago, bytes_str};
 use crate::web::data::{
     BuildProgressFormatter, BuildReasonFormatter, BuildStateFormatter, describe_cron_timezone_hack,
 };
@@ -13,7 +14,7 @@ use crate::web::requests::{
     get_info, get_key, get_package, get_package_pkgbuild, get_packages, get_webhook_secret,
     remove_package, set_package_setting, subscribe_events,
 };
-use chrono::{Local, Utc};
+use chrono::{Duration, Local, Utc};
 use colored::{ColoredString, Colorize};
 use semver::Version;
 use serene_data::build::BuildState;
@@ -26,7 +27,6 @@ use std::env::consts::ARCH;
 use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
-use std::time::Duration;
 
 /// waits for a package to build and then installs it
 fn wait_and_install(c: &Config, base: &str, quiet: bool, just_listen: bool) {
@@ -323,8 +323,13 @@ pub fn list(c: &Config) {
                             .as_ref()
                             .map(|p| {
                                 let duration = Utc::now() - p.ended.unwrap_or(p.started);
-                                let string = ago::coarse(duration);
-
+                                let string = if let Some((time_unit, count)) =
+                                    ago::coarse_raw(duration, false, false)
+                                {
+                                    format!("{:2} {time_unit}", count as i64)
+                                } else {
+                                    String::from("now")
+                                };
                                 if duration.num_weeks() > 0 {
                                     string.dimmed()
                                 } else {
@@ -478,7 +483,7 @@ pub fn info(c: &Config, package: &str, all: bool) {
                 peek.reason.colored(),
                 peek.started.with_timezone(&Local).format("%x %X").to_string().normal(),
                 peek.ended
-                    .map(|ended| ago::fine(ended - peek.started))
+                    .map(|ended| ago::fine(ended - peek.started, false, false))
                     .map(ColoredString::from)
                     .unwrap_or_else(|| "??".blue()),
             ]
@@ -539,44 +544,61 @@ pub fn build_info(c: &Config, package: &str, build: &Option<String>) {
                 _ => {}
             }
 
+            if b.mem_peak.is_some()
+                || b.cpu_system.is_some()
+                || b.cpu_user.is_some()
+                || b.io_tbr.is_some()
+                || b.io_tbw.is_some()
+            {
+                println!("\nbuild stats:");
 
-            if b.mem_peak.is_some() || b.cpu_system.is_some() || b.cpu_user.is_some() || b.io_tbr.is_some() || b.io_tbw.is_some() {
-                println!("\nbuild stats:")
-            }
-            if let Some(mem_peak) = b.mem_peak {
-                println!("  {:<12} {}", "peak memory:", bytes_str(mem_peak))
-            }
-            if b.cpu_user.is_some() || b.cpu_system.is_some() {
-                let mut line = String::new();
-                let both = b.cpu_user.is_some() && b.cpu_system.is_some();
-                let mut total = Duration::from_micros(0);
-
-                if let Some(cpu_user) = b.cpu_user {
-                    let duration = Duration::from_micros(cpu_user as u64);
-                    line += format!("{} user", duration_str(duration)).as_str();
-                    total += duration;
+                if let Some(mem_peak) = b.mem_peak {
+                    println!("  {:<12} {}", "peak memory:", bytes_str(mem_peak))
                 }
-                if both {
-                    line += ", ";
-                }
-                if let Some(cpu_system) = b.cpu_system {
-                    let duration = Duration::from_micros(cpu_system as u64);
-                    line += format!("{} system", duration_str(duration)).as_str();
-                    total += duration;
+                if b.cpu_user.is_some() || b.cpu_system.is_some() {
+                    let mut line = String::new();
+                    let both = b.cpu_user.is_some() && b.cpu_system.is_some();
+                    let mut total = Duration::microseconds(0);
+
+                    if let Some(cpu_user) = b.cpu_user {
+                        let duration = Duration::microseconds(cpu_user as i64);
+                        line += format!(
+                            "{} user",
+                            coarse(duration, true, true, true)
+                                .unwrap_or(String::from("instantaneous"))
+                        )
+                        .as_str();
+                        total += duration;
+                    }
+                    if both {
+                        line += ", ";
+                    }
+                    if let Some(cpu_system) = b.cpu_system {
+                        let duration = Duration::microseconds(cpu_system as i64);
+                        line += format!(
+                            "{} system",
+                            coarse(duration, true, true, true)
+                                .unwrap_or(String::from("instantaneous"))
+                        )
+                        .as_str();
+                        total += duration;
+                    }
+
+                    if both {
+                        println!("  {:<12} {} ({})", "cpu time:", fine(total, false, true), line)
+                    } else {
+                        println!("  {:<12} {}", "cpu time:", line)
+                    }
                 }
 
-                if both {
-                    println!("  {:<12} {} ({})", "cpu time:", duration_str(total), line)
-                } else {
-                    println!("  {:<12} {}", "cpu time:", line)
+                if b.io_tbr.is_some() || b.io_tbw.is_some() {
+                    let total_read =
+                        b.io_tbr.map(bytes_str).unwrap_or("???".bright_black().to_string());
+                    let total_write =
+                        b.io_tbw.map(bytes_str).unwrap_or("???".bright_black().to_string());
+
+                    println!("  {:<12} {} read, {} written", "io:", total_read, total_write)
                 }
-            }
-
-            if b.io_tbr.is_some() || b.io_tbw.is_some() {
-                let total_read = b.io_tbr.map(bytes_str).unwrap_or("???".bright_black().to_string());
-                let total_write = b.io_tbw.map(bytes_str).unwrap_or("???".bright_black().to_string());
-
-                println!("  {:<12} {} read, {} written", "io:", total_read, total_write)
             }
         }
         Err(e) => log.fail(&e.msg()),
@@ -923,7 +945,8 @@ pub fn server_info(c: &Config) {
     println!("{:<10} {}/{}", "location:", c.url.italic(), info.architecture);
 
     // this might have a prefixed space for the tables
-    let uptime = ago::coarse(Utc::now() - info.started);
+    let uptime =
+        ago::coarse(Utc::now() - info.started, false, false, false).unwrap_or(String::from("now"));
     println!("{:<10} {}", "uptime:", uptime.strip_prefix(" ").unwrap_or(&uptime));
 
     println!("{:<10} {}", "repo name:", info.name.bold());

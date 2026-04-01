@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 #![feature(iter_intersperse)]
-#![feature(f128)]
 
 mod action;
 mod command;
@@ -8,7 +7,7 @@ mod complete;
 mod config;
 mod intro;
 pub mod log;
-mod table;
+mod print;
 mod web;
 
 use crate::command::Args;

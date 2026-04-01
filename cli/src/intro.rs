@@ -1,14 +1,14 @@
 use std::{
     env,
-    io::{stdin, stdout, Write},
-    process::{exit, Command, Stdio},
+    io::{Write, stdin, stdout},
+    process::{Command, Stdio, exit},
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
 use colored::Colorize;
 
-use crate::{action::pacman, config::Config, table::ago, web::requests};
+use crate::{action::pacman, config::Config, print::ago, web::requests};
 
 /// prints the intro sequence which walks the user through adding the secret
 pub fn intro() -> Result<()> {
@@ -46,7 +46,9 @@ pub fn intro() -> Result<()> {
     println!(
         "It's running Serene {} and is up for {}.",
         info.version,
-        ago::coarse(Utc::now() - info.started).trim()
+        ago::coarse(Utc::now() - info.started, false, false, false)
+            .unwrap_or(String::from("now"))
+            .trim()
     );
 
     // write config now
@@ -263,9 +265,5 @@ fn run_as_root_with_stdin(elevator: &str, args: &[&str], input: &str) -> Result<
 
     let status =
         child.wait().with_context(|| format!("failed to wait for `{readable}` to exit"))?;
-    if !status.success() {
-        Err(anyhow!("failed to run `{readable}` successfully"))
-    } else {
-        Ok(())
-    }
+    if !status.success() { Err(anyhow!("failed to run `{readable}` successfully")) } else { Ok(()) }
 }

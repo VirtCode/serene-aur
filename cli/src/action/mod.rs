@@ -1,6 +1,5 @@
 pub mod pacman;
 mod procedures;
-mod util;
 
 use crate::action::procedures::{
     add, build, build_all, build_info, build_logs, info, list, pkgbuild, remove, set_setting,

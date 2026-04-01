@@ -15,7 +15,7 @@ message "synchronizing dependencies"
 makepkg --syncdeps --nobuild --noconfirm
 
 # collect stats before build
-(. /app/stats.sh > /app/target/.stats-before.json)
+(. ../stats.sh > ../target/.stats-before.json)
 
 # build
 message "starting package build"
@@ -27,7 +27,7 @@ echo "running with custom flags: $FLAGS"
 makepkg --force --noconfirm $FLAGS
 
 # collect stats after build
-(. /app/stats.sh > /app/target/.stats-after.json)
+(. ../stats.sh > ../target/.stats-after.json)
 
 # also add built version, primarily for devel packages
 message "collecting package information"

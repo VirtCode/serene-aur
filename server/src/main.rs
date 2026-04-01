@@ -1,5 +1,4 @@
 #![allow(non_local_definitions, dead_code)]
-#![feature(type_alias_impl_trait)]
 #![feature(str_as_str)]
 
 pub mod package;

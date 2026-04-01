@@ -39,7 +39,7 @@ chrono = { version = "0.4.31", features = ["serde"] }
 # - event source stuff
 reqwest-eventsource = { version = "0.6.0" }
 futures = "0.3.30"
-tokio = "1.37.0"
+tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
 
 [lints.clippy]
 too_many_arguments = "allow"

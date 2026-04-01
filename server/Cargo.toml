@@ -58,8 +58,8 @@ anyhow = "1.0.75"
 lazy_static = "1.4.0"
 
 # crypto
-sequoia-openpgp = { version = "1.21.1" }
-sequoia-gpg-agent = { version = "0.4.2" }
+sequoia-openpgp = { version = "2.2.0" }
+sequoia-gpg-agent = { version = "0.6.2" }
 
 [lints.clippy]
 new_without_default = "allow"
