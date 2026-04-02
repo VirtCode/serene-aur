@@ -1,12 +1,14 @@
-name: Nightly Runner Image
+name: Development Runner Image
 
-# this will run on
 on:
   push:
-    tags: ['*']
-  workflow_dispatch:
+    branches: ['main']
+    paths: ["runner/**", ".github/workflows/runner-development.yml"]
+  pull_request:
+    paths: ["runner/**", ".github/workflows/runner-development.yml"]
   schedule:
     - cron: "0 22 * * *"
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -23,16 +25,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-        with:
-          # we need this to get the tag
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Get latest tag
-        run: echo "tag=$(git describe --tags --abbrev=0)" >> "$GITHUB_ENV"
-
-      - name: Checkout latest tag
-        run: git checkout ${{ env.tag }}
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -46,10 +38,11 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # small hack to also tag scheduled builds as `main`
           tags: |
-            type=schedule
-            type=raw,value=edge-${{ env.tag }}
-
+            type=schedule,pattern=main
+            type=ref,event=branch
+            type=ref,event=pr
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6

@@ -3,9 +3,9 @@ name: Development Image
 on:
   push:
     branches: ['main']
-    paths: ["server/**", ".github/workflows/publish.yml"]
+    paths: ["server/**", ".github/workflows/server-development.yml"]
   pull_request:
-    paths: ["server/**", ".github/workflows/publish.yml"]
+    paths: ["server/**", ".github/workflows/server-development.yml"]
   workflow_dispatch:
 
 env:

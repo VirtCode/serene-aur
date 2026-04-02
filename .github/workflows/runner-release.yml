@@ -1,0 +1,58 @@
+name: Release Runner Image
+
+on:
+  push:
+    tags: ['*']
+  schedule:
+    - cron: "0 22 * * *"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-runner
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          # we need this to get the tag
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Get latest tag
+        run: echo "tag=$(git describe --tags --abbrev=0)" >> "$GITHUB_ENV"
+
+      - name: Checkout latest tag
+        run: git checkout ${{ env.tag }}
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=edge-${{ env.tag }}
+
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: runner
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
