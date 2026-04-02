@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN apk add --no-cache musl-dev
 # install nettle for signing
-RUN apk add --no-cache nettle-dev clang clang-libclang pkgconfig
+RUN apk add --no-cache nettle-dev clang clang-libclang pkgconfig capnproto-dev
 # install pacman for libalpm
 RUN apk add --no-cache pacman-dev
 # install git for dynamic version
@@ -30,7 +30,7 @@ WORKDIR /app
 COPY --from=builder /app/target/release/serene /usr/bin/serene
 
 # install required utilities and libraries
-RUN apk add --no-cache git binutils nettle pacman
+RUN apk add --no-cache git binutils nettle pacman capnproto
 
 # create local user
 RUN adduser -D --uid 1000 user
