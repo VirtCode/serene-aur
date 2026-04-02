@@ -324,11 +324,11 @@ pub fn list(c: &Config) {
                             .map(|p| {
                                 let duration = Utc::now() - p.ended.unwrap_or(p.started);
                                 let string = if let Some((time_unit, count)) =
-                                    ago::coarse_raw(duration, false, false)
+                                    ago::coarse_raw::<i32>(duration, false, false)
                                 {
                                     format!("{:2} {time_unit}", count as i64)
                                 } else {
-                                    String::from("now")
+                                    String::from("   now")
                                 };
                                 if duration.num_weeks() > 0 {
                                     string.dimmed()

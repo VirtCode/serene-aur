@@ -3835,6 +3835,7 @@ dependencies = [
  "colored",
  "cron-descriptor",
  "futures",
+ "num-traits",
  "rand 0.8.5",
  "reqwest 0.12.28",
  "reqwest-eventsource",

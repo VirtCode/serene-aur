@@ -11,6 +11,7 @@ clap_complete = "*"
 serene-data = { path = "../server/data" }
 anyhow = "1.0.77"
 semver = "1.0.23"
+num-traits = "0.2.19"
 
 # serialization
 serde = { version = "1.0.193", features = ["derive"]}
