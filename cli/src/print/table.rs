@@ -1,5 +1,3 @@
-pub mod ago;
-
 use colored::{ColoredString, Colorize};
 use std::cmp;
 use terminal_size::{terminal_size, Width};

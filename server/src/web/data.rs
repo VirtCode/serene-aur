@@ -49,6 +49,11 @@ impl BuildSummary {
             started: self.started,
             ended: self.ended,
             reason: self.reason,
+            mem_peak: self.stats.as_ref().and_then(|s| s.mem_peak),
+            cpu_system: self.stats.as_ref().and_then(|s| s.cpu_system),
+            cpu_user: self.stats.as_ref().and_then(|s| s.cpu_user),
+            io_tbr: self.stats.as_ref().and_then(|s| s.io_tbr),
+            io_tbw: self.stats.as_ref().and_then(|s| s.io_tbw),
         }
     }
 }

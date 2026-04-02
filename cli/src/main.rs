@@ -7,7 +7,7 @@ mod complete;
 mod config;
 mod intro;
 pub mod log;
-mod table;
+mod print;
 mod web;
 
 use crate::command::Args;

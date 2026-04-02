@@ -125,7 +125,11 @@ impl Config {
         let hash = secret::hash(&self.secret);
 
         if nice {
-            println!("{hash} {}@{}", whoami::username(), whoami::hostname())
+            println!(
+                "{hash} {}@{}",
+                whoami::username(),
+                whoami::fallible::hostname().unwrap_or(String::from("unknown"))
+            )
         } else {
             println!("{hash}")
         }

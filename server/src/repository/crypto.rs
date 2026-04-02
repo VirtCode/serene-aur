@@ -5,12 +5,12 @@ use log::warn;
 use sequoia_gpg_agent::keyinfo::KeyProtection;
 use sequoia_gpg_agent::sequoia_ipc::Keygrip;
 use sequoia_gpg_agent::{self as gpg_agent, Agent, PinentryMode};
+use sequoia_openpgp::Cert;
 use sequoia_openpgp::crypto::{self, Password, Signer};
 use sequoia_openpgp::parse::Parse;
 use sequoia_openpgp::policy::StandardPolicy;
-use sequoia_openpgp::serialize::stream::{self, Message};
 use sequoia_openpgp::serialize::Serialize;
-use sequoia_openpgp::Cert;
+use sequoia_openpgp::serialize::stream::{self, Message};
 use std::path::Path;
 use std::{fs, io};
 
@@ -41,9 +41,9 @@ fn get_local_keypair() -> anyhow::Result<crypto::KeyPair> {
                 .clone()
                 .context("private key is encrypted but no password was provided")?,
         );
-        let algo = key.pk_algo();
+        let key_clone = key.clone();
         key.secret_mut()
-            .decrypt_in_place(algo, &password)
+            .decrypt_in_place(&key_clone, &password)
             .context("failed to unlock private key")?;
     };
 
@@ -201,6 +201,7 @@ pub async fn sign(output: &Path, file: &Path) -> anyhow::Result<()> {
     let message = Message::new(&mut sink);
 
     let mut message = stream::Signer::new(message, keypair)
+        .context("failed to create signer")?
         .detached()
         .build()
         .context("failed to create signer")?;
