@@ -10,3 +10,4 @@
 - [ ] create `serene manage purge` command which removes all deps that are no longer needed
 - [x] set packager for build packages
 - [X] store logs out side of db because this is a huge performance bottleneck
+- [ ] treat prepare stats differently from build stats

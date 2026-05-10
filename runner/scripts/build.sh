@@ -12,7 +12,7 @@ message "running per-package preparation commands"
 
 # dependency sync
 message "synchronizing dependencies"
-makepkg --syncdeps --nobuild --noconfirm
+makepkg --syncdeps --noprepare --nobuild --noconfirm
 
 # collect stats before build
 (. ../stats.sh > ../target/.stats-before.json)
