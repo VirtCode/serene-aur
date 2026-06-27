@@ -34,7 +34,11 @@ message "collecting package information"
 makepkg --printsrcinfo > ../target/.SRCINFO
 
 message "cleaning up to save space"
-# we have no use for the pacman cache (and yes --noconfirm doesn't work here)
-yes | sudo pacman -Scc
+
+# we have no use for the pacman cache
+# - use yes because --noconfirm doesn't work for this
+# - for some reason it can also return a non-zero exit code after some time, so
+#   cause of set -e the exit code will be non-zero even though the package built
+yes | sudo pacman -Scc || true
 
 message "build script finished"
