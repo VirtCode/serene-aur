@@ -1,3 +1,4 @@
+use crate::config::CONFIG;
 use crate::database::{self, Database};
 use crate::package::Package;
 use crate::package::srcinfo::SrcinfoGeneratorInstance;
@@ -154,7 +155,9 @@ impl Builder {
             summary.change(&self.db).await?;
             self.broadcast.change(&package.base, summary.state.clone()).await;
 
-            let clean = package.clean || force_clean; // also clean here if force clean
+            // force_clean is only used here as it is intended to remove the _old_ container
+            let clean = package.clean || CONFIG.force_clean || force_clean;
+
             let (container, success) = match self.build(&mut package, clean).await {
                 Ok((status, logs, container)) => {
                     let next = status.success;
@@ -194,7 +197,7 @@ impl Builder {
             }
 
             // CLEAN
-            if package.clean {
+            if package.clean || CONFIG.force_clean {
                 summary.state = Running(Publish);
                 summary.change(&self.db).await?;
                 self.broadcast.change(&package.base, summary.state.clone()).await;

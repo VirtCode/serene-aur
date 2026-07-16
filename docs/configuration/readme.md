@@ -111,6 +111,10 @@ ARCH=[architecture of server]
 # disable the package scheduling, so packages won't build automatically
 SCHEDULING_DISABLED=false
 
+# whether to implicitly treat all packages as `clean`
+# this will always remove build containers and may be useful on servers lacking storage
+FORCE_CLEAN=false
+
 # timeout (in milliseconds) that is used to connect to the AUR RPC
 # and how many retries are made per request
 AUR_REQUEST_TIMEOUT=5000

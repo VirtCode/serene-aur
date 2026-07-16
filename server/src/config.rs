@@ -80,6 +80,8 @@ pub struct Config {
     pub resolve_ignore_failed: bool,
     /// maximal amount of concurrent builds allowed PER SESSION
     pub concurrent_builds: usize,
+    /// forces clean on all packages, removing container after build
+    pub force_clean: bool,
     /// whether to build the CLI from latest commit instead of matching tag
     pub edge_cli: bool,
     /// optional name of packager set in package metadata
@@ -124,6 +126,8 @@ impl Default for Config {
             resolve_build_sequence: true,
             resolve_ignore_failed: false,
             concurrent_builds: 5,
+
+            force_clean: false,
 
             sync_mirror: "https://mirror.init7.net/archlinux/{repo}/os/{arch}".to_string(),
 
@@ -212,6 +216,8 @@ impl Config {
             resolve_build_sequence: Self::env_bool("RESOLVE_BUILD_SEQUENCE", default.resolve_build_sequence),
             resolve_ignore_failed: Self::env_bool("RESOLVE_IGNORE_FAILED", default.resolve_ignore_failed),
             concurrent_builds: Self::env_usize("CONCURRENT_BUILDS", default.concurrent_builds),
+
+            force_clean: Self::env_bool("FORCE_CLEAN", default.force_clean),
 
             webhook_secret: Self::env_string_option("WEBHOOK_SECRET", default.webhook_secret),
 
