@@ -1,6 +1,6 @@
 use colored::{ColoredString, Colorize};
 use std::cmp;
-use terminal_size::{terminal_size, Width};
+use terminal_size::{Width, terminal_size};
 
 pub struct Column {
     header: String,

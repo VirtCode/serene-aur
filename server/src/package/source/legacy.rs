@@ -2,7 +2,7 @@ use crate::package::source::aur::AurSource;
 use crate::package::source::cli::CliSource;
 use crate::package::source::git::GitSource;
 use crate::package::source::raw::RawSource;
-use crate::package::source::{Source, SourceImpl, SRCINFO};
+use crate::package::source::{SRCINFO, Source, SourceImpl};
 use crate::package::srcinfo::SrcinfoWrapper;
 use anyhow::Context;
 use log::debug;

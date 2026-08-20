@@ -6,7 +6,7 @@ use ::log::info;
 use anyhow::Context;
 use anyhow::Result;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
-use sqlx::{migrate, SqlitePool};
+use sqlx::{SqlitePool, migrate};
 
 const FILE: &str = "serene.db";
 

@@ -4,24 +4,24 @@ use crate::config::{CONFIG, INFO};
 use crate::database::{self, Database};
 use crate::package;
 use crate::package::srcinfo::SrcinfoGenerator;
-use crate::package::{aur, source, Package};
-use crate::repository::crypto::{get_public_key_bytes, should_sign_packages};
+use crate::package::{Package, aur, source};
 use crate::repository::PackageRepositoryInstance;
+use crate::repository::crypto::{get_public_key_bytes, should_sign_packages};
 use crate::web::auth::{AuthRead, AuthWrite};
 use crate::web::broadcast::Broadcast;
 use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound};
 use actix_web::web::{Data, Json, Path, Query, Redirect};
-use actix_web::{delete, get, post, Responder};
-use auth::{create_webhook_secret, AuthWebhook};
+use actix_web::{Responder, delete, get, post};
+use auth::{AuthWebhook, create_webhook_secret};
 use chrono::DateTime;
 use cron::Schedule;
 use hyper::StatusCode;
 use serde::Deserialize;
+use serene_data::SereneInfo;
 use serene_data::build::BuildReason;
 use serene_data::package::{
     PackageAddRequest, PackageAddSource, PackageBuildRequest, PackageSettingsRequest,
 };
-use serene_data::SereneInfo;
 use std::str::FromStr;
 use tokio::sync::Mutex;
 
@@ -75,7 +75,9 @@ pub async fn add(
                 let exists = aur::check_exists_mirror(name).await.internal()?;
 
                 if !exists {
-                    return Err(ErrorNotFound(format!("aur package with base '{name}' does not exists (you must speficy the base because the github mirror is being used)")));
+                    return Err(ErrorNotFound(format!(
+                        "aur package with base '{name}' does not exists (you must speficy the base because the github mirror is being used)"
+                    )));
                 }
 
                 name.clone()

@@ -4,7 +4,9 @@ WORKDIR /app
 
 RUN apk add --no-cache musl-dev
 # install nettle for signing
-RUN apk add --no-cache nettle-dev clang clang-libclang pkgconfig capnproto-dev
+# FIXME: Once sequoia works with Nettle 4.0, we no longer need to force the nettle-dev version:
+#        See <https://gitlab.com/sequoia-pgp/nettle-sys/-/work_items/21>
+RUN apk add --no-cache 'nettle-dev=~3' clang clang-libclang pkgconfig capnproto-dev
 # install pacman for libalpm
 RUN apk add --no-cache pacman-dev
 # install git for dynamic version

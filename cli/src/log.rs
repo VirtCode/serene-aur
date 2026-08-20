@@ -1,5 +1,5 @@
 use colored::Colorize;
-use spinoff::{spinners, Color, Spinner};
+use spinoff::{Color, Spinner, spinners};
 
 pub struct Log {
     spinner: Option<Spinner>,

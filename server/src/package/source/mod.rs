@@ -9,7 +9,7 @@ use crate::package::srcinfo::{SrcinfoGeneratorInstance, SrcinfoWrapper};
 use crate::runner::archive::InputArchive;
 use anyhow::Context;
 use async_trait::async_trait;
-use dyn_clone::{clone_trait_object, DynClone};
+use dyn_clone::{DynClone, clone_trait_object};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;

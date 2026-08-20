@@ -1,10 +1,10 @@
-use crate::build::session::BuildSession;
 use crate::build::BuilderInstance;
+use crate::build::session::BuildSession;
 use crate::database::Database;
-use crate::package::srcinfo::SrcinfoGeneratorInstance;
 use crate::package::Package;
+use crate::package::srcinfo::SrcinfoGeneratorInstance;
 use crate::web::broadcast::BroadcastInstance;
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
 use log::{debug, error, info, warn};
@@ -14,7 +14,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::select;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 
 /// metadata associated with a build
 /// can be used to override stuff like clean
@@ -176,7 +176,9 @@ impl BuildScheduler {
                         match Package::find(&base, &db).await {
                             Ok(Some(p)) => packages.push(p),
                             Ok(None) => {
-                                warn!("package with base {base} was scheduled but is no longer present")
+                                warn!(
+                                    "package with base {base} was scheduled but is no longer present"
+                                )
                             }
                             Err(e) => {
                                 error!("failed to access database: {e:#}")
@@ -312,7 +314,7 @@ impl BuildScheduler {
 
         match BuildSession::start(packages, &db, builder, broadcast, meta).await {
             Ok(mut session) => {
-                if let Err(e) = session.run().await {
+                if let Err(e) = session.run(&db).await {
                     error!("failed to run build session: {e:#}");
                 }
             }

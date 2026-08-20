@@ -1,5 +1,5 @@
-use crate::build::schedule::{BuildMeta, BuildScheduler};
 use crate::build::BuildSummary;
+use crate::build::schedule::{BuildMeta, BuildScheduler};
 use crate::config::{CLI_PACKAGE_NAME, CONFIG};
 use crate::database::Database;
 use crate::package::source::Source;
@@ -7,7 +7,7 @@ use crate::package::srcinfo::{SrcinfoGeneratorInstance, SrcinfoWrapper};
 use crate::resolve::AurResolver;
 use crate::runner;
 use crate::runner::archive::InputArchive;
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use chrono::{DateTime, Utc};
 use log::{debug, info, warn};
 use serene_data::build::{BuildReason, BuildState};
@@ -86,7 +86,7 @@ async fn add(
     }
 
     // resolve deps - this already resolves transitive deps
-    let mut resolver = AurResolver::with(db, &srcinfo, CONFIG.aur_resolve_adding).await?;
+    let mut resolver = AurResolver::with_all(db, &[&srcinfo], CONFIG.aur_resolve_adding).await?;
     let actions = resolver.resolve_package_raw(&srcinfo.base.pkgbase).await?;
 
     if !actions.missing.is_empty() {
@@ -234,6 +234,8 @@ pub struct Package {
     pub prepare: Option<String>,
     /// special makepkg flags
     pub flags: Vec<MakepkgFlag>,
+    /// hash of all `libsomething.so.<number>` files provided by this package
+    pub shared_objects_hash: Option<String>,
 }
 
 impl Package {
@@ -250,6 +252,7 @@ impl Package {
             schedule: None,
             prepare: None,
             flags: vec![],
+            shared_objects_hash: None,
 
             srcinfo: None,
             pkgbuild: None,
@@ -269,11 +272,7 @@ impl Package {
         self.schedule
             .as_ref()
             .unwrap_or_else(|| {
-                if self.source.devel {
-                    &CONFIG.schedule_devel
-                } else {
-                    &CONFIG.schedule_normal
-                }
+                if self.source.devel { &CONFIG.schedule_devel } else { &CONFIG.schedule_normal }
             })
             .clone()
     }
@@ -387,7 +386,10 @@ impl Package {
 
     /// returns all currently-known members of the package
     pub fn get_packages(&self) -> Vec<String> {
-        self.srcinfo.as_ref().map(|s| s.pkgnames().map(|s| s.to_owned()).collect()).unwrap_or_default()
+        self.srcinfo
+            .as_ref()
+            .map(|s| s.pkgnames().map(|s| s.to_owned()).collect())
+            .unwrap_or_default()
     }
 
     /// returns the description of the package from the srcinfo if there is any

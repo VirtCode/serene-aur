@@ -37,7 +37,9 @@ pub fn generate_completions(
                         &package_completion_bash(tokens.split(" ").count() as u32 + 1, multiple),
                     );
                 } else if warnings {
-                    println!("cargo:error=did not find '{search}' in completions, did the completions change?");
+                    println!(
+                        "cargo:error=did not find '{search}' in completions, did the completions change?"
+                    );
                 }
             }
         }

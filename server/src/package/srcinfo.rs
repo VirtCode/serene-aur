@@ -1,5 +1,5 @@
-use crate::runner::archive::InputArchive;
 use crate::runner::RunnerInstance;
+use crate::runner::archive::InputArchive;
 use anyhow::anyhow;
 use log::debug;
 use serde::de::Error;

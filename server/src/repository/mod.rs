@@ -7,7 +7,7 @@ use futures_util::AsyncRead;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::fs;
 use tokio::sync::Mutex;
@@ -36,7 +36,9 @@ pub async fn remove_orphan_signature() {
                 && e.path().to_string_lossy().ends_with(format!("{PACKAGE_EXTENSION}.sig").as_str())
         })
         .for_each(|entry| {
-            if let Some(path) = entry.path().file_stem() && !Path::new(REPO_DIR).join(path).exists() {
+            if let Some(path) = entry.path().file_stem()
+                && !Path::new(REPO_DIR).join(path).exists()
+            {
                 if let Err(e) = std::fs::remove_file(entry.path()) {
                     warn!(
                         "failed to delete orphan signature file from repository ({e}): {}",
@@ -122,11 +124,14 @@ impl PackageRepository {
     }
 
     /// publishes the files for a package on the repository
+    ///
+    /// returns the list of file system paths to the published
+    /// package archive files
     pub async fn publish(
         &mut self,
         package: &Package,
         mut output: OutputArchive<impl AsyncRead + Unpin>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<PathBuf>> {
         let files = package
             .expected_files()
             .await
@@ -180,6 +185,9 @@ impl PackageRepository {
             .await
             .context("failed to add files to repository")?;
 
+        let paths =
+            files.iter().map(|file| Path::new(REPO_DIR).join(file)).collect::<Vec<PathBuf>>();
+
         // create entries, assuming they have the right order
         let entries = package
             .get_packages()
@@ -191,7 +199,7 @@ impl PackageRepository {
         self.bases.insert(package.base.clone(), entries);
         self.save().await?;
 
-        Ok(())
+        Ok(paths)
     }
 
     /// removes a package from the repository

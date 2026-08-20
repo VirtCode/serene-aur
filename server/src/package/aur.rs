@@ -1,7 +1,7 @@
 use crate::config::CONFIG;
 use crate::package::git;
 use crate::package::srcinfo::SrcinfoWrapper;
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use log::{debug, warn};
 use raur::{Package, Raur};
 use reqwest::Client;

@@ -1,0 +1,1 @@
+ALTER TABLE package ADD COLUMN shared_objects_hash VARCHAR DEFAULT NULL;

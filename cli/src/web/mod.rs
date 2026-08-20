@@ -6,8 +6,8 @@ use reqwest::blocking::{Client, Response};
 
 use crate::config::Config;
 use reqwest_eventsource::{Event, EventSource};
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use tokio::runtime::Runtime;
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -1,5 +1,5 @@
 use crate::package::srcinfo::SrcinfoWrapper;
-use crate::package::{aur, Package};
+use crate::package::{Package, aur};
 use crate::resolve::sync::create_and_sync;
 use crate::{database::Database, resolve::stub::StubAur};
 use alpm::Alpm;
@@ -60,15 +60,20 @@ impl AurResolver {
         Self::new(added, aur).await
     }
 
-    /// create a new resolver with an additional added package
-    pub async fn with(db: &Database, srcinfo: &SrcinfoWrapper, aur: bool) -> anyhow::Result<Self> {
+    /// create a new resolver with all existing packages and optional additional
+    /// packages
+    pub async fn with_all(
+        db: &Database,
+        srcinfos: &[&SrcinfoWrapper],
+        aur: bool,
+    ) -> anyhow::Result<Self> {
         let mut all: Vec<Srcinfo> = Package::find_all(db)
             .await?
             .into_iter()
             .filter_map(|p| p.srcinfo.map(|s| s.into()))
             .collect();
 
-        all.push(srcinfo.clone().into());
+        all.extend(srcinfos.into_iter().map(|info| (*info).clone().into()));
 
         Self::new(all, aur).await
     }
@@ -84,9 +89,9 @@ impl AurResolver {
     }
 
     /// resolves a package, but returns the raw results
-    /// see Self::resolve_package
+    /// see [`resolve_package`]
     pub async fn resolve_package_raw(&mut self, package: &str) -> anyhow::Result<Actions<'_>> {
-        debug!("resolving dependencies of package {}", &package);
+        debug!("resolving dependencies of package {package}");
 
         let own = PkgbuildRepo { name: "serene", pkgs: self.local.iter().collect() };
 
@@ -123,5 +128,22 @@ impl AurResolver {
             depend: result.iter_pkgbuilds().map(|(info, _)| info.base.pkgbase.clone()).collect(),
             missing: result.missing.into_iter().map(|m| m.dep).collect(),
         })
+    }
+
+    /// resolve the dependencies of all packages of the build server
+    ///
+    /// this returns a list of tuples containing a [`Package`] and its
+    /// associated [`ResolveInfo`]
+    pub async fn resolve_all(
+        &mut self,
+        db: &Database,
+    ) -> anyhow::Result<Vec<(Package, ResolveInfo)>> {
+        let packages = Package::find_all(db).await?;
+        let mut result = Vec::with_capacity(packages.len());
+        for package in packages.into_iter() {
+            let info = self.resolve_package(&package.base).await?;
+            result.push((package, info));
+        }
+        Ok(result)
     }
 }

@@ -81,6 +81,8 @@ pub struct BuildInfo {
 #[strum(serialize_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum BuildReason {
+    /// build was triggered by a change in one of its dependencies
+    Dependency,
     /// build was triggered by a webhook
     Webhook,
     /// build was manually triggered by a user

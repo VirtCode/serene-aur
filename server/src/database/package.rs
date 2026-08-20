@@ -33,6 +33,7 @@ struct PackageRecord {
     schedule: Option<String>,
     prepare: Option<String>,
     flags: Option<String>,
+    shared_objects_hash: Option<String>,
 }
 
 impl DatabaseConversion<PackageRecord> for Package {
@@ -55,6 +56,7 @@ impl DatabaseConversion<PackageRecord> for Package {
                 None
             },
             dependency: self.dependency,
+            shared_objects_hash: self.shared_objects_hash.clone(),
         })
     }
 
@@ -79,6 +81,7 @@ impl DatabaseConversion<PackageRecord> for Package {
                 .map(|s| serde_json::from_str(&s).context("failed to deserialize source"))
                 .unwrap_or_else(|| Ok(vec![]))?,
             dependency: value.dependency,
+            shared_objects_hash: value.shared_objects_hash,
         })
     }
 }
@@ -149,10 +152,10 @@ impl Package {
         let record = self.create_record()?;
 
         query!(r#"
-            INSERT INTO package (base, added, source, srcinfo, pkgbuild, enabled, clean, private, schedule, prepare, flags, dependency, built_state)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            INSERT INTO package (base, added, source, srcinfo, pkgbuild, enabled, clean, private, schedule, prepare, flags, dependency, built_state, shared_objects_hash)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         "#,
-            record.base, record.added, record.source, record.srcinfo, record.pkgbuild, record.enabled, record.clean, record.private, record.schedule, record.prepare, record.flags, record.dependency, record.built_state
+            record.base, record.added, record.source, record.srcinfo, record.pkgbuild, record.enabled, record.clean, record.private, record.schedule, record.prepare, record.flags, record.dependency, record.built_state, record.shared_objects_hash
         )
             .execute(db).await?;
 
@@ -199,6 +202,25 @@ impl Package {
             record.srcinfo,
             record.pkgbuild,
             record.built_state
+        )
+        .execute(db)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Updates the stored shared objects hash in the database
+    pub async fn change_shared_objects_hash(&self, db: &Database) -> Result<()> {
+        let record = self.create_record()?;
+
+        query!(
+            r#"
+            UPDATE package
+            SET shared_objects_hash = $2
+            WHERE base = $1
+            "#,
+            record.base,
+            record.shared_objects_hash
         )
         .execute(db)
         .await?;

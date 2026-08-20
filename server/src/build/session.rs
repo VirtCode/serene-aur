@@ -23,8 +23,9 @@ pub struct BuildSession<'a> {
     db: &'a Database,
 }
 
-/// specifies whether a build was successful
-struct BuildResult(String, bool);
+/// specifies whether a build was successful together with an optional
+/// list of packages which need to be rebuilt
+struct BuildResult(String, bool, Option<Vec<Package>>);
 
 impl<'a> BuildSession<'a> {
     /// starts a session by resolving the packages.
@@ -109,7 +110,7 @@ impl<'a> BuildSession<'a> {
     }
 
     /// builds all packages in the optimal sequence
-    pub async fn run(&mut self) -> Result<()> {
+    pub async fn run(&mut self, db: &Database) -> Result<()> {
         let (tx, mut rx) = tokio::sync::mpsc::channel(1);
 
         loop {
@@ -134,13 +135,43 @@ impl<'a> BuildSession<'a> {
             }
 
             // wait for next
-            let Some(BuildResult(built, success)) = rx.recv().await else {
+            let Some(BuildResult(built, success, required_rebuilds)) = rx.recv().await else {
                 warn!("didn't catch previous ending condition!");
                 break;
             };
 
             info!("received build result for package {built} with status {success}");
             self.building.remove(&built);
+
+            if let Some(required_rebuilds) = required_rebuilds {
+                info!(
+                    "build of package {built} requires rebuild of {} {}",
+                    required_rebuilds.len(),
+                    if required_rebuilds.len() == 1 { "dependent" } else { "dependents" }
+                );
+                for package in required_rebuilds {
+                    if self.packages.iter().any(|(pkg, _, _)| pkg.base == package.base) {
+                        // the package is already part of the session and was not yet built;
+                        // we don't need to add it again
+                        break;
+                    }
+
+                    let summary = BuildSummary::start(&package, BuildReason::Dependency);
+                    summary.save(db).await?;
+                    self.broadcast.change(&package.base, summary.state.clone()).await;
+
+                    self.packages.push((package, summary, HashSet::new()));
+                    // FIXME: Theoretically, here we should check whether any
+                    // other packages of the session also
+                    // depend on `package` and then add it to their `deps`.
+                    // However, with the current dependency resolution setup
+                    // this is kind of
+                    // annoying. Furthermore, we should also check whether any
+                    // other packages of the session are
+                    // dependencies of `package` and then add them to the `deps`
+                    // of `package`.
+                }
+            }
 
             // updating waiting packages
             if success || CONFIG.resolve_ignore_failed {
@@ -193,18 +224,19 @@ impl<'a> BuildSession<'a> {
         tokio::spawn(async move {
             let base = package.base.clone();
 
-            let success = match builder.run_build(package, false, clean, summary).await {
-                Ok(summary) => {
-                    matches!(summary.state, BuildState::Success)
-                }
-                Err(e) => {
-                    warn!("build failed beyond fatally: {e:#}");
+            let (success, required_rebuilds) =
+                match builder.run_build(package, false, clean, summary).await {
+                    Ok((summary, required_rebuilds)) => {
+                        (matches!(summary.state, BuildState::Success), required_rebuilds)
+                    }
+                    Err(e) => {
+                        warn!("build failed beyond fatally: {e:#}");
 
-                    false
-                }
-            };
+                        (false, None)
+                    }
+                };
 
-            if let Err(e) = tx.send(BuildResult(base, success)).await {
+            if let Err(e) = tx.send(BuildResult(base, success, required_rebuilds)).await {
                 error!("failed to send result back to main thread: {e}");
             }
         });

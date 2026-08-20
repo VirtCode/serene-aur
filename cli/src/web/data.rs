@@ -1,8 +1,8 @@
 use anyhow::anyhow;
 use chrono::{Local, Offset};
 use colored::{ColoredString, Colorize};
-use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron_options;
 use cron_descriptor::cronparser::Options;
+use cron_descriptor::cronparser::cron_expression_descriptor::get_description_cron_options;
 use serene_data::build::{BuildProgress, BuildReason, BuildState};
 use std::str::FromStr;
 
@@ -46,6 +46,7 @@ impl BuildReasonFormatter for BuildReason {
             BuildReason::Manual => "manual".bright_blue(),
             BuildReason::Schedule => "schedule".dimmed(),
             BuildReason::Initial => "initial".bright_blue(),
+            BuildReason::Dependency => "dependency".bright_blue(),
             BuildReason::Unknown => "unknown".dimmed(),
         }
     }

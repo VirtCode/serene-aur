@@ -1,12 +1,12 @@
 use crate::config::Config;
-use crate::web::{delete_empty, eventsource, get, get_raw, post, post_simple, Result};
+use crate::web::{Result, delete_empty, eventsource, get, get_raw, post, post_simple};
 use reqwest_eventsource::Event;
+use serene_data::SereneInfo;
 use serene_data::build::BuildInfo;
 use serene_data::package::{
     BroadcastEvent, PackageAddRequest, PackageBuildRequest, PackageInfo, PackagePeek,
     PackageSettingsRequest,
 };
-use serene_data::SereneInfo;
 
 pub fn get_info(c: &Config) -> Result<SereneInfo> {
     get::<SereneInfo>(c, "")
@@ -93,7 +93,7 @@ where
 
             let event_json = serde_json::Value::Object(serde_json::Map::from_iter([
                 (String::from("event"), serde_json::Value::String(event.event)),
-                (String::from("data"), data_value)
+                (String::from("data"), data_value),
             ]));
 
             if let Ok(brd) = serde_json::from_value(event_json) {

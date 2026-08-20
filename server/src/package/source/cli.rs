@@ -1,6 +1,6 @@
 use crate::config::{self, CONFIG, INFO};
 use crate::package::git;
-use crate::package::source::{Source, SourceImpl, SrcinfoWrapper, PKGBUILD};
+use crate::package::source::{PKGBUILD, Source, SourceImpl, SrcinfoWrapper};
 use crate::runner::archive::InputArchive;
 use async_trait::async_trait;
 use log::debug;

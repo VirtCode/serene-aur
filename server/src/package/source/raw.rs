@@ -1,4 +1,4 @@
-use crate::package::source::{Source, SourceImpl, PKGBUILD};
+use crate::package::source::{PKGBUILD, Source, SourceImpl};
 use crate::package::srcinfo::SrcinfoWrapper;
 use crate::runner::archive::InputArchive;
 use async_trait::async_trait;

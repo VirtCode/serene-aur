@@ -9,6 +9,7 @@ serene-data = { path = "data" }
 # interact with the aur
 alpm = "5.0.2"
 alpm-utils = "5.0.0"
+alpm-mtree = "0.3.3"
 raur = { version = "7.0.0", default-features = false, features = ["async", "rustls-tls"] }
 aur-depends = { version = "5.0.0", default-features = false, features = ["rustls-tls"] }
 srcinfo = "2.1.0"
@@ -58,8 +59,10 @@ anyhow = "1.0.75"
 lazy_static = "1.4.0"
 
 # crypto
-sequoia-openpgp = { version = "2.2.0" }
+sequoia-openpgp = { version = "2.4.1" }
 sequoia-gpg-agent = { version = "0.6.2" }
+sha2 = "0.11.0"
+base64 = "0.21.7"
 
 [lints.clippy]
 new_without_default = "allow"
