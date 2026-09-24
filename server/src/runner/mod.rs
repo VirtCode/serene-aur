@@ -336,7 +336,22 @@ impl Runner {
 
 /// constructs the container name from package and configuration
 fn container_name(package: &Package) -> String {
-    format!("{}{}", CONFIG.container_prefix, &package.base)
+    format!("{}{}", CONFIG.container_prefix, escape_name(&package.base))
+}
+
+/// escapes a package name to be valid for docker
+/// docker only accepts [a-zA-Z0-9_.-] in container names, but arch packages may
+/// contain e.g. [+@], uses `_` as the escape character to be reversible
+fn escape_name(name: &str) -> String {
+    name.chars()
+        .map(|c| match c {
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '.' => c.to_string(),
+
+            // escape the rest
+            // all other allowed chars are ascii so 2 digits should be enough
+            c => format!("_{:02X}", c as u32),
+        })
+        .collect()
 }
 
 /// get the docker image name that should be used
@@ -350,5 +365,25 @@ pub fn repository_file() -> String {
         format!("[{}]\nSigLevel = Never\nServer = {}", &CONFIG.repository_name, s)
     } else {
         "".to_string()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_escape() {
+        // no escape
+        assert_eq!(
+            escape_name("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-"),
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-".to_string()
+        );
+
+        // should escape escape char
+        assert_eq!(escape_name("should_escape_these+"), "should_5Fescape_5Fthese_2B".to_string());
+
+        // a real-world test
+        assert_eq!(escape_name("libstdc++5"), "libstdc_2B_2B5".to_string());
     }
 }
