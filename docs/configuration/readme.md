@@ -39,6 +39,10 @@ AUR_GITHUB_MIRROR=false
 # otherwise missing dependencies will result in an error
 AUR_RESOLVE_ADDING=true
 
+# user agent sent with requests to the aur rpc
+# the aur rejects requests without a user agent
+AUR_USER_AGENT=Serene-AUR
+
 # whether to set newly added packages to build automatically
 # this corresponds to the default value of the "enable" setting in the cli
 SCHEDULING_DEFAULT=true
