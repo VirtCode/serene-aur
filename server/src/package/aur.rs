@@ -13,6 +13,7 @@ pub const GITHUB_MIRROR: &str = "https://github.com/archlinux/aur";
 pub fn handle() -> anyhow::Result<raur::Handle> {
     Ok(raur::Handle::new_with_client(
         Client::builder()
+            .user_agent(&CONFIG.aur_user_agent)
             .timeout(Duration::from_millis(CONFIG.aur_request_timeout as u64))
             .build()
             .context("failed to build aur client")?,

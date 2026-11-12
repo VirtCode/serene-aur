@@ -44,6 +44,8 @@ pub struct Config {
     pub aur_request_timeout: usize,
     /// amount of retries for aur RPC requests
     pub aur_request_retries: usize,
+    /// user agent sent with requests made to the aur RPC
+    pub aur_user_agent: String,
     /// disable scheduling of package builds alltogether
     pub scheduling_disabled: bool,
     /// whether packaged are scheduled ("enabled") by default
@@ -101,6 +103,7 @@ impl Default for Config {
             aur_resolve_adding: true,
             aur_request_timeout: 5000,
             aur_request_retries: 1,
+            aur_user_agent: "Serene-AUR".to_string(),
 
             scheduling_disabled: false,
             scheduling_default: true,
@@ -193,6 +196,7 @@ impl Config {
             aur_resolve_adding: Self::env_bool("AUR_RESOLVE_ADDING", default.aur_resolve_adding),
             aur_request_timeout: Self::env_usize("AUR_REQUEST_TIMEOUT", default.aur_request_timeout),
             aur_request_retries: Self::env_usize("AUR_REQUEST_RETRIES", default.aur_request_retries),
+            aur_user_agent: Self::env_string("AUR_USER_AGENT", default.aur_user_agent),
 
             scheduling_disabled: Self::env_bool("SCHEDULING_DISABLED", default.scheduling_disabled),
             scheduling_default: Self::env_bool("SCHEDULING_DEFAULT", default.scheduling_default),
