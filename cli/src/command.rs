@@ -34,6 +34,10 @@ pub enum Action {
         #[clap(short, long, requires = "nonaur", help_heading = "Custom Sources")]
         devel: bool,
 
+        /// branch of the custom repository to use instead of its default branch
+        #[clap(short, long, requires = "custom", help_heading = "Custom Sources")]
+        branch: Option<String>,
+
         /// replace existing package with same base
         #[clap(short, long)]
         replace: bool,

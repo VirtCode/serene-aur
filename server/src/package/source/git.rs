@@ -9,16 +9,18 @@ use std::path::Path;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GitSource {
     repository: String,
+    #[serde(default)]
+    branch: Option<String>,
     last_commit: String,
 }
 
 impl GitSource {
-    pub fn new(repository: &str) -> Self {
-        Self { repository: repository.to_owned(), last_commit: "".to_owned() }
+    pub fn new(repository: &str, branch: Option<String>) -> Self {
+        Self { repository: repository.to_owned(), branch, last_commit: "".to_owned() }
     }
 
     pub fn migrated(repository: String, last_commit: String) -> Self {
-        Self { repository, last_commit }
+        Self { repository, branch: None, last_commit }
     }
 }
 
@@ -28,7 +30,7 @@ impl SourceImpl for GitSource {
     async fn initialize(&mut self, folder: &Path) -> anyhow::Result<()> {
         debug!("initializing git source for {}", self.repository);
 
-        git::clone(&self.repository, folder, None).await?;
+        git::clone(&self.repository, folder, self.branch.clone()).await?;
         self.last_commit = git::find_local_commit(folder).await?;
 
         Ok(())
@@ -58,6 +60,6 @@ impl SourceImpl for GitSource {
 }
 
 /// create a new git source
-pub fn new(repository: &str, devel: bool) -> Source {
-    Source::new(Box::new(GitSource::new(repository)), devel)
+pub fn new(repository: &str, branch: Option<String>, devel: bool) -> Source {
+    Source::new(Box::new(GitSource::new(repository, branch)), devel)
 }
