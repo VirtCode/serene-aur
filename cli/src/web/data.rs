@@ -88,7 +88,7 @@ pub fn describe_cron_timezone_hack(schedule: &str) -> anyhow::Result<String> {
             .split(',')
             .map(|s| {
                 i32::from_str(s)
-                    .map(|i| (i + offset % 24).to_string())
+                    .map(|i| (i + offset).rem_euclid(24).to_string())
                     .unwrap_or_else(|_| s.to_string())
             })
             .intersperse(",".to_string())

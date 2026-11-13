@@ -25,7 +25,12 @@ pub struct PackageAddRequest {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum PackageAddSource {
     Aur { name: String },
-    Git { url: String, devel: bool },
+    Git {
+        url: String,
+        devel: bool,
+        #[serde(default)]
+        branch: Option<String>,
+    },
     Raw { pkgbuild: String, devel: bool },
 }
 

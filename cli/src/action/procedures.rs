@@ -160,6 +160,7 @@ pub fn add(
     custom: bool,
     pkgbuild: bool,
     devel: bool,
+    branch: Option<String>,
     install: bool,
     quiet: bool,
     listen: bool,
@@ -194,8 +195,15 @@ pub fn add(
         log.next("adding package from custom pkgbuild");
         PackageAddSource::Raw { pkgbuild: what.to_owned(), devel }
     } else if custom {
-        log.next(&format!("adding package from repository at {}", what.italic()));
-        PackageAddSource::Git { url: what.to_owned(), devel }
+        match &branch {
+            Some(branch) => log.next(&format!(
+                "adding package from branch {} of repository at {}",
+                branch.italic(),
+                what.italic()
+            )),
+            None => log.next(&format!("adding package from repository at {}", what.italic())),
+        }
+        PackageAddSource::Git { url: what.to_owned(), devel, branch }
     } else {
         log.next(&format!("adding package {} from the AUR", what.italic()));
         PackageAddSource::Aur { name: what.to_owned() }

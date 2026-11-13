@@ -18,6 +18,9 @@ serene add my-package
 # Adding a custom repository from github. The optional devel flag specifies that it is a development package (e.g. it works like -git).
 serene add --custom --devel https://github.com/my-user/my-package
 
+# Adding a custom repository, using its `my-package` branch instead of the default branch.
+serene add --custom --branch my-package https://github.com/my-user/my-packages
+
 # Adding a custom pkgbuild for a git package from the filesystem, replacing the previous version. We load the pkgbuild from the filesystem.
 serene add --pkgbuild --devel --replace --file ./PKGBUILD
 
