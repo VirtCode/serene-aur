@@ -90,7 +90,9 @@ pub async fn add(
 
             source::aur::new(&base, false) // TODO: support the devel flag
         }
-        PackageAddSource::Git { url, devel } => source::git::new(url, *devel),
+        PackageAddSource::Git { url, devel, branch } => {
+            source::git::new(url, branch.clone(), *devel)
+        }
         PackageAddSource::Raw { pkgbuild: src, devel } => source::raw::new(src, *devel),
     };
 

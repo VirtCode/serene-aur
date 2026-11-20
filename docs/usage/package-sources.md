@@ -26,6 +26,11 @@ The git source allows you to use a custom git repository as a package source. Th
 serene add --custom https://<my-git-host>/<my-git-repository>
 ```
 
+By default, the default branch of the repository is used. To use a different branch, pass `--branch <branch>`. This way, a single repository can hold multiple packages, each on its own branch:
+```shell
+serene add --custom --branch <my-branch> https://<my-git-host>/<my-git-repository>
+```
+
 If your package is a `devel` package, you'll need to either also pass `--devel` when adding the package, or set the `devel` state after having added it.
 
 It is recommended that custom repositories contain contain their own `.SRCINFO`. Serene however will automatically generate one based off of the `PKGBUILD` when no such file is found. You may just notice that adding the package could take a bit longer than usual.
