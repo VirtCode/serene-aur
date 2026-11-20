@@ -10,6 +10,8 @@ pub mod log;
 mod print;
 mod web;
 
+use std::env;
+
 use crate::command::Args;
 use crate::config::Config;
 use clap::Parser;
@@ -24,7 +26,7 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let mut config = Config::read()?;
 
-    if let Some(host) = args.server {
+    if let Some(host) = args.server.or_else(|| env::var("SERENE_SERVER").ok()) {
         config.url = host;
     }
 

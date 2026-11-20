@@ -113,6 +113,7 @@ The CLI does not offer much local configuration. It does set up everything neede
 This configuration is stored at `~/.config/serene.yml` (or wherever your `XDG_CONFIG_HOME` is) as YAML. It contains the following attributes and defaults:
 ```yaml
 # url of the server that is used
+# can be overriden using the `--server` argument or `SERENE_SERVER` env
 url: <my-server-url>
 
 # root elevator binary that is used
